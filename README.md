@@ -1,12 +1,31 @@
-# YTKTV
+<h1 align="center">YTKTV</h1>
 
-Turn any computer into a karaoke (KTV) machine powered by YouTube.
+<p align="center">
+  <b>Turn any computer into a karaoke (KTV) machine powered by YouTube.</b>
+</p>
+
+<p align="center">
+  <a href="https://github.com/TonyD365/YTKTV/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/TonyD365/YTKTV?color=ff2d95"></a>
+  <a href="https://github.com/TonyD365/YTKTV/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/TonyD365/YTKTV/total?color=8a5cff"></a>
+  <a href="https://github.com/TonyD365/YTKTV/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TonyD365/YTKTV/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776ab">
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-22d3ee">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/TonyD365/YTKTV"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/TonyD365/YTKTV/releases/latest"><b>Download</b></a> ·
+  <a href="#features">Features</a> ·
+  <a href="https://github.com/TonyD365/YTKTV/issues">Report a problem</a>
+</p>
 
 The main display becomes a KTV song console, an extended display shows the music video full
 screen, guests pick songs from their phones, and a built-in mixing console blends the
 microphones into the music with reverb and echo.
 
-[![CI](https://github.com/TonyD365/YTKTV/actions/workflows/ci.yml/badge.svg)](https://github.com/TonyD365/YTKTV/actions/workflows/ci.yml)
+| Song console | Mixing console |
+|---|---|
+| ![The song console showing the Artists page](docs/images/console.png) | ![The mixing console page](docs/images/mixer.png) |
 
 ## Features
 
