@@ -38,6 +38,14 @@ if not os.path.isabs(libmpv):
         sys.exit(f"could not locate {libmpv} on disk")
     libmpv = match.group(1)
 
+# Refuse to package a library that cannot be loaded (e.g. a truncated download).
+import ctypes
+
+try:
+    ctypes.CDLL(libmpv)
+except OSError as exc:
+    sys.exit(f"libmpv at {libmpv} cannot be loaded: {exc}")
+
 datas = [(str(Path(ytktv.__file__).parent / "server" / "static"), "ytktv/server/static")]
 datas += collect_data_files("imageio_ffmpeg")
 datas += collect_data_files("certifi")

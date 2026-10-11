@@ -108,12 +108,14 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          python -c "from ytktv import bootstrap; bootstrap.install_windows_libmpv(print)"
-          python packaging/make_icon.py build/icon
-          python -m PyInstaller packaging/ytktv.spec --noconfirm --distpath dist --workpath build/pyinstaller
-          $version = python -c "import ytktv; print(ytktv.__version__)"
-          choco install innosetup --no-progress -y
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\windows\installer.iss
+          # pwsh does not stop when a native command fails, so check each one.
+          function Check { if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }
+          python -c "from ytktv import bootstrap; bootstrap.install_windows_libmpv(print)"; Check
+          python packaging/make_icon.py build/icon; Check
+          python -m PyInstaller packaging/ytktv.spec --noconfirm --distpath dist --workpath build/pyinstaller; Check
+          $version = python -c "import ytktv; print(ytktv.__version__)"; Check
+          choco install innosetup --no-progress -y; Check
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\windows\installer.iss; Check
 
       - name: Build (Linux)
         if: runner.os == 'Linux'

@@ -129,9 +129,31 @@ def install_plan() -> str | None:
     return " ".join(command) if command else None
 
 
-def install_windows_libmpv(report: Callable[[str], None]) -> None:
-    import py7zr
+def _extract_7z(archive: Path, member: str, dest: Path) -> None:
+    """Extract one file from a .7z with the system's tools.
 
+    mpv's archives use the BCJ2 filter, which pure-Python extractors cannot
+    read. Windows 10+ ships bsdtar as ``tar.exe``, which can; 7-Zip also works.
+    """
+    system_root = os.environ.get("SYSTEMROOT", r"C:\Windows")
+    candidates = [
+        [str(Path(system_root) / "System32" / "tar.exe"), "-xf", str(archive), "-C", str(dest)],
+        ["7z", "e", "-y", f"-o{dest}", str(archive)],
+        ["tar", "-xf", str(archive), "-C", str(dest)],
+    ]
+    errors: list[str] = []
+    for command in candidates:
+        if shutil.which(command[0]) is None:
+            continue
+        result = subprocess.run([*command, member], capture_output=True, text=True)
+        if result.returncode == 0 and (dest / member).exists():
+            return
+        errors.append(f"{command[0]}: {(result.stderr or result.stdout).strip()[-200:]}")
+        (dest / member).unlink(missing_ok=True)
+    raise RuntimeError("could not extract libmpv: " + ("; ".join(errors) or "no tar or 7z found"))
+
+
+def install_windows_libmpv(report: Callable[[str], None]) -> None:
     api = f"https://api.github.com/repos/{MPV_WINDOWS_REPO}/releases/latest"
     request = urllib.request.Request(api, headers={"Accept": "application/vnd.github+json"})
     with urlopen(request, timeout=30) as response:
@@ -139,14 +161,26 @@ def install_windows_libmpv(report: Callable[[str], None]) -> None:
     asset = next((a for a in release.get("assets", []) if _WIN_ASSET_RE.match(a["name"])), None)
     if asset is None:
         raise RuntimeError("no libmpv build found in the latest mpv release")
+    target = lib_dir() / "libmpv-2.dll"
     archive = lib_dir() / asset["name"]
-    report(f"Downloading {asset['name']}...")
-    with urlopen(asset["browser_download_url"], timeout=60) as response, archive.open("wb") as out:
-        shutil.copyfileobj(response, out)
-    report("Extracting libmpv...")
-    with py7zr.SevenZipFile(archive) as bundle:
-        bundle.extract(path=lib_dir(), targets=["libmpv-2.dll"])
-    archive.unlink(missing_ok=True)
+    try:
+        report(f"Downloading {asset['name']}...")
+        with (
+            urlopen(asset["browser_download_url"], timeout=60) as response,
+            archive.open("wb") as out,
+        ):
+            shutil.copyfileobj(response, out)
+        report("Extracting libmpv...")
+        target.unlink(missing_ok=True)
+        _extract_7z(archive, target.name, lib_dir())
+        if target.stat().st_size < 1_000_000:
+            raise RuntimeError("extracted libmpv is truncated")
+    except Exception:
+        # Never leave a partial DLL behind: it would be found and fail to load later.
+        target.unlink(missing_ok=True)
+        raise
+    finally:
+        archive.unlink(missing_ok=True)
 
 
 def install_libmpv(report: Callable[[str], None] = lambda _msg: None) -> bool:
