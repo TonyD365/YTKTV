@@ -45,7 +45,8 @@ microphones into the music with reverb and echo.
 - **Karaoke lyrics.** The **Lyrics** button in the control bar puts the words at the bottom of
   the MV screen, filling with colour line by line as the song plays. They come from the
   video's subtitles, or from YouTube's automatic captions when it has none (those are often
-  inaccurate for singing).
+  inaccurate for singing). The colour follows the singer word by word wherever YouTube's
+  captions say when each word was heard, and fills evenly otherwise.
 - **Finding songs.** Suggestions appear as you type, recent searches stay one tap away, and the
   Artists page lists well-known artists by scene. Song cards show whether a song is already
   selected and whether its instrumental is ready, so you can pick one that starts at once.

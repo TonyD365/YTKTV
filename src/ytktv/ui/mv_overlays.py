@@ -23,7 +23,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 
 from ytktv.ui import theme
-from ytktv.youtube.lyrics import LyricLine, line_at
+from ytktv.youtube.lyrics import LyricLine, line_at, sung_fraction
 
 # Show the next line this long before it starts, so singers can read ahead.
 LEAD_SECONDS = 3.0
@@ -169,11 +169,14 @@ class LyricsOverlay(_Overlay):
         # The drawing is done a step per frame while the line before it is still being
         # sung, so nothing slow is left to do at the moment the lines change.
         self._art: dict[int, _LineArt] = {}
+        # Per line, where each timed word begins as a share of the line's width.
+        self._stops: dict[int, list[tuple[float, float]]] = {}
         self._job: tuple[int, Iterator[None]] | None = None
         self._geometry: tuple[int, int, float] | None = None
 
     def set_lines(self, lines: list[dict[str, Any]]) -> None:
-        self._lines = [LyricLine(float(d["start"]), float(d["end"]), str(d["text"])) for d in lines]
+        self._lines = [LyricLine.from_dict(d) for d in lines]
+        self._stops.clear()
         self._shown = None
         self._art.clear()
         self._job = None
@@ -191,8 +194,25 @@ class LyricsOverlay(_Overlay):
         line = self._lines[index]
         if self._position < line.start - LEAD_SECONDS:
             return None
-        span = max(0.05, line.end - line.start)
-        return index, max(0.0, min(1.0, (self._position - line.start) / span))
+        return index, sung_fraction(line, self._position, self._word_stops(index))
+
+    def _word_stops(self, index: int) -> list[tuple[float, float]]:
+        """Turn the word positions of line *index* from characters into shares of its width."""
+        if index not in self._stops:
+            line = self._lines[index]
+            stops: list[tuple[float, float]] = []
+            if line.words:
+                font = QFont()
+                font.setWeight(QFont.Weight.Black)
+                font.setPixelSize(40)  # only proportions matter here
+                metrics = QFontMetricsF(font)
+                width = metrics.horizontalAdvance(line.text) or 1.0
+                stops = [
+                    (time, metrics.horizontalAdvance(line.text[:offset]) / width)
+                    for time, offset in line.words
+                ]
+            self._stops[index] = stops
+        return self._stops[index]
 
     def set_time(self, position: float) -> None:
         self._position = position

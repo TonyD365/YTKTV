@@ -209,6 +209,27 @@ def test_lyrics_overlay_follows_playback_time(qtbot):
     assert not overlay.isVisible() and not overlay.has_lines()
 
 
+def test_lyrics_overlay_colour_follows_word_timing(qtbot):
+    from ytktv.ui.mv_overlays import LyricsOverlay
+
+    overlay = LyricsOverlay()
+    qtbot.addWidget(overlay)
+    overlay.resize(800, 200)
+    # "la" is sung at once, then nothing until "di" eight seconds later.
+    overlay.set_lines(
+        [{"start": 10.0, "end": 20.0, "text": "la di", "words": [[10.0, 0], [18.0, 3]]}]
+    )
+    overlay.show()
+    overlay.set_time(14.0)
+    index, waiting = overlay._current()
+    assert index == 0 and 0.3 < waiting < 0.7  # "la" is done, "di" has not started
+    overlay.set_time(17.5)
+    assert overlay._current() == (0, waiting)  # an even fill would have moved on
+    overlay.set_time(19.9)
+    assert overlay._current()[1] > waiting
+    overlay.grab()
+
+
 def test_lyrics_overlay_draws_lines_once_and_ahead_of_time(qtbot, monkeypatch):
     """Drawing a line is slow: it happens once, in steps, before the line is needed."""
     from ytktv.ui import mv_overlays
