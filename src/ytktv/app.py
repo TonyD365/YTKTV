@@ -116,18 +116,26 @@ def make_stem_manager(youtube: YouTube, settings: Any, ffmpeg: str | None, separ
     return manager
 
 
-def make_runtime_separator(runtime: Any, settings: Any) -> Any:
-    """Separator that runs in the downloaded runtime (packaged Windows / Linux builds)."""
-    from ytktv.separation.remote import SubprocessSeparator
+def make_separator(settings: Any, runtime: Any = None) -> Any:
+    """Separator running in a worker process.
+
+    With *runtime* it uses the downloaded environment (packaged Windows / Linux
+    builds); otherwise the libraries that are part of this build.
+    """
+    from ytktv.separation.remote import SubprocessSeparator, builtin_launcher, runtime_launcher
     from ytktv.separation.runtime import VARIANTS
 
-    variant = VARIANTS[runtime.installed_variant()]
+    directml = False
+    launcher = builtin_launcher()
+    if runtime is not None:
+        directml = VARIANTS[runtime.installed_variant()].directml
+        launcher = runtime_launcher(runtime.python)
     return SubprocessSeparator(
-        runtime.python,
+        launcher,
         settings.separation_model,
         data_dir() / "models",
         cache_dir() / "separator",
-        directml=variant.directml,
+        directml=directml,
         log_path=cache_dir() / "separator.log",
     )
 
@@ -194,22 +202,27 @@ def main(argv: list[str] | None = None) -> int:
         audio.start()
 
     from ytktv.separation import runtime as separation_runtime
-    from ytktv.separation.base import detect_accelerator, separation_installed
+    from ytktv.separation.base import separation_installed
 
     # Three ways to get separation: libraries inside this build (macOS, source installs),
-    # a downloaded runtime (packaged Windows / Linux), or not at all.
+    # a downloaded runtime (packaged Windows / Linux), or not at all. Either way it runs
+    # in a separate low-priority process so it cannot disturb the live audio.
     runtime = None
     separator: Any = None
     if separation_installed():
-        from ytktv.separation.uvr import UvrSeparator
-
-        separator = UvrSeparator(
-            settings.separation_model, data_dir() / "models", cache_dir() / "separator"
-        )
+        separator = make_separator(settings)
     elif separation_runtime.supported():
         runtime = separation_runtime.Runtime()
         if runtime.installed_variant():
-            separator = make_runtime_separator(runtime, settings)
+            separator = make_separator(settings, runtime)
+
+    from ytktv.core.preload import MediaPreloader
+
+    def preload(video_id: str, dest: Path) -> Path:
+        return youtube.download_media(video_id, dest, settings.max_height, ffmpeg=ffmpeg)
+
+    preloader = MediaPreloader(cache_dir() / "media", preload)
+    preloader.start()
 
     controller = KTVController(
         store,
@@ -217,6 +230,7 @@ def main(argv: list[str] | None = None) -> int:
         youtube,
         library=Library(data_dir() / "library.json"),
         bus=bus,
+        preloader=preloader,
         stems=make_stem_manager(youtube, settings, ffmpeg, separator) if separator else None,
         audio=audio,
     )
@@ -226,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
 
         def work() -> None:
             try:
-                label = active.start() if hasattr(active, "start") else detect_accelerator().label
+                label = active.start()
             except Exception as exc:
                 log.warning("separation runtime did not start: %s", exc)
                 label = "Unavailable (see Settings)"
@@ -268,7 +282,7 @@ def main(argv: list[str] | None = None) -> int:
             controller,
             runtime,
             window,
-            make_separator=lambda: make_runtime_separator(runtime, settings),
+            make_separator=lambda: make_separator(settings, runtime),
             on_ready=enable,
         )
         window.settings_page.install_separation.connect(setup.install_recommended)

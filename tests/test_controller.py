@@ -142,13 +142,17 @@ class FakeStems:
     def path(self, video_id):
         return self.tmp / f"{video_id}.flac" if video_id in self.ready else None
 
+    def retain(self, wanted):
+        self.retained = set(wanted)
+
     def stop(self):
         pass
 
 
-def test_instrumental_attaches_when_separation_finishes_mid_song(tmp_path):
+def test_instrumental_attaches_mid_song_when_not_waiting(tmp_path):
     stems = FakeStems(tmp_path)
     controller, player, _ = make_controller(tmp_path, stems=stems)
+    controller.settings.wait_for_instrumental = False
     try:
         controller.set_vocal_mode(VocalMode.INSTRUMENTAL)
         song = make_song(1)
@@ -169,6 +173,121 @@ def test_instrumental_attaches_when_separation_finishes_mid_song(tmp_path):
         assert not player.instrumental_active
     finally:
         controller.close()
+
+
+def test_removed_songs_are_dropped_from_separation(tmp_path):
+    stems = FakeStems(tmp_path)
+    controller, _, _ = make_controller(tmp_path, stems=stems)
+    controller.settings.wait_for_instrumental = False
+    try:
+        songs = [make_song(i) for i in range(1, 4)]
+        items = [controller.enqueue(song) for song in songs]
+        wait_for(lambda: controller.status == PlayStatus.PLAYING)
+        controller.remove(items[1].id)
+        assert stems.retained == {songs[0].video_id, songs[2].video_id}
+        controller.skip()
+        wait_for(lambda: controller.current is not None and controller.current.id == items[2].id)
+        assert stems.retained == {songs[2].video_id}
+        controller.clear_queue()
+        assert stems.retained == {songs[2].video_id}
+    finally:
+        controller.close()
+
+
+def test_song_waits_for_its_instrumental_then_starts_with_it(tmp_path):
+    stems = FakeStems(tmp_path)
+    controller, player, _ = make_controller(tmp_path, stems=stems)
+    try:
+        controller.set_vocal_mode(VocalMode.INSTRUMENTAL)
+        song = make_song(1)
+        controller.enqueue(song)
+        wait_for(lambda: controller.state()["loading"] == "Preparing instrumental")
+        assert controller.status == PlayStatus.LOADING and player.play_count == 0
+
+        stems.ready.add(song.video_id)
+        stems.on_change(song.video_id, StemStatus.READY)
+        wait_for(lambda: controller.status == PlayStatus.PLAYING)
+        assert player.instrumental_active  # from the first note, no switch mid-song
+        assert controller.state()["loading"] == ""
+    finally:
+        controller.close()
+
+
+def test_choosing_original_or_skipping_ends_the_wait(tmp_path):
+    stems = FakeStems(tmp_path)
+    controller, player, _ = make_controller(tmp_path, stems=stems)
+    try:
+        controller.set_vocal_mode(VocalMode.INSTRUMENTAL)
+        controller.enqueue(make_song(1))
+        controller.enqueue(make_song(2))
+        wait_for(lambda: controller.state()["loading"] == "Preparing instrumental")
+        controller.skip()  # give up on song 1 while it is still waiting
+        wait_for(
+            lambda: controller.current is not None and controller.current.song.title == "Song 2"
+        )
+        wait_for(lambda: controller.state()["loading"] == "Preparing instrumental")
+        assert player.play_count == 0 and controller.state()["history"] == []
+
+        controller.set_vocal_mode(VocalMode.ORIGINAL)  # no need to wait any more
+        wait_for(lambda: controller.status == PlayStatus.PLAYING)
+        assert controller.current.song.title == "Song 2" and not player.instrumental_active
+    finally:
+        controller.close()
+
+
+class FakePreloader:
+    def __init__(self, tmp_path):
+        self.tmp = tmp_path
+        self.synced = []
+        self.ready = set()
+        self.on_change = None
+        self.stopped = False
+
+    def sync(self, upcoming, keep=None):
+        self.synced.append((list(upcoming), set(keep or ())))
+
+    def path(self, video_id):
+        return self.tmp / f"{video_id}.mkv" if video_id in self.ready else None
+
+    def status(self, video_id):
+        return "ready" if video_id in self.ready else "loading"
+
+    def stop(self):
+        self.stopped = True
+
+
+def test_upcoming_songs_are_preloaded_and_played_from_disk(tmp_path):
+    preloader = FakePreloader(tmp_path)
+    controller, player, resolver = make_controller(tmp_path, preloader=preloader)
+    try:
+        songs = [make_song(i) for i in range(1, 5)]
+        for song in songs:
+            controller.enqueue(song)
+        wait_for(lambda: controller.status == PlayStatus.PLAYING)
+        # The first song had no time to preload: it is streamed.
+        assert player.source.video_url.startswith("https://")
+        upcoming, keep = preloader.synced[-1]
+        assert upcoming == [songs[1].video_id, songs[2].video_id]  # two ahead, not the whole queue
+        assert keep == {songs[0].video_id}
+        assert controller.state()["queue"][0]["preload"] == "loading"
+
+        preloader.ready.add(songs[1].video_id)
+        player.finish()
+        wait_for(
+            lambda: (
+                controller.current.song.title == "Song 2"
+                and controller.status == PlayStatus.PLAYING
+            )
+        )
+        assert player.source.video_url == str(tmp_path / f"{songs[1].video_id}.mkv")
+        assert preloader.synced[-1] == ([songs[2].video_id, songs[3].video_id], {songs[1].video_id})
+
+        controller.settings.preload_queue = False
+        controller.clear_queue()
+        assert preloader.synced[-1] == ([], {songs[1].video_id})
+    finally:
+        controller.close()
+    assert preloader.stopped
 
 
 def test_favorites_toggle_and_persist(tmp_path):

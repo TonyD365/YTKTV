@@ -17,11 +17,18 @@ microphones into the music with reverb and echo.
   "Now Playing" / "Up Next" banner and an idle screen showing the phone QR code.
 - **Original / Instrumental switch.** Every selected song is split into vocals and backing track
   in the background with an AI model, on the GPU when one is available (Apple Silicon via Metal,
-  NVIDIA via CUDA, other Windows GPUs via DirectML). Switching is instant and stays in sync. Until a song is ready, *Vocal Cut*
-  and *L* / *R* (for classic split-track KTV videos) work with no waiting.
+  NVIDIA via CUDA, other Windows GPUs via DirectML). Both tracks play together and switching is
+  a crossfade, so there is no gap. A song waits for its instrumental before it starts (shown as
+  "Preparing instrumental"), and work on songs removed from the queue is cancelled. *Vocal Cut*
+  and *L* / *R* (for classic split-track KTV videos) need no preparation.
+- **Smooth playback.** The next songs in the queue are downloaded ahead of time and played from
+  disk; only the first song of a session streams, with a loading screen until it is ready.
+  Separation runs in its own low-priority process so it cannot disturb the live sound.
 - **Mixing console.** Four microphone channels laid out like a hardware desk: input selection,
   GAIN, 3-band EQ, ECHO, FX (reverb), PAN, fader, MUTE and PEAK LEDs; MUSIC, MICS and MAIN bus
-  faders, an LED meter and output device selection. Microphones are mixed into the output
+  faders, an OUTPUT meter for the total level (music and microphones), and output device
+  selection. Each channel has a low cut and a noise gate, so an open microphone stays silent
+  until someone sings. Microphones are mixed into the output
   automatically.
 - **KTV controls.** Queue, Priority (play next), Skip, Replay, Pause, Key up/down (±6 semitones),
   Tempo, favorites, sung history, plus Applause / Cheer / Air Horn / Drum Roll buttons.

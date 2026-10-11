@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import os
+import threading
 import time
 from pathlib import Path
 
 from tests.helpers import wait_for
 from ytktv.core.models import StemStatus
-from ytktv.separation.base import FakeSeparator, detect_accelerator
+from ytktv.separation.base import FakeSeparator
 from ytktv.separation.cache import StemCache
 from ytktv.separation.worker import StemManager
 
@@ -75,7 +76,69 @@ def test_cache_prunes_least_recently_used_but_keeps_protected(tmp_path):
     assert cache.get("old") and cache.get("new") and cache.get("mid") is None
 
 
-def test_detect_accelerator_reports_something():
-    accelerator = detect_accelerator()
-    assert accelerator.kind in ("cuda", "mps", "directml", "cpu", "unavailable")
-    assert accelerator.label
+class SlowSeparator:
+    """Blocks in separate() until released or cancelled, like a real long job."""
+
+    def __init__(self):
+        self.started = threading.Event()
+        self.release = threading.Event()
+        self.cancelled = False
+        self.calls = []
+
+    def separate(self, source, out_path):
+        self.calls.append(source.parent.parent.name)
+        self.started.set()
+        self.release.wait(5)
+        if self.cancelled:
+            self.cancelled = False
+            raise RuntimeError("worker exited")
+        out_path.write_bytes(b"stem")
+
+    def cancel(self):
+        self.cancelled = True
+        self.release.set()
+
+
+def test_removed_song_is_aborted_and_the_next_one_starts(tmp_path):
+    cache = StemCache(tmp_path, 10**9)
+    separator = SlowSeparator()
+    events = []
+    manager = StemManager(
+        cache, separator, fake_download, on_change=lambda v, s: events.append((v, s))
+    )
+    manager.start()
+    try:
+        for video_id in ("a", "b", "c"):
+            manager.request(video_id)
+        assert separator.started.wait(3)  # "a" is being separated
+        separator.started.clear()
+
+        manager.retain({"c"})  # "a" (running) and "b" (queued) were removed from the queue
+        assert manager.status("b") == StemStatus.NONE
+        assert separator.started.wait(3)  # moved straight on to "c"
+        wait_for(lambda: manager.status("a") == StemStatus.NONE)
+        assert not cache.folder("a").exists()  # nothing half-done left behind
+        assert (("a", StemStatus.FAILED)) not in events
+
+        separator.release.set()
+        wait_for(lambda: manager.status("c") == StemStatus.READY)
+        assert separator.calls == ["a", "c"]  # "b" never ran
+
+        # A song that was cancelled can be requested again later.
+        separator.release.clear()
+        separator.started.clear()
+        assert manager.request("a") == StemStatus.QUEUED
+        assert separator.started.wait(3)
+        separator.release.set()
+        wait_for(lambda: manager.status("a") == StemStatus.READY)
+    finally:
+        separator.release.set()
+        manager.stop()
+
+
+def test_retain_keeps_finished_stems(tmp_path):
+    cache = StemCache(tmp_path, 10**9)
+    manager = StemManager(cache, FakeSeparator(), fake_download)
+    manager.process("done")
+    manager.retain(set())
+    assert manager.status("done") == StemStatus.READY and manager.path("done") is not None

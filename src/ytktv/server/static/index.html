@@ -234,7 +234,7 @@ $("search-form").addEventListener("submit", (e) => {
 function render() {
   if (!state) return;
   const cur = state.current;
-  $("now-label").textContent = {idle: "Now Playing", loading: "Loading", playing: "Now Playing", paused: "Paused"}[state.status];
+  $("now-label").textContent = state.loading || {idle: "Now Playing", loading: "Loading", playing: "Now Playing", paused: "Paused"}[state.status];
   $("now-title").textContent = cur ? cur.song.title + (cur.singer ? `  ·  ${cur.singer}` : "") : "Nothing yet. Pick a song!";
   $("btn-pause").textContent = state.status === "paused" ? "Play" : "Pause";
   $("count").textContent = state.queue.length;

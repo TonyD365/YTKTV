@@ -270,7 +270,7 @@ def self_test(report: Report = print) -> int:
     import tempfile
     import wave
 
-    from ytktv.separation.remote import SubprocessSeparator
+    from ytktv.separation.remote import SubprocessSeparator, runtime_launcher
 
     bootstrap.ensure_ffmpeg()
     override = os.environ.get("YTKTV_SEPARATION_ROOT")
@@ -292,7 +292,7 @@ def self_test(report: Report = print) -> int:
             clip.writeframes(bytes(frames))
         output = Path(folder) / "instrumental.flac"
         separator = SubprocessSeparator(
-            runtime.python,
+            runtime_launcher(runtime.python),
             "UVR-MDX-NET-Inst_HQ_3.onnx",
             Path(folder) / "models",
             Path(folder) / "work",

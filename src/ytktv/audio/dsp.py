@@ -53,34 +53,60 @@ def _peak(sr: float, freq: float, gain_db: float, q: float) -> list[float]:
     ]
 
 
+def _high_pass(sr: float, freq: float) -> list[float]:
+    """Second-order Butterworth high-pass as one normalised section."""
+    w0 = 2.0 * math.pi * freq / sr
+    alpha = math.sin(w0) / math.sqrt(2.0)
+    cos = math.cos(w0)
+    a0 = 1 + alpha
+    return [
+        (1 + cos) / 2 / a0,
+        -(1 + cos) / a0,
+        (1 + cos) / 2 / a0,
+        1.0,
+        -2 * cos / a0,
+        (1 - alpha) / a0,
+    ]
+
+
 class ThreeBandEQ:
     """LOW shelf (120 Hz), MID peak (1.5 kHz) and HIGH shelf (8 kHz)."""
 
-    def __init__(self, sample_rate: float) -> None:
+    def __init__(self, sample_rate: float, low_cut_hz: float | None = None) -> None:
         self.sample_rate = sample_rate
+        # An optional high-pass runs in the same filter call as the EQ bands: one pass
+        # through the block instead of two.
+        self._prefix = [_high_pass(sample_rate, low_cut_hz)] if low_cut_hz else []
         self._gains = (0.0, 0.0, 0.0)
         self._sos = self._design(*self._gains)
-        self._zi = np.zeros((3, 2), dtype=np.float64)
+        self._zi = np.zeros((len(self._sos), 2), dtype=np.float64)
 
     def _design(self, low: float, mid: float, high: float) -> FloatArray:
         sr = self.sample_rate
-        return np.array(
-            [
+        if (low, mid, high) == (0.0, 0.0, 0.0):
+            bands = []  # flat: only the low cut (if any) needs to run
+        else:
+            bands = [
                 _shelf(sr, 120.0, low, high=False),
                 _peak(sr, 1500.0, mid, q=0.8),
                 _shelf(sr, 8000.0, high, high=True),
-            ],
-            dtype=np.float64,
-        )
+            ]
+        return np.array([*self._prefix, *bands], dtype=np.float64).reshape(-1, 6)
 
     def set_gains(self, low_db: float, mid_db: float, high_db: float) -> None:
         gains = (low_db, mid_db, high_db)
         if gains != self._gains:
+            flat_changed = (gains == (0.0, 0.0, 0.0)) != (self._gains == (0.0, 0.0, 0.0))
             self._gains = gains
             self._sos = self._design(*gains)
+            if flat_changed:  # the number of sections changed; keep the low cut's state
+                zi = np.zeros((len(self._sos), 2), dtype=np.float64)
+                keep = len(self._prefix)
+                zi[:keep] = self._zi[:keep]
+                self._zi = zi
 
     def process(self, x: FloatArray) -> FloatArray:
-        if self._gains == (0.0, 0.0, 0.0):
+        if len(self._sos) == 0:
             return x
         y, self._zi = sosfilt(self._sos, x, zi=self._zi)
         return y.astype(np.float32, copy=False)
@@ -183,6 +209,64 @@ class Reverb:
         return left * wet, right * wet
 
 
+class LowCut:
+    """80 Hz high-pass: removes handling rumble and mains hum without touching voices."""
+
+    def __init__(self, sample_rate: float, freq: float = 80.0) -> None:
+        self._sos = np.array([_high_pass(sample_rate, freq)])
+        self._zi = np.zeros((1, 2))
+
+    def process(self, x: FloatArray) -> FloatArray:
+        y, self._zi = sosfilt(self._sos, x, zi=self._zi)
+        return y.astype(np.float32, copy=False)
+
+
+class NoiseGate:
+    """Closes the channel while nobody is singing, so an open mic adds no hiss or room noise.
+
+    Opens instantly, holds through short pauses, then fades shut. The open and
+    close thresholds differ so a level hovering near one of them cannot chatter.
+    """
+
+    def __init__(
+        self,
+        sample_rate: float,
+        open_db: float = -45.0,
+        close_db: float = -52.0,
+        hold_seconds: float = 0.4,
+        release_seconds: float = 0.25,
+    ) -> None:
+        self.sample_rate = sample_rate
+        self._open = db_to_gain(open_db)
+        self._close = db_to_gain(close_db)
+        self._hold = int(hold_seconds * sample_rate)
+        self._release = release_seconds * sample_rate
+        self._held = 0
+        self._gain = 0.0
+        self.is_open = False
+
+    def process(self, x: FloatArray) -> FloatArray:
+        n = len(x)
+        if n == 0:
+            return x
+        level = math.sqrt(float(np.dot(x, x)) / n)
+        if level >= self._open:
+            self.is_open = True
+            self._held = self._hold
+        elif self.is_open and level < self._close:
+            self._held -= n
+            if self._held <= 0:
+                self.is_open = False
+        previous = self._gain
+        # Snap open (the first syllable must not be clipped off); fade shut.
+        target = 1.0 if self.is_open else max(0.0, previous - n / self._release)
+        self._gain = target
+        if previous == target:
+            return x if target == 1.0 else x * np.float32(target)
+        start = target if self.is_open else previous
+        return x * np.linspace(start, target, n, dtype=np.float32)
+
+
 class Limiter:
     """Block-wise brick-wall limiter with instant attack and smooth release."""
 
@@ -213,10 +297,11 @@ def fader_gain(position: float) -> float:
 
 
 class MicChain:
-    """One mixer channel strip: trim -> EQ -> echo/reverb sends -> pan -> fader."""
+    """One mixer channel strip: gate -> trim -> low cut + EQ -> echo/reverb -> pan."""
 
     def __init__(self, sample_rate: float) -> None:
-        self.eq = ThreeBandEQ(sample_rate)
+        self.gate = NoiseGate(sample_rate)
+        self.eq = ThreeBandEQ(sample_rate, low_cut_hz=80.0)  # low cut and EQ in one pass
         self.echo = Echo(sample_rate)
         self.reverb = Reverb(sample_rate)
         self._level = 0.0
@@ -225,6 +310,7 @@ class MicChain:
     def process(self, x: FloatArray, params: MicParams) -> FloatArray:
         """Process a mono block and return a stereo (n, 2) block."""
         n = len(x)
+        x = self.gate.process(x)
         target = 0.0 if params.mute else params.gain * fader_gain(params.fader)
         if target != self._level:
             x = x * np.linspace(self._level, target, n, dtype=np.float32)

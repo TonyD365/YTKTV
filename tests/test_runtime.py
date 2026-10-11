@@ -4,6 +4,8 @@ import json
 import subprocess
 import sys
 import textwrap
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -168,11 +170,10 @@ def separator(tmp_path):
     script = tmp_path / "fake_worker.py"
     script.write_text(FAKE_WORKER)
     sep = SubprocessSeparator(
-        sys.executable,
+        [sys.executable, "-u", str(script)],
         "model.onnx",
         tmp_path / "models",
         tmp_path / "work",
-        script=script,
         log_path=tmp_path / "worker.log",
     )
     yield sep
@@ -236,3 +237,51 @@ def test_worker_script_is_standalone():
     """It runs inside the downloaded environment, where the ytktv package does not exist."""
     source = Path(runtime.__file__).with_name("sep_worker.py").read_text()
     assert "import ytktv" not in source and "from ytktv" not in source
+
+
+def test_builtin_launcher_starts_the_app_in_worker_mode(monkeypatch):
+    from ytktv.separation import remote
+
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    assert remote.builtin_launcher() == [sys.executable, "-u", "-m", "ytktv", "--separation-worker"]
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    assert remote.builtin_launcher() == [sys.executable, "--separation-worker"]
+    assert remote.runtime_launcher("/env/python")[0] == "/env/python"
+
+
+SLOW_WORKER = textwrap.dedent(
+    """
+    import json, os, shutil, sys, time
+    def send(message):
+        print('@@YTKTV ' + json.dumps(message), flush=True)
+    send({"event": "ready", "kind": "cpu", "device": "CPU"})
+    for line in sys.stdin:
+        request = json.loads(line)
+        if os.path.basename(request["source"]).startswith("slow"):
+            time.sleep(30)
+        shutil.copyfile(request["source"], request["output"])
+        send({"ok": True})
+    """
+)
+
+
+def test_cancel_aborts_the_running_song_and_the_worker_recovers(tmp_path):
+    script = tmp_path / "slow_worker.py"
+    script.write_text(SLOW_WORKER)
+    launcher = [sys.executable, "-u", str(script)]
+    separator = SubprocessSeparator(launcher, "m", tmp_path / "models", tmp_path / "work")
+    slow = tmp_path / "slow.wav"
+    slow.write_bytes(b"x")
+    quick = tmp_path / "quick.wav"
+    quick.write_bytes(b"y")
+    try:
+        separator.start()
+        threading.Timer(0.5, separator.cancel).start()
+        began = time.monotonic()
+        with pytest.raises(WorkerError):
+            separator.separate(slow, tmp_path / "slow.flac")
+        assert time.monotonic() - began < 10  # did not wait out the 30 s job
+        separator.separate(quick, tmp_path / "quick.flac")
+        assert (tmp_path / "quick.flac").read_bytes() == b"y"
+    finally:
+        separator.close()

@@ -23,6 +23,7 @@ from ytktv.youtube.parse import MediaSource
 
 if TYPE_CHECKING:
     from ytktv.audio.engine import AudioEngine
+    from ytktv.core.preload import MediaPreloader
     from ytktv.separation.worker import StemManager
 
 log = logging.getLogger(__name__)
@@ -31,6 +32,8 @@ PITCH_RANGE = 6  # semitones either way
 SPEEDS = (0.8, 0.9, 1.0, 1.1, 1.2)
 _POSITION_INTERVAL = 0.5
 _OPEN_RETRIES = 2
+_PRELOAD_AHEAD = 2  # how many upcoming songs to keep downloaded
+_INSTRUMENTAL_WAIT = 180.0  # longest a song is held back for its instrumental
 
 
 class StreamResolver(Protocol):
@@ -50,6 +53,7 @@ class KTVController:
         stems: StemManager | None = None,
         audio: AudioEngine | None = None,
         accelerator: str = "",
+        preloader: MediaPreloader | None = None,
     ) -> None:
         self.store = store
         self.settings = store.settings
@@ -60,6 +64,7 @@ class KTVController:
         self.stems = stems
         self.audio = audio
         self.accelerator = accelerator
+        self.preloader = preloader
 
         self.queue = SongQueue()
         self.queue.load_history(self.library.history)
@@ -79,6 +84,10 @@ class KTVController:
         self._prefetcher = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ytktv-prefetch")
         self._last_position_emit = 0.0
         self._started = False  # has the current song actually produced playback?
+        self.loading = ""  # what the room is waiting for while status is LOADING
+        self._skip_wait: str | None = None
+        self._awaiting_start = False  # play() was called and the first frame is pending
+        self._wake = threading.Event()
         self._retries: dict[str, int] = {}
         self._save_timer: threading.Timer | None = None
         self._closed = False
@@ -88,6 +97,8 @@ class KTVController:
         if stems is not None:
             stems.on_change = self._on_stem_change
             stems.order = self._stem_order
+        if preloader is not None:
+            preloader.on_change = lambda _video_id: self._emit_state()
         self._apply_volume()
         player.set_audio_device(self.settings.output_device)
 
@@ -112,6 +123,7 @@ class KTVController:
     def remove(self, item_id: str) -> bool:
         ok = self.queue.remove(item_id)
         if ok:
+            self._sync_preload()
             self._emit_state()
         return ok
 
@@ -136,6 +148,7 @@ class KTVController:
 
     def clear_queue(self) -> None:
         self.queue.clear()
+        self._sync_preload()
         self._emit_state()
 
     # -- transport --------------------------------------------------------
@@ -145,6 +158,8 @@ class KTVController:
             current_id = self.current.id if self.current else None
             if current_id is None and self.status != PlayStatus.IDLE:
                 return  # already switching songs
+            self._skip_wait = current_id  # in case the song is still waiting to start
+        self._wake.set()
         self._executor.submit(self._advance, current_id, True)
 
     def replay(self) -> None:
@@ -202,21 +217,34 @@ class KTVController:
                 item = self.queue.pop_next()
                 self.current = item
                 self.status = PlayStatus.LOADING if item else PlayStatus.IDLE
+                self.loading = "Loading video" if item else ""
+                self._awaiting_start = False
                 self.position = 0.0
                 self.duration = float(item.song.duration) if item else 0.0
                 self.pitch = 0
                 self.speed = 1.0
+            self._sync_preload()
             self._emit_state()
+            # Silence the previous song now: the next one may take a while to be ready.
+            self.player.stop()
+            self._apply_volume()
             if item is None:
-                self.player.stop()
-                self._apply_volume()
                 return
+            if not self._wait_for_instrumental(item):
+                expected_id = item.id  # skipped while waiting
+                continue
             try:
-                source = self.resolver.resolve(item.song.video_id, self.settings.max_height)
+                video_id = item.song.video_id
+                local = self.preloader.path(video_id) if self.preloader else None
+                if local is not None:
+                    source = MediaSource(video_url=str(local))
+                else:
+                    source = self.resolver.resolve(video_id, self.settings.max_height)
                 self.player.set_pitch(0)
                 self.player.set_speed(1.0)
                 self._apply_vocal_mode()
-                stem = self.stems.path(item.song.video_id) if self.stems else None
+                stem = self.stems.path(video_id) if self.stems else None
+                self._awaiting_start = True
                 self.player.play(
                     source,
                     instrumental=stem,
@@ -224,16 +252,52 @@ class KTVController:
                 )
                 self._apply_volume()
             except Exception as exc:
+                self._awaiting_start = False
                 log.warning("could not play %s: %s", item.song.video_id, exc)
                 self.toast(f"Could not play: {item.song.title}", error=True)
                 expected_id = item.id
                 continue
-            with self._lock:
-                if self.current is item:
-                    self.status = PlayStatus.PLAYING
-            self._emit_state()
+            # Status stays LOADING until the player reports its first position.
             self._prefetch_next()
             return
+
+    def _wait_for_instrumental(self, item: QueueItem) -> bool:
+        """Hold a song until its instrumental is ready, so it never switches mid-song.
+
+        Only applies in Instrumental mode. Returns False if the song was
+        skipped during the wait. Choosing another vocal mode ends the wait.
+        """
+        if self.stems is None or not self.settings.wait_for_instrumental:
+            return True
+        video_id = item.song.video_id
+        deadline = time.monotonic() + _INSTRUMENTAL_WAIT
+        announced = False
+        while not self._closed and time.monotonic() < deadline:
+            with self._lock:
+                if self._skip_wait == item.id:
+                    self._skip_wait = None
+                    return False
+                if self.current is not item:
+                    return False
+            if self.vocal_mode != VocalMode.INSTRUMENTAL:
+                break
+            status = self.stems.status(video_id)
+            if status == StemStatus.NONE:
+                status = self.stems.request(video_id)
+            if status in (StemStatus.READY, StemStatus.FAILED):
+                break
+            if not announced:
+                announced = True
+                with self._lock:
+                    self.loading = "Preparing instrumental"
+                self._emit_state()
+            self._wake.wait(0.25)
+            self._wake.clear()
+        if announced:
+            with self._lock:
+                self.loading = "Loading video"
+            self._emit_state()
+        return True
 
     def _on_player_end(self, reason: str) -> None:
         with self._lock:
@@ -259,6 +323,7 @@ class KTVController:
         try:
             source = self.resolver.resolve(item.song.video_id, self.settings.max_height)
             stem = self.stems.path(item.song.video_id) if self.stems else None
+            self._awaiting_start = True
             self.player.play(
                 source,
                 instrumental=stem,
@@ -270,6 +335,15 @@ class KTVController:
             self._advance(item_id)
 
     def _on_player_position(self, position: float, duration: float) -> None:
+        if self.status == PlayStatus.LOADING:
+            if not self._awaiting_start:
+                return  # a late report from the previous song
+            with self._lock:
+                if self.status == PlayStatus.LOADING and self._awaiting_start:
+                    self._awaiting_start = False
+                    self.status = PlayStatus.PLAYING
+                    self.loading = ""
+            self._emit_state()
         self.position = position
         if position > 1.0:
             self._started = True
@@ -280,7 +354,23 @@ class KTVController:
             self._last_position_emit = now
             self.bus.emit("position", {"position": position, "duration": self.duration})
 
+    def _sync_preload(self) -> None:
+        """Tell the background workers which songs still matter after a queue change."""
+        if self.stems is not None:
+            # A removed or skipped song must not keep the separator busy.
+            self.stems.retain(set(self._stem_order()))
+        if self.preloader is None:
+            return
+        with self._lock:
+            keep = {self.current.song.video_id} if self.current else set()
+        if not self.settings.preload_queue:
+            self.preloader.sync([], keep)
+            return
+        upcoming = [item.song.video_id for item in self.queue.snapshot()[:_PRELOAD_AHEAD]]
+        self.preloader.sync(upcoming, keep)
+
     def _prefetch_next(self) -> None:
+        self._sync_preload()
         upcoming = self.queue.peek()
         if upcoming is None:
             return
@@ -299,6 +389,7 @@ class KTVController:
     def set_vocal_mode(self, mode: VocalMode | str) -> None:
         self.vocal_mode = VocalMode(mode)
         self.settings.default_vocal_mode = self.vocal_mode.value
+        self._wake.set()
         self._apply_vocal_mode()
         if (
             self.vocal_mode == VocalMode.INSTRUMENTAL
@@ -383,6 +474,7 @@ class KTVController:
         return order
 
     def _on_stem_change(self, video_id: str, status: StemStatus) -> None:
+        self._wake.set()
         if status == StemStatus.READY and self.stems is not None:
             with self._lock:
                 is_current = self.current is not None and self.current.song.video_id == video_id
@@ -416,6 +508,7 @@ class KTVController:
     def _item_dict(self, item: QueueItem) -> dict[str, Any]:
         data = item.to_dict()
         data["stem"] = self.stem_status(item.song.video_id).value
+        data["preload"] = self.preloader.status(item.song.video_id) if self.preloader else "none"
         return data
 
     def state(self) -> dict[str, Any]:
@@ -426,6 +519,7 @@ class KTVController:
         return {
             "version": __version__,
             "status": status.value,
+            "loading": self.loading if status == PlayStatus.LOADING else "",
             "current": self._item_dict(current) if current else None,
             "queue": [self._item_dict(item) for item in self.queue.snapshot()],
             "history": [song.to_dict() for song in self.queue.history()[:50]],
@@ -461,8 +555,11 @@ class KTVController:
         self.library.save(self.queue.history())
         self._executor.shutdown(wait=False, cancel_futures=True)
         self._prefetcher.shutdown(wait=False, cancel_futures=True)
+        self._wake.set()
         if self.stems is not None:
             self.stems.stop()
+        if self.preloader is not None:
+            self.preloader.stop()
         if self.audio is not None:
             self.audio.stop()
         self.player.close()

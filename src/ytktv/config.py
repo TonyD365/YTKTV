@@ -60,6 +60,10 @@ class Settings:
     auto_separate: bool = True
     separation_model: str = "UVR-MDX-NET-Inst_HQ_3.onnx"
     stem_cache_gb: float = 5.0
+    # Hold a song back until its instrumental is ready instead of switching mid-song.
+    wait_for_instrumental: bool = True
+    # Download the next songs in the queue ahead of time so they play without buffering.
+    preload_queue: bool = True
     # Runtime variant the user said no to downloading; do not ask about it again.
     separation_declined: str = ""
 

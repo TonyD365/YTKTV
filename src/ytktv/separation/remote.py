@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from typing import IO, Any
@@ -19,6 +20,19 @@ log = logging.getLogger(__name__)
 
 PREFIX = "@@YTKTV "
 WORKER_SCRIPT = Path(__file__).with_name("sep_worker.py")
+WORKER_FLAG = "--separation-worker"
+
+
+def runtime_launcher(python: Path | str) -> list[str]:
+    """Start the worker with a separate Python environment (the downloaded runtime)."""
+    return [str(python), "-u", str(WORKER_SCRIPT)]
+
+
+def builtin_launcher() -> list[str]:
+    """Start the worker with this app's own libraries, in a new process."""
+    if getattr(sys, "frozen", False):
+        return [sys.executable, WORKER_FLAG]
+    return [sys.executable, "-u", "-m", "ytktv", WORKER_FLAG]
 
 
 class WorkerError(RuntimeError):
@@ -30,18 +44,16 @@ class SubprocessSeparator:
 
     def __init__(
         self,
-        python: Path | str,
+        launcher: list[str],
         model: str,
         model_dir: Path,
         work_dir: Path,
         directml: bool = False,
-        script: Path = WORKER_SCRIPT,
         log_path: Path | None = None,
     ) -> None:
+        """*launcher* is the command that starts the worker, without its arguments."""
         self._command = [
-            str(python),
-            "-u",
-            str(script),
+            *launcher,
             "--model",
             model,
             "--model-dir",
@@ -119,6 +131,19 @@ class SubprocessSeparator:
                 raise
             if not reply.get("ok"):
                 raise WorkerError(str(reply.get("error", "separation failed")))
+
+    def cancel(self) -> None:
+        """Abandon the song being separated right now (it raises :class:`WorkerError`).
+
+        Safe to call from another thread while :meth:`separate` is waiting; the
+        worker is restarted for the next song.
+        """
+        process = self._process
+        if process is not None and process.poll() is None:
+            try:
+                process.kill()
+            except OSError:
+                log.debug("could not cancel the separation worker", exc_info=True)
 
     def _close_log(self) -> None:
         if self._log_file is not None:

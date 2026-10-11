@@ -38,6 +38,8 @@ class FakePlayer:
         self.instrumental = instrumental
         self.instrumental_active = bool(instrumental) and use_instrumental
         self.play_count += 1
+        if self.on_position:  # a real player reports position 0 once playback begins
+            self.on_position(0.0, source.duration)
 
     def stop(self) -> None:
         self.source = None
@@ -70,6 +72,9 @@ class FakePlayer:
 
     def set_audio_device(self, description: str | None) -> None:
         self.audio_device = description
+
+    def levels(self) -> tuple[float, float]:
+        return (0.0, 0.0)
 
     def close(self) -> None:
         self.closed = True
