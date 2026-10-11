@@ -1,0 +1,156 @@
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from ytktv.audio import sfx
+from ytktv.audio.dsp import Echo, Limiter, MicChain, Reverb, ThreeBandEQ, fader_gain
+from ytktv.audio.engine import Mixer, RingBuffer
+from ytktv.config import Settings
+from ytktv.core.models import MicParams
+
+SR = 48000
+BLOCK = 256
+
+
+def sine(freq: float, blocks: int = 40) -> np.ndarray:
+    t = np.arange(BLOCK * blocks) / SR
+    return (0.25 * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+
+
+def run_blocks(process, signal: np.ndarray) -> np.ndarray:
+    return np.concatenate([process(signal[i : i + BLOCK]) for i in range(0, len(signal), BLOCK)])
+
+
+def rms(x: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(np.square(x))))
+
+
+def test_eq_flat_is_passthrough_and_bands_hit_their_range():
+    eq = ThreeBandEQ(SR)
+    low = sine(60)
+    block = low[:BLOCK]
+    assert eq.process(block) is block
+
+    eq.set_gains(12.0, 0.0, 0.0)
+    boosted = run_blocks(eq.process, low)
+    assert rms(boosted[BLOCK * 20 :]) > rms(low) * 3  # ~ +12 dB on bass
+
+    eq = ThreeBandEQ(SR)
+    eq.set_gains(12.0, 0.0, 0.0)
+    high = sine(10000)
+    untouched = run_blocks(eq.process, high)
+    assert rms(untouched[BLOCK * 20 :]) == pytest.approx(rms(high), rel=0.1)
+
+
+def test_block_processing_matches_one_long_block():
+    """Effects must keep state correctly across block boundaries."""
+    signal = sine(440, blocks=80)
+    for make in (lambda: Echo(SR), lambda: Reverb(SR)):
+        chunked, whole = make(), make()
+
+        def as_mono(result):
+            return result if isinstance(result, np.ndarray) else result[0]
+
+        a = run_blocks(lambda block, fx=chunked: as_mono(fx.process(block, 0.5)), signal)
+        b = as_mono(whole.process(signal, 0.5))
+        np.testing.assert_allclose(a, b, atol=1e-5)
+
+
+def test_echo_repeats_after_the_delay():
+    echo = Echo(SR, delay_ms=100)
+    impulse = np.zeros(SR // 2, dtype=np.float32)
+    impulse[0] = 1.0
+    wet = echo.process(impulse, 1.0)
+    delay = int(SR * 0.1)
+    assert wet[delay] > 0.5
+    assert wet[2 * delay] > 0.1
+    assert np.all(wet[:delay] == 0)
+
+
+def test_reverb_has_a_decaying_tail_and_stays_finite():
+    reverb = Reverb(SR)
+    burst = np.zeros(SR * 2, dtype=np.float32)
+    burst[:2000] = sine(440, blocks=8)[:2000]
+    left, right = reverb.process(burst, 1.0)
+    assert np.isfinite(left).all() and np.isfinite(right).all()
+    early, late = rms(left[4000:20000]), rms(left[-16000:])
+    assert early > 0 and late < early
+    assert not np.allclose(left, right)  # stereo spread
+
+
+def test_limiter_keeps_peaks_under_the_ceiling():
+    limiter = Limiter(ceiling=0.9)
+    loud = np.full((BLOCK, 2), 3.0, dtype=np.float32)
+    limiter.process(loud)
+    out = limiter.process(loud)
+    assert float(np.max(np.abs(out))) <= 0.9 + 1e-4
+    quiet = np.full((BLOCK, 2), 0.1, dtype=np.float32)
+    fresh = Limiter()
+    assert fresh.process(quiet) is quiet
+
+
+def test_fader_taper():
+    assert fader_gain(0.0) == 0.0
+    assert fader_gain(0.8) == pytest.approx(1.0)
+    assert fader_gain(1.0) > 1.0
+
+
+def test_mic_chain_mute_pan_and_shape():
+    signal = sine(440, blocks=8)
+    chain = MicChain(SR)
+    out = np.concatenate(
+        [
+            chain.process(signal[i : i + BLOCK], MicParams(pan=-1.0, reverb=0, echo=0))
+            for i in range(0, len(signal), BLOCK)
+        ]
+    )
+    assert out.shape == (len(signal), 2) and out.dtype == np.float32
+    assert rms(out[:, 1]) < 1e-6 < rms(out[:, 0])
+
+    muted = MicChain(SR)
+    params = MicParams(mute=True, reverb=0, echo=0)
+    assert rms(muted.process(signal[:BLOCK], params)) == 0.0
+
+
+def test_ring_buffer_wraps_drops_oldest_and_bounds_latency():
+    ring = RingBuffer(8)
+    ring.write(np.arange(6, dtype=np.float32))
+    np.testing.assert_array_equal(ring.read(4), [0, 1, 2, 3])
+    ring.write(np.arange(6, 12, dtype=np.float32))  # wraps
+    np.testing.assert_array_equal(ring.read(8), [4, 5, 6, 7, 8, 9, 10, 11])
+    np.testing.assert_array_equal(ring.read(3), [0, 0, 0])  # underrun pads with silence
+
+    ring.write(np.arange(20, dtype=np.float32))  # overflow keeps the newest 8
+    np.testing.assert_array_equal(ring.read(8), np.arange(12, 20))
+
+    ring.write(np.arange(8, dtype=np.float32))
+    np.testing.assert_array_equal(ring.read(2, max_lag=4), [4, 5])  # skipped the backlog
+
+
+def test_mixer_mixes_mics_applies_volumes_and_plays_sfx():
+    settings = Settings()
+    mixer = Mixer(settings, SR)
+    block = sine(440, blocks=1)
+    out = mixer.mix([block, None, None, None], BLOCK)
+    assert out.shape == (BLOCK, 2)
+    assert mixer.mic_peaks[0] > 0 and mixer.mic_peaks[1] == 0
+    assert mixer.master_peak[0] > 0
+
+    settings.master_volume = 0
+    assert rms(mixer.mix([block, None, None, None], BLOCK)) == 0.0
+
+    settings.master_volume = 100
+    assert mixer.trigger("applause") and not mixer.trigger("nope")
+    silent = mixer.mix([None, None, None, None], BLOCK)
+    assert rms(silent) > 0  # the effect is audible with no microphones
+
+
+@pytest.mark.parametrize("name", sfx.SFX_NAMES)
+def test_sfx_are_stereo_normalised_and_deterministic(name):
+    bank = sfx.SfxBank(22050)
+    samples = bank.get(name)
+    assert samples is not None and samples.ndim == 2 and samples.shape[1] == 2
+    assert samples.dtype == np.float32
+    assert 0.3 < float(np.max(np.abs(samples))) <= 0.71
+    assert bank.get(name) is samples

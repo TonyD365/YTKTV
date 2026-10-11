@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0720">
+<title>YTKTV Remote</title>
+<style>
+  :root {
+    --bg: #0d0720; --panel: #1a1035; --panel-2: #241650; --line: #3a2a70;
+    --text: #f3eeff; --muted: #a99bd6; --pink: #ff3d9a; --cyan: #2ee6ff;
+    --purple: #8b5cff; --gold: #ffc94d; --danger: #ff5470;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(1200px 500px at 50% -10%, #3a1a7a 0%, var(--bg) 60%) fixed;
+    color: var(--text); font: 16px/1.4 -apple-system, "Segoe UI", Roboto, "PingFang SC", sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header { padding: calc(10px + env(safe-area-inset-top)) 16px 10px; }
+  .brand { font-weight: 900; letter-spacing: 2px; font-size: 20px;
+    background: linear-gradient(90deg, var(--pink), var(--cyan)); -webkit-background-clip: text;
+    background-clip: text; color: transparent; }
+  .now { margin-top: 8px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 10px 12px; }
+  .now .label { font-size: 11px; letter-spacing: 1.5px; color: var(--cyan); text-transform: uppercase; }
+  .now .title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar { height: 4px; background: var(--panel-2); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--pink), var(--cyan)); }
+  main { flex: 1; overflow-y: auto; padding: 4px 16px 16px; }
+  section { display: none; } section.active { display: block; }
+  nav { display: flex; background: #0a0518; border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom); }
+  nav button { flex: 1; background: none; border: 0; color: var(--muted); padding: 12px 0 10px;
+    font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+  nav button.active { color: var(--pink); box-shadow: inset 0 3px 0 var(--pink); }
+  .badge { background: var(--pink); color: #fff; border-radius: 10px; padding: 0 7px; font-size: 11px; margin-left: 4px; }
+  form.search { display: flex; gap: 8px; margin: 8px 0 12px; }
+  input[type=text], input[type=search] { flex: 1; min-width: 0; background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 16px; outline: none; }
+  input:focus { border-color: var(--cyan); }
+  button.btn { background: linear-gradient(135deg, var(--pink), var(--purple)); color: #fff; border: 0;
+    border-radius: 12px; padding: 12px 16px; font-weight: 800; font-size: 15px; }
+  button.btn:active, .pad button:active, .chip:active { transform: scale(.96); }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
+  .chip { flex: none; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    border-radius: 18px; padding: 7px 14px; font-size: 13px; }
+  .card { display: flex; gap: 10px; align-items: center; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 14px; padding: 8px; margin-bottom: 8px; }
+  .card img { width: 96px; height: 54px; object-fit: cover; border-radius: 8px; background: #000; flex: none; }
+  .card .meta { flex: 1; min-width: 0; }
+  .card .t { font-weight: 600; font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden; }
+  .card .s { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .acts { display: flex; flex-direction: column; gap: 6px; flex: none; }
+  .mini { border: 0; border-radius: 9px; padding: 7px 10px; font-weight: 800; font-size: 12px; color: #fff;
+    background: var(--purple); min-width: 62px; }
+  .mini.pink { background: var(--pink); } .mini.ghost { background: var(--panel-2); color: var(--muted); }
+  .mini.danger { background: var(--danger); }
+  .tag { font-size: 10px; border-radius: 6px; padding: 1px 6px; margin-left: 6px; border: 1px solid var(--line); color: var(--muted); }
+  .tag.ready { color: #5dffb0; border-color: #2b8a62; } .tag.busy { color: var(--gold); border-color: #8a6a1c; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  h3 { font-size: 12px; letter-spacing: 2px; color: var(--cyan); text-transform: uppercase; margin: 16px 0 8px; }
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .pad button { background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    border-radius: 14px; padding: 16px 4px; font-weight: 800; font-size: 14px; }
+  .pad button.on { background: linear-gradient(135deg, var(--pink), var(--purple)); border-color: transparent; }
+  .pad button.wide { grid-column: span 3; }
+  .row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+  .row label { width: 62px; color: var(--muted); font-size: 13px; font-weight: 700; }
+  .row output { width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+  input[type=range] { flex: 1; accent-color: var(--pink); height: 28px; }
+  .stepper { display: flex; align-items: center; gap: 10px; flex: 1; }
+  .stepper button { width: 54px; height: 44px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font-size: 22px; font-weight: 800; }
+  .stepper b { flex: 1; text-align: center; font-size: 18px; }
+  #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #000c;
+    border: 1px solid var(--cyan); color: var(--text); padding: 9px 16px; border-radius: 20px; font-size: 13px;
+    opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 86vw; text-align: center; }
+  #toast.show { opacity: 1; } #toast.error { border-color: var(--danger); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">YTKTV</div>
+  <div class="now">
+    <div class="label" id="now-label">Now Playing</div>
+    <div class="title" id="now-title">Nothing yet. Pick a song!</div>
+    <div class="bar"><i id="progress"></i></div>
+  </div>
+</header>
+
+<main>
+  <section id="tab-search" class="active">
+    <form class="search" id="search-form">
+      <input type="search" id="q" placeholder="Song, artist or YouTube link" autocomplete="off" enterkeyhint="search">
+      <button class="btn" type="submit">Search</button>
+    </form>
+    <div class="chips" id="chips"></div>
+    <div id="results"><div class="empty">Search for a song or tap a category.</div></div>
+  </section>
+
+  <section id="tab-queue">
+    <h3>Selected</h3>
+    <div id="queue"></div>
+    <h3>Sung</h3>
+    <div id="history"></div>
+  </section>
+
+  <section id="tab-remote">
+    <h3>Playback</h3>
+    <div class="pad">
+      <button data-act="pause" id="btn-pause">Pause</button>
+      <button data-act="replay">Replay</button>
+      <button data-act="skip">Skip</button>
+    </div>
+    <h3>Vocals</h3>
+    <div class="pad" id="modes">
+      <button data-mode="original">Original</button>
+      <button data-mode="instrumental">Instrumental</button>
+      <button data-mode="center_cut">Vocal Cut</button>
+    </div>
+    <h3>Key &amp; Tempo</h3>
+    <div class="row"><label>Key</label>
+      <div class="stepper"><button id="key-down">&minus;</button><b id="key">0</b><button id="key-up">+</button></div>
+    </div>
+    <div class="row"><label>Tempo</label>
+      <div class="stepper"><button id="tempo-down">&minus;</button><b id="tempo">100%</b><button id="tempo-up">+</button></div>
+    </div>
+    <h3>Volume</h3>
+    <div class="row"><label>Music</label><input type="range" min="0" max="100" id="vol-music"><output id="out-music"></output></div>
+    <div class="row"><label>Mic</label><input type="range" min="0" max="100" id="vol-mic"><output id="out-mic"></output></div>
+    <h3>Crowd</h3>
+    <div class="pad">
+      <button data-sfx="applause">Applause</button>
+      <button data-sfx="cheer">Cheer</button>
+      <button data-sfx="airhorn">Air Horn</button>
+      <button data-sfx="drumroll" class="wide">Drum Roll</button>
+    </div>
+    <h3>Your name</h3>
+    <div class="row"><input type="text" id="singer" maxlength="40" placeholder="Shown next to your songs"></div>
+  </section>
+</main>
+
+<nav>
+  <button data-tab="search" class="active">SEARCH</button>
+  <button data-tab="queue">QUEUE<span class="badge" id="count">0</span></button>
+  <button data-tab="remote">REMOTE</button>
+</nav>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+let state = null;
+let dragging = {};
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") node.className = v;
+    else if (k === "onclick") node.addEventListener("click", v);
+    else node.setAttribute(k, v);
+  }
+  for (const child of children) node.append(child);
+  return node;
+}
+
+async function api(path, method = "GET", body) {
+  const res = await fetch(path, {
+    method, headers: body ? {"Content-Type": "application/json"} : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+  return res.json();
+}
+
+let toastTimer;
+function toast(message, error) {
+  const t = $("toast");
+  t.textContent = message;
+  t.className = "show" + (error ? " error" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.className = ""), 2200);
+}
+
+const fmt = (s) => s ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}` : "";
+const STEM = {queued: ["busy", "Queued"], downloading: ["busy", "Preparing"], separating: ["busy", "Separating"],
+              ready: ["ready", "Instrumental ready"], failed: ["", "No instrumental"]};
+
+function songCard(song, actions, extra) {
+  const sub = [song.channel, fmt(song.duration)].filter(Boolean).join(" · ");
+  const title = el("div", {class: "t"}, song.title);
+  const line = el("div", {class: "s"}, sub);
+  if (extra) line.append(extra);
+  return el("div", {class: "card"},
+    el("img", {src: song.thumbnail, loading: "lazy", alt: ""}),
+    el("div", {class: "meta"}, title, line),
+    el("div", {class: "acts"}, ...actions));
+}
+
+async function add(song, priority) {
+  try {
+    await api("/api/queue", "POST", {song, priority, singer: $("singer").value});
+    toast(priority ? "Playing next" : "Added to queue");
+  } catch (e) { toast(e.message, true); }
+}
+
+function renderResults(songs) {
+  const box = $("results");
+  box.replaceChildren();
+  if (!songs.length) { box.append(el("div", {class: "empty"}, "No results.")); return; }
+  for (const song of songs) {
+    box.append(songCard(song, [
+      el("button", {class: "mini pink", onclick: () => add(song, false)}, "Select"),
+      el("button", {class: "mini", onclick: () => add(song, true)}, "Priority"),
+    ]));
+  }
+}
+
+async function load(path) {
+  $("results").replaceChildren(el("div", {class: "empty"}, "Searching…"));
+  try { renderResults(await api(path)); }
+  catch (e) { $("results").replaceChildren(el("div", {class: "empty"}, "Search failed. Try again.")); }
+}
+
+$("search-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const q = $("q").value.trim();
+  if (q) { $("q").blur(); load("/api/search?q=" + encodeURIComponent(q)); }
+});
+
+function render() {
+  if (!state) return;
+  const cur = state.current;
+  $("now-label").textContent = {idle: "Now Playing", loading: "Loading", playing: "Now Playing", paused: "Paused"}[state.status];
+  $("now-title").textContent = cur ? cur.song.title + (cur.singer ? `  ·  ${cur.singer}` : "") : "Nothing yet. Pick a song!";
+  $("btn-pause").textContent = state.status === "paused" ? "Play" : "Pause";
+  $("count").textContent = state.queue.length;
+  $("key").textContent = (state.pitch > 0 ? "+" : "") + state.pitch;
+  $("tempo").textContent = Math.round(state.speed * 100) + "%";
+  for (const b of $("modes").children) b.classList.toggle("on", b.dataset.mode === state.vocal_mode);
+  for (const name of ["music", "mic"]) {
+    if (!dragging[name]) $("vol-" + name).value = state[name + "_volume"];
+    $("out-" + name).textContent = $("vol-" + name).value;
+  }
+  setProgress(state.position, state.duration);
+
+  const q = $("queue");
+  q.replaceChildren();
+  if (!state.queue.length) q.append(el("div", {class: "empty"}, "The queue is empty."));
+  state.queue.forEach((item, i) => {
+    const stem = STEM[item.stem];
+    const tag = stem ? el("span", {class: "tag " + stem[0]}, stem[1]) : "";
+    const who = item.singer ? el("span", {class: "tag"}, item.singer) : "";
+    const extra = document.createDocumentFragment();
+    extra.append(who, tag);
+    q.append(songCard(item.song, [
+      el("button", {class: "mini" + (i === 0 ? " ghost" : ""), onclick: () => api(`/api/queue/${item.id}/top`, "POST")}, "Top"),
+      el("button", {class: "mini danger", onclick: () => api(`/api/queue/${item.id}`, "DELETE")}, "Remove"),
+    ], extra));
+  });
+
+  const h = $("history");
+  h.replaceChildren();
+  if (!state.history.length) h.append(el("div", {class: "empty"}, "No songs sung yet."));
+  for (const song of state.history.slice(0, 20)) {
+    h.append(songCard(song, [el("button", {class: "mini pink", onclick: () => add(song, false)}, "Again")]));
+  }
+}
+
+function setProgress(position, duration) {
+  $("progress").style.width = duration > 0 ? Math.min(100, position / duration * 100) + "%" : "0";
+}
+
+for (const b of document.querySelectorAll("nav button")) {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("active", x === b));
+    document.querySelectorAll("section").forEach((s) => s.classList.toggle("active", s.id === "tab-" + b.dataset.tab));
+  });
+}
+document.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => api("/api/player/" + b.dataset.act, "POST")));
+document.querySelectorAll("[data-sfx]").forEach((b) => b.addEventListener("click", () => api("/api/sfx/" + b.dataset.sfx, "POST")));
+document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => {
+  api("/api/sound", "POST", {vocal_mode: b.dataset.mode});
+  if (b.dataset.mode === "instrumental" && state && state.current && state.current.stem !== "ready")
+    toast(state.separation ? "Instrumental is still being prepared" : "Separation is not installed on the host");
+}));
+const sound = (body) => api("/api/sound", "POST", body).catch((e) => toast(e.message, true));
+$("key-up").onclick = () => state && sound({pitch: Math.min(6, state.pitch + 1)});
+$("key-down").onclick = () => state && sound({pitch: Math.max(-6, state.pitch - 1)});
+$("tempo-up").onclick = () => state && sound({speed: Math.min(1.2, state.speed + 0.1)});
+$("tempo-down").onclick = () => state && sound({speed: Math.max(0.8, state.speed - 0.1)});
+for (const name of ["music", "mic"]) {
+  const slider = $("vol-" + name);
+  slider.addEventListener("input", () => { dragging[name] = true; $("out-" + name).textContent = slider.value; });
+  slider.addEventListener("change", () => { dragging[name] = false; sound({[name + "_volume"]: +slider.value}); });
+}
+$("singer").value = localStorage.getItem("singer") || "";
+$("singer").addEventListener("change", () => localStorage.setItem("singer", $("singer").value));
+
+api("/api/categories").then((names) => {
+  for (const name of names) {
+    $("chips").append(el("button", {class: "chip", onclick: () => load("/api/hot?category=" + encodeURIComponent(name))}, name));
+  }
+});
+
+function connect() {
+  const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === "state") { state = msg.data; render(); }
+    else if (msg.type === "position") setProgress(msg.data.position, msg.data.duration);
+  };
+  ws.onclose = () => setTimeout(connect, 1500);
+}
+connect();
+</script>
+</body>
+</html>
