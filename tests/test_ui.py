@@ -110,3 +110,28 @@ def test_fader_click_jumps_and_clamps(qtbot):
     assert fader.value() < 0.1
     fader.set_value(5)
     assert fader.value() == 1.0
+
+
+def test_mv_screen_shows_pause_and_play_symbols(window, qtbot):
+    main, controller = window
+    mv = main.mv_window
+    mv.show()
+    controller.enqueue(make_song(1))
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    qtbot.waitUntil(lambda: mv._last_status == "playing", timeout=3000)
+    assert not mv.badge.isVisible()  # nothing shown just because a song started
+
+    controller.toggle_pause()
+    qtbot.waitUntil(lambda: mv.badge.isVisible() and mv.badge.symbol == "pause", timeout=3000)
+    qtbot.wait(1600)
+    assert mv.badge.isVisible()  # the pause symbol stays for as long as it is paused
+
+    controller.toggle_pause()
+    qtbot.waitUntil(lambda: mv.badge.symbol == "play", timeout=3000)
+    assert mv.badge.isVisible()
+    qtbot.waitUntil(lambda: not mv.badge.isVisible(), timeout=4000)  # then it fades away
+
+    controller.toggle_pause()
+    qtbot.waitUntil(lambda: mv.badge.isVisible(), timeout=3000)
+    controller.skip()  # the song ends while paused: the symbol must not linger
+    qtbot.waitUntil(lambda: not mv.badge.isVisible(), timeout=4000)
