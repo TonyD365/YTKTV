@@ -363,6 +363,19 @@ class KTVController:
 
     # -- separation -------------------------------------------------------
 
+    def attach_stems(self, stems: StemManager) -> None:
+        """Enable separation after start-up (the runtime was just downloaded)."""
+        previous = self.stems
+        stems.on_change = self._on_stem_change
+        stems.order = self._stem_order
+        self.stems = stems
+        if previous is not None:
+            previous.stop()
+        if self.settings.auto_separate:
+            for video_id in self._stem_order():
+                stems.request(video_id)
+        self._emit_state()
+
     def _stem_order(self) -> list[str]:
         with self._lock:
             order = [self.current.song.video_id] if self.current else []

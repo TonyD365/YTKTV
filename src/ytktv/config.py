@@ -60,6 +60,8 @@ class Settings:
     auto_separate: bool = True
     separation_model: str = "UVR-MDX-NET-Inst_HQ_3.onnx"
     stem_cache_gb: float = 5.0
+    # Runtime variant the user said no to downloading; do not ask about it again.
+    separation_declined: str = ""
 
     auto_update: bool = True
 

@@ -3,7 +3,11 @@
 #   pyinstaller packaging/ytktv.spec --noconfirm
 #
 # Environment:
-#   YTKTV_BUNDLE_SEPARATION=0   leave the vocal-separation runtime (torch) out
+#   YTKTV_SEPARATION_MODE       how the build gets vocal separation:
+#                                 bundle    ship torch inside the app (default; macOS)
+#                                 download  ship the uv installer; the app fetches the right
+#                                           GPU or CPU runtime on first run (Windows, Linux)
+#                                 none      no separation at all
 #   YTKTV_ICON_DIR=path         folder with icon.icns / icon.ico (optional)
 #   CODESIGN_IDENTITY=name      macOS Developer ID Application identity (optional)
 
@@ -20,7 +24,9 @@ from ytktv import bootstrap
 ROOT = Path(SPECPATH).parent
 SYSTEM = platform.system()
 VERSION = ytktv.__version__
-BUNDLE_SEPARATION = os.environ.get("YTKTV_BUNDLE_SEPARATION", "1") != "0"
+SEPARATION_MODE = os.environ.get("YTKTV_SEPARATION_MODE", "bundle")
+if SEPARATION_MODE not in ("bundle", "download", "none"):
+    sys.exit(f"unknown YTKTV_SEPARATION_MODE {SEPARATION_MODE!r}")
 CODESIGN_IDENTITY = os.environ.get("CODESIGN_IDENTITY") or None
 ICON_DIR = Path(os.environ.get("YTKTV_ICON_DIR", ROOT / "build" / "icon"))
 
@@ -46,7 +52,12 @@ try:
 except OSError as exc:
     sys.exit(f"libmpv at {libmpv} cannot be loaded: {exc}")
 
-datas = [(str(Path(ytktv.__file__).parent / "server" / "static"), "ytktv/server/static")]
+PACKAGE = Path(ytktv.__file__).parent
+datas = [
+    (str(PACKAGE / "server" / "static"), "ytktv/server/static"),
+    # Run as a plain script by the downloaded runtime, so it must exist as a file.
+    (str(PACKAGE / "separation" / "sep_worker.py"), "ytktv/separation"),
+]
 datas += collect_data_files("imageio_ffmpeg")
 datas += collect_data_files("certifi")
 datas += copy_metadata("ytktv")
@@ -55,7 +66,7 @@ hiddenimports = ["uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols.htt
                  "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on"]
 excludes = ["tkinter", "pytest", "IPython", "matplotlib"]
 
-if BUNDLE_SEPARATION:
+if SEPARATION_MODE == "bundle":
     # torchvision registers its operators from a compiled extension that static
     # analysis misses; without collect_all the frozen app fails at "torchvision::nms".
     for package in ("audio_separator", "torch", "torchvision", "onnxruntime", "onnx2torch",
@@ -70,6 +81,10 @@ if BUNDLE_SEPARATION:
 else:
     excludes += ["audio_separator", "torch", "torchvision", "onnxruntime", "onnx", "librosa",
                  "onnx2torch", "numba", "llvmlite", "sklearn", "pydub"]
+if SEPARATION_MODE == "download":
+    from uv import find_uv_bin
+
+    binaries.append((find_uv_bin(), "."))
 
 analysis = Analysis(
     [str(ROOT / "packaging" / "launcher.py")],

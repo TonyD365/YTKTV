@@ -20,17 +20,9 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      bundle_separation:
-        description: Bundle the vocal-separation runtime (large)
-        type: boolean
-        default: true
 
 permissions:
   contents: read
-
-env:
-  YTKTV_BUNDLE_SEPARATION: ${{ github.event_name == 'workflow_dispatch' && !inputs.bundle_separation && '0' || '1' }}
 
 jobs:
   build:
@@ -40,10 +32,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: macos-arm64, os: macos-14 }
-          - { name: macos-x86_64, os: macos-15-intel }
-          - { name: windows-x64, os: windows-latest }
-          - { name: linux-x86_64, os: ubuntu-24.04 }
+          # separation: how each build gets the vocal-separation libraries.
+          #   bundle    inside the app (Apple Silicon: torch has Metal built in)
+          #   download  the app detects the GPU on first run and downloads a CUDA, DirectML
+          #             or CPU runtime, so the installer stays small
+          #   none      the libraries do not support the platform
+          - { name: macos-arm64, os: macos-14, separation: bundle }
+          - { name: macos-x86_64, os: macos-15-intel, separation: none }
+          - { name: windows-x64, os: windows-latest, separation: download }
+          - { name: linux-x86_64, os: ubuntu-24.04, separation: download }
+    env:
+      YTKTV_SEPARATION_MODE: ${{ matrix.separation }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,18 +56,9 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          if [ "$RUNNER_OS" = "Linux" ] && [ "$YTKTV_BUNDLE_SEPARATION" = "1" ]; then
-            # The default Linux torch wheel drags in the CUDA libraries and makes the AppImage
-            # larger than the 2 GB limit for release files. Bundle the CPU build instead.
-            python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          fi
-          if [ "$YTKTV_BUNDLE_SEPARATION" = "1" ] && ! python -m pip install ".[package,separation]"; then
-            # Some platforms (Intel Macs) no longer get wheels for the separation runtime.
-            echo "::warning::Vocal separation could not be installed on ${{ matrix.name }}; building without it."
-            echo "YTKTV_BUNDLE_SEPARATION=0" >> "$GITHUB_ENV"
-            YTKTV_BUNDLE_SEPARATION=0
-          fi
-          if [ "$YTKTV_BUNDLE_SEPARATION" != "1" ]; then python -m pip install ".[package]"; fi
+          extras="package"
+          if [ "$YTKTV_SEPARATION_MODE" = "bundle" ]; then extras="package,separation"; fi
+          python -m pip install ".[${extras}]"
           python -c "import ytktv; print('Building YTKTV', ytktv.__version__)"
 
       - name: Check the version matches the release tag
@@ -135,6 +125,27 @@ jobs:
           chmod +x appimagetool && sudo mv appimagetool /usr/local/bin/appimagetool
           APPIMAGE_EXTRACT_AND_RUN=1 PYTHON=python packaging/linux/build_appimage.sh
 
+      # Prove the packaged app can fetch a runtime and separate audio with it. CI machines
+      # have no GPU, so this exercises the CPU runtime; the GPU ones use the same path.
+      - name: Test the downloadable separation runtime (Linux)
+        if: runner.os == 'Linux' && matrix.separation == 'download'
+        env:
+          YTKTV_SEPARATION_VARIANT: cpu
+          YTKTV_SEPARATION_ROOT: ${{ runner.temp }}/separation-runtime
+        run: dist/YTKTV/YTKTV --separation-self-test
+
+      - name: Test the downloadable separation runtime (Windows)
+        if: runner.os == 'Windows' && matrix.separation == 'download'
+        shell: pwsh
+        env:
+          YTKTV_SEPARATION_VARIANT: cpu
+          YTKTV_SEPARATION_ROOT: ${{ runner.temp }}\separation-runtime
+          YTKTV_LOG_FILE: ${{ runner.temp }}\self-test.log
+        run: |
+          $process = Start-Process -FilePath dist\YTKTV\YTKTV.exe -ArgumentList '--separation-self-test' -Wait -PassThru
+          Get-Content $env:YTKTV_LOG_FILE -ErrorAction SilentlyContinue
+          exit $process.ExitCode
+
       - name: Check installer size
         shell: bash
         run: |
@@ -170,8 +181,7 @@ jobs:
           pattern: installer-macos-*
           merge-multiple: true
       # One installer for every Mac: it carries both builds and installs the one
-      # matching the machine. The per-architecture packages stay attached as well,
-      # because YTKTV 1.0.0 only knows how to update from those.
+      # matching the machine. Only this package is attached to the release.
       - name: Combine into a universal installer
         env:
           MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
@@ -209,6 +219,8 @@ jobs:
       - name: Checksums
         working-directory: installers
         run: |
+          # The universal installer replaces the two per-architecture macOS packages.
+          rm -f ./*-macos-arm64.pkg ./*-macos-x86_64.pkg
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
       - name: Upload to the release

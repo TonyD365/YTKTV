@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import platform
 import signal
 import socket
@@ -34,6 +35,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-mic", action="store_true", help="start without the microphone mixer")
     parser.add_argument("--windowed", action="store_true", help="keep the MV screen in a window")
     parser.add_argument("--debug", action="store_true", help="verbose logging")
+    parser.add_argument(
+        "--separation-self-test",
+        action="store_true",
+        help="install the separation runtime, separate a test clip, and exit (used by CI)",
+    )
     return parser.parse_args(argv)
 
 
@@ -96,20 +102,11 @@ def _ensure_libmpv(app: Any) -> bool:
     return bool(result.get("ok"))
 
 
-def _build_stems(youtube: YouTube, settings: Any, ffmpeg: str | None) -> Any:
-    from ytktv.separation.base import separation_installed
-
-    if not separation_installed():
-        return None
+def make_stem_manager(youtube: YouTube, settings: Any, ffmpeg: str | None, separator: Any) -> Any:
     from ytktv.separation.cache import StemCache
-    from ytktv.separation.uvr import UvrSeparator
     from ytktv.separation.worker import StemManager
 
-    root = cache_dir() / "stems"
-    cache = StemCache(root, int(settings.stem_cache_gb * 1024**3))
-    separator = UvrSeparator(
-        settings.separation_model, data_dir() / "models", cache_dir() / "separator"
-    )
+    cache = StemCache(cache_dir() / "stems", int(settings.stem_cache_gb * 1024**3))
 
     def download(video_id: str, dest: Path) -> Path:
         return youtube.download_audio(video_id, dest, ffmpeg=ffmpeg)
@@ -119,12 +116,35 @@ def _build_stems(youtube: YouTube, settings: Any, ffmpeg: str | None) -> Any:
     return manager
 
 
+def make_runtime_separator(runtime: Any, settings: Any) -> Any:
+    """Separator that runs in the downloaded runtime (packaged Windows / Linux builds)."""
+    from ytktv.separation.remote import SubprocessSeparator
+    from ytktv.separation.runtime import VARIANTS
+
+    variant = VARIANTS[runtime.installed_variant()]
+    return SubprocessSeparator(
+        runtime.python,
+        settings.separation_model,
+        data_dir() / "models",
+        cache_dir() / "separator",
+        directml=variant.directml,
+        log_path=cache_dir() / "separator.log",
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        # Windowed builds have no console; YTKTV_LOG_FILE captures the log instead.
+        filename=os.environ.get("YTKTV_LOG_FILE") or None,
     )
+
+    if args.separation_self_test:
+        from ytktv.separation import runtime as separation_runtime
+
+        return separation_runtime.self_test(lambda line: log.info("%s", line))
 
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QSurfaceFormat
@@ -173,23 +193,52 @@ def main(argv: list[str] | None = None) -> int:
         audio = AudioEngine(settings)
         audio.start()
 
+    from ytktv.separation import runtime as separation_runtime
+    from ytktv.separation.base import detect_accelerator, separation_installed
+
+    # Three ways to get separation: libraries inside this build (macOS, source installs),
+    # a downloaded runtime (packaged Windows / Linux), or not at all.
+    runtime = None
+    separator: Any = None
+    if separation_installed():
+        from ytktv.separation.uvr import UvrSeparator
+
+        separator = UvrSeparator(
+            settings.separation_model, data_dir() / "models", cache_dir() / "separator"
+        )
+    elif separation_runtime.supported():
+        runtime = separation_runtime.Runtime()
+        if runtime.installed_variant():
+            separator = make_runtime_separator(runtime, settings)
+
     controller = KTVController(
         store,
         player,
         youtube,
         library=Library(data_dir() / "library.json"),
         bus=bus,
-        stems=_build_stems(youtube, settings, ffmpeg),
+        stems=make_stem_manager(youtube, settings, ffmpeg, separator) if separator else None,
         audio=audio,
     )
 
-    def detect() -> None:
-        from ytktv.separation.base import detect_accelerator
+    def describe_device(active: Any) -> None:
+        """Find out (off the GUI thread) which device separation runs on."""
 
-        controller.accelerator = detect_accelerator().label
-        bus.emit("state", None)
+        def work() -> None:
+            try:
+                label = active.start() if hasattr(active, "start") else detect_accelerator().label
+            except Exception as exc:
+                log.warning("separation runtime did not start: %s", exc)
+                label = "Unavailable (see Settings)"
+            controller.accelerator = label
+            bus.emit("state", None)
 
-    threading.Thread(target=detect, name="ytktv-detect", daemon=True).start()
+        threading.Thread(target=work, name="ytktv-detect", daemon=True).start()
+
+    if separator is not None:
+        describe_device(separator)
+    elif runtime is None:
+        controller.accelerator = "Not installed"
 
     from ytktv.server.app import ServerThread, create_app
 
@@ -208,6 +257,23 @@ def main(argv: list[str] | None = None) -> int:
     updates = UpdateManager(controller, window)
     updates.status.connect(window.settings_page.set_update_status)
     window.settings_page.check_updates.connect(lambda: updates.check(manual=True))
+    if runtime is not None:
+        from ytktv.ui.separation_setup import SeparationSetup
+
+        def enable(new_separator: Any) -> None:
+            controller.attach_stems(make_stem_manager(youtube, settings, ffmpeg, new_separator))
+            describe_device(new_separator)
+
+        setup = SeparationSetup(
+            controller,
+            runtime,
+            window,
+            make_separator=lambda: make_runtime_separator(runtime, settings),
+            on_ready=enable,
+        )
+        window.settings_page.install_separation.connect(setup.install_recommended)
+        setup.status.connect(window.settings_page.set_runtime_status)
+        setup.start()
     window.show()
     window.place_mv()
     if not have_mpv:

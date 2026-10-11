@@ -269,6 +269,7 @@ class HistoryPage(Page):
 class SettingsPage(Page):
     display_changed = Signal()
     check_updates = Signal()
+    install_separation = Signal()
 
     def __init__(self, ctx: Context, server_url: str) -> None:
         super().__init__("Settings", ctx)
@@ -337,6 +338,15 @@ class SettingsPage(Page):
         self.separation_label = QLabel()
         self.separation_label.setWordWrap(True)
         vocals.addWidget(self.separation_label)
+        self.runtime_button = QPushButton()
+        self.runtime_button.setProperty("accent", True)
+        self.runtime_button.hide()
+        self.runtime_button.clicked.connect(self.install_separation.emit)
+        button_row = QHBoxLayout()
+        button_row.addWidget(self.runtime_button)
+        button_row.addStretch()
+        vocals.addLayout(button_row)
+        self._runtime_text = ""
         check(vocals, "Prepare an instrumental for every selected song", "auto_separate")
 
         # Phone
@@ -388,8 +398,17 @@ class SettingsPage(Page):
         self.ctx.controller.settings.max_height = int(self.quality.currentData())
         self.ctx.controller.mixer_changed()
 
+    def set_runtime_status(self, text: str, button: str) -> None:
+        """Status of the downloadable runtime; empty text means "nothing special to say"."""
+        self._runtime_text = text
+        self.runtime_button.setText(button)
+        self.runtime_button.setVisible(bool(button))
+        self.on_state(self.ctx.controller.state())
+
     def on_state(self, state: dict[str, Any]) -> None:
-        if state["separation"]:
+        if self._runtime_text:
+            self.separation_label.setText(self._runtime_text)
+        elif state["separation"]:
             device = state["accelerator"] or "detecting hardware..."
             self.separation_label.setText(
                 f"Running on: {device}\n"
