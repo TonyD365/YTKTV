@@ -458,3 +458,46 @@ def test_score_toggle_live_score_and_score_card(window, qtbot):
     assert mv.score_card._points == 92 and "Ann" in mv.score_card._caption
     mv.score_card.grab()  # painting must not fail
     assert "92" in main.toast.text()
+
+
+def test_queue_rows_are_reordered_by_dragging_the_grip(window, qtbot):
+    main, controller = window
+    for i in range(1, 6):
+        controller.enqueue(make_song(i))
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    main.show_page("queue")
+    song_list = main.pages["queue"].list
+    qtbot.waitUntil(lambda: len(song_list._rows) == 4, timeout=3000)
+    qtbot.wait(50)  # let the rows take their places
+
+    def titles():
+        return [item.song.title for item in controller.queue.snapshot()]
+
+    def middle(row):
+        return row.mapToGlobal(row.rect().center())
+
+    assert titles() == ["Song 2", "Song 3", "Song 4", "Song 5"]
+    rows = list(song_list._rows)
+    below_last = rows[3].mapToGlobal(rows[3].rect().bottomLeft()) + QPoint(20, 30)
+
+    song_list.drag_start(rows[0])  # the first song to the very end
+    song_list.drag_to(below_last)
+    assert song_list._marker.isVisible()
+    song_list.drag_end(below_last)
+    assert titles() == ["Song 3", "Song 4", "Song 5", "Song 2"]
+    assert not song_list._marker.isVisible()
+
+    qtbot.waitUntil(lambda: song_list._rows and song_list._rows[0] is not rows[0], timeout=3000)
+    qtbot.wait(50)
+    rows = list(song_list._rows)
+    above_first = rows[0].mapToGlobal(rows[0].rect().topLeft()) + QPoint(20, 2)
+    song_list.drag_start(rows[2])  # "Song 5" to the top
+    song_list.drag_end(above_first)
+    assert titles() == ["Song 5", "Song 3", "Song 4", "Song 2"]
+
+    qtbot.waitUntil(lambda: song_list._rows and song_list._rows[0] is not rows[0], timeout=3000)
+    qtbot.wait(50)
+    rows = list(song_list._rows)
+    song_list.drag_start(rows[1])  # dropped where it already is: nothing moves
+    song_list.drag_end(middle(rows[1]))
+    assert titles() == ["Song 5", "Song 3", "Song 4", "Song 2"]

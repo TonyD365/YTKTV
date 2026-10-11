@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.helpers import FakeSource, wait_for
+from tests.helpers import FakeSource, make_song, wait_for
 from ytktv.core.models import PlayStatus
 from ytktv.server.app import create_app
 
@@ -119,3 +119,18 @@ def test_danmaku_guide_and_lights_over_http(client):
     assert http.post("/api/sound", json={"show_lyrics": False}).json()["show_lyrics"] is False
     assert http.post("/api/sound", json={"guide_vocal": 101}).status_code == 422
     assert http.get("/api/lyrics").json() == []
+
+
+def test_phones_are_told_apart_and_find_their_own_songs(client):
+    http, controller = client
+    me = http.get("/api/me").json()["id"]
+    assert len(me) == 10 and "testclient" not in me  # a fingerprint, not the address
+
+    songs = http.get("/api/search", params={"q": "x", "limit": 3}).json()
+    for song in songs:
+        assert http.post("/api/queue", json={"song": song}).json()["owner"] == me
+    controller.enqueue(make_song(9))
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    state = http.get("/api/state").json()
+    assert state["current"]["owner"] == me
+    assert [item["owner"] for item in state["queue"]] == [me, me, ""]  # the last from the console

@@ -23,8 +23,10 @@ class SongQueue:
         with self._lock:
             return len(self._items)
 
-    def add(self, song: Song, singer: str = "", priority: bool = False) -> QueueItem:
-        item = QueueItem(song=song, singer=singer)
+    def add(
+        self, song: Song, singer: str = "", priority: bool = False, owner: str = ""
+    ) -> QueueItem:
+        item = QueueItem(song=song, singer=singer, owner=owner)
         with self._lock:
             if priority:
                 self._items.insert(0, item)

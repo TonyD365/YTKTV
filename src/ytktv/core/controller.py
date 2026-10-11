@@ -33,6 +33,7 @@ log = logging.getLogger(__name__)
 
 PITCH_RANGE = 6  # semitones either way
 SPEEDS = (0.8, 0.9, 1.0, 1.1, 1.2)
+UNKNOWN_SONG_SECONDS = 240  # assumed for wait estimates when YouTube gave no length
 _POSITION_INTERVAL = 0.5
 _OPEN_RETRIES = 2
 _PRELOAD_AHEAD = 2  # how many upcoming songs to keep downloaded
@@ -121,8 +122,10 @@ class KTVController:
 
     # -- queue ------------------------------------------------------------
 
-    def enqueue(self, song: Song, singer: str = "", priority: bool = False) -> QueueItem:
-        item = self.queue.add(song, singer=singer, priority=priority)
+    def enqueue(
+        self, song: Song, singer: str = "", priority: bool = False, owner: str = ""
+    ) -> QueueItem:
+        item = self.queue.add(song, singer=singer, priority=priority, owner=owner)
         if self.stems is not None and self.settings.auto_separate:
             self.stems.request(song.video_id)
         with self._lock:
@@ -137,7 +140,9 @@ class KTVController:
         self._emit_state()
         return item
 
-    def enqueue_many(self, songs: list[Song], singer: str = "", shuffle: bool = False) -> int:
+    def enqueue_many(
+        self, songs: list[Song], singer: str = "", shuffle: bool = False, owner: str = ""
+    ) -> int:
         """Queue several songs at once (a playlist). Returns how many were added."""
         songs = list(songs)
         if shuffle:
@@ -145,7 +150,7 @@ class KTVController:
         if not songs:
             return 0
         for song in songs:
-            self.queue.add(song, singer=singer)
+            self.queue.add(song, singer=singer, owner=owner)
             if self.stems is not None and self.settings.auto_separate:
                 self.stems.request(song.video_id)
         with self._lock:
@@ -823,11 +828,13 @@ class KTVController:
         self.toast(f"Imported {len(songs)} songs into {name}")
         return name
 
-    def enqueue_playlist(self, name: str, shuffle: bool = False, singer: str = "") -> int:
+    def enqueue_playlist(
+        self, name: str, shuffle: bool = False, singer: str = "", owner: str = ""
+    ) -> int:
         songs = self.library.playlist(name)
         if songs is None:
             raise KeyError(name)
-        return self.enqueue_many(songs, singer=singer, shuffle=shuffle)
+        return self.enqueue_many(songs, singer=singer, shuffle=shuffle, owner=owner)
 
     # -- state ------------------------------------------------------------
 
@@ -840,6 +847,18 @@ class KTVController:
         data["preload"] = self.preloader.status(item.song.video_id) if self.preloader else "none"
         return data
 
+    def _queue_dicts(self, current: QueueItem | None) -> list[dict[str, Any]]:
+        """The queue, each song with a rough number of seconds until its turn."""
+        speed = self.speed or 1.0
+        wait = max(0.0, self.duration - self.position) / speed if current else 0.0
+        items = []
+        for item in self.queue.snapshot():
+            data = self._item_dict(item)
+            data["wait"] = round(wait)
+            wait += (item.song.duration or UNKNOWN_SONG_SECONDS) / speed
+            items.append(data)
+        return items
+
     def state(self) -> dict[str, Any]:
         with self._lock:
             current = self.current
@@ -850,7 +869,7 @@ class KTVController:
             "status": status.value,
             "loading": self.loading if status == PlayStatus.LOADING else "",
             "current": self._item_dict(current) if current else None,
-            "queue": [self._item_dict(item) for item in self.queue.snapshot()],
+            "queue": self._queue_dicts(current),
             "history": [song.to_dict() for song in self.queue.history()[:50]],
             "position": self.position,
             "duration": self.duration,

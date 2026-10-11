@@ -386,6 +386,7 @@ class QueuePage(Page):
         self.header.addWidget(shuffle)
         self.header.addWidget(clear)
         self.list = SongList("Nothing selected yet. Find a song and press Select.")
+        self.list.on_move = ctx.controller.move
         self.body.addWidget(self.list, stretch=1)
         self._signature: Any = None
 
@@ -424,7 +425,11 @@ class QueuePage(Page):
                 ("Top", "", partial(controller.prioritize, item["id"])),
                 ("Remove", "danger", partial(controller.remove, item["id"])),
             ]
-            rows.append(SongRow(song, actions, self.ctx.thumbnails, tags, index=i + 1))
+            rows.append(
+                SongRow(
+                    song, actions, self.ctx.thumbnails, tags, index=i + 1, key=item["id"], grip=True
+                )
+            )
         self.list.set_rows(rows)
 
 

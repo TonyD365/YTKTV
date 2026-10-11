@@ -75,9 +75,15 @@ class QueueItem:
     song: Song
     singer: str = ""
     id: str = field(default_factory=_new_id)
+    owner: str = ""  # which phone asked for it (see server.client_id); "" for the console
 
     def to_dict(self) -> dict[str, Any]:
-        return {"id": self.id, "singer": self.singer, "song": self.song.to_dict()}
+        return {
+            "id": self.id,
+            "singer": self.singer,
+            "owner": self.owner,
+            "song": self.song.to_dict(),
+        }
 
 
 @dataclass
