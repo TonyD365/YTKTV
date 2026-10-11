@@ -1,16 +1,24 @@
 name: Release
 
-# Push a tag like v1.0.0 to build installers for every platform and publish a
-# GitHub Release marked "Latest". Installed copies of YTKTV poll
-# /releases/latest, so publishing here is what rolls the update out.
+# Builds the installers for every platform and attaches them to a GitHub
+# Release that you create by hand:
 #
-# Tags with a suffix (v1.1.0-rc1) are published as pre-releases and are never
-# offered as updates. Run the workflow manually to test the builds without
-# publishing anything.
+#   1. On GitHub: Releases -> Draft a new release, choose a new tag such as
+#      v1.0.0 on main, tick "Set as the latest release", and publish.
+#   2. This workflow starts, builds the macOS .pkg, the Windows installer and
+#      the Linux AppImage from that tag, and uploads them plus SHA256SUMS to
+#      the release.
+#
+# Installed copies of YTKTV poll /releases/latest and update once the
+# installers are attached. A release marked as a pre-release is never offered
+# as an update.
+#
+# Run the workflow manually (Actions -> Release -> Run workflow) to test the
+# builds without touching any release; the installers are kept as artifacts.
 
 on:
-  push:
-    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       bundle_separation:
@@ -53,13 +61,15 @@ jobs:
           python -m pip install ".[${extras}]"
           python -c "import ytktv; print('Building YTKTV', ytktv.__version__)"
 
-      - name: Check the version matches the tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Check the version matches the release tag
+        if: github.event_name == 'release'
         shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           version="$(python -c 'import ytktv; print(ytktv.__version__)')"
-          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
-            echo "::error::Package version ${version} does not match tag ${GITHUB_REF_NAME}"
+          if [ "v${version}" != "${TAG}" ]; then
+            echo "::error::Package version ${version} does not match release tag ${TAG}. Tags must look like v1.2.3."
             exit 1
           fi
 
@@ -135,10 +145,10 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  publish:
-    name: Publish release
+  attach:
+    name: Attach installers to the release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -153,14 +163,9 @@ jobs:
         run: |
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
-      - name: Create the release
+      - name: Upload to the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: |
-          flags=(--title "YTKTV ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag)
-          case "$GITHUB_REF_NAME" in
-            *-*) flags+=(--prerelease --latest=false) ;;
-            *) flags+=(--latest) ;;
-          esac
-          gh release create "$GITHUB_REF_NAME" installers/* "${flags[@]}"
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" installers/* --clobber

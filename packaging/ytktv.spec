@@ -27,6 +27,16 @@ ICON_DIR = Path(os.environ.get("YTKTV_ICON_DIR", ROOT / "build" / "icon"))
 libmpv = bootstrap.find_libmpv()
 if libmpv is None:
     sys.exit("libmpv was not found; install mpv before building (see README).")
+if not os.path.isabs(libmpv):
+    # On Linux the lookup returns a bare soname ("libmpv.so.2"); PyInstaller needs the file.
+    import re
+    import subprocess
+
+    listing = subprocess.run(["ldconfig", "-p"], capture_output=True, text=True).stdout
+    match = re.search(rf"^\s*{re.escape(libmpv)}\s.*=>\s*(\S+)$", listing, re.MULTILINE)
+    if match is None:
+        sys.exit(f"could not locate {libmpv} on disk")
+    libmpv = match.group(1)
 
 datas = [(str(Path(ytktv.__file__).parent / "server" / "static"), "ytktv/server/static")]
 datas += collect_data_files("imageio_ffmpeg")
