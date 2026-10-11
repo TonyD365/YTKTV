@@ -25,6 +25,9 @@ microphones into the music with reverb and echo.
   Instrumental mode, for songs you only half know.
 - **Karaoke lyrics.** When a video has subtitles, they are shown at the bottom of the MV screen
   and fill with colour line by line as the song plays. Videos without subtitles show no lyrics.
+- **Finding songs.** Suggestions appear as you type, recent searches stay one tap away, and the
+  Artists page lists well-known artists by scene. Song cards show whether a song is already
+  selected and whether its instrumental is ready, so you can pick one that starts at once.
 - **Playlists.** Build playlists with "＋ List" on any song, save the current queue as one, or
   paste a YouTube playlist link to import it (up to 200 songs). Play or shuffle a whole playlist
   from the console or a phone.

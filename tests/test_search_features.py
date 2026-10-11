@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from tests.helpers import FakeSource, make_song, wait_for
 from tests.test_controller import FakeStems
 from ytktv.core.library import SEARCH_HISTORY, Library
-from ytktv.core.models import PlayStatus
+from ytktv.core.models import PlayStatus, StemStatus
 from ytktv.server.app import create_app
 from ytktv.youtube import search
 from ytktv.youtube.search import ARTISTS
@@ -173,9 +173,7 @@ def test_result_cards_show_selected_and_instrumental_ready(console, qtbot):
     qtbot.waitUntil(lambda: row_tags(page)[0] == ["Selected"], timeout=3000)
 
     stems.ready.add(second.video_id)  # its instrumental finished in the background
-    controller._on_stem_change(
-        second.video_id, __import__("ytktv.core.models").core.models.StemStatus.READY
-    )
+    controller._on_stem_change(second.video_id, StemStatus.READY)
     qtbot.waitUntil(lambda: row_tags(page)[1] == ["Instrumental ready"], timeout=3000)
     assert row_tags(page)[0] == ["Selected"]
 
