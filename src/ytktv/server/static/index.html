@@ -149,6 +149,9 @@
     <h3>Volume</h3>
     <div class="row"><label>Music</label><input type="range" min="0" max="100" id="vol-music"><output id="out-music"></output></div>
     <div class="row"><label>Mic</label><input type="range" min="0" max="100" id="vol-mic"><output id="out-mic"></output></div>
+    <h3>Microphones</h3>
+    <div class="chips" id="presets"></div>
+    <div id="mics"></div>
     <h3>Crowd</h3>
     <div class="pad">
       <button data-sfx="applause">Applause</button>
@@ -179,6 +182,7 @@
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
+const enc = encodeURIComponent;
 let state = null;
 let dragging = {};
 const SLIDERS = [["music", "music_volume"], ["mic", "mic_volume"], ["guide", "guide_vocal"]];
@@ -398,8 +402,48 @@ api("/api/categories").then((names) => {
   }
 });
 
+// --- microphone mixer ---
+const MIC_SLIDERS = [
+  ["fader", "Volume", 0, 1], ["reverb", "Reverb", 0, 1], ["echo", "Echo", 0, 1],
+  ["low_db", "Bass", -12, 12], ["mid_db", "Mid", -12, 12], ["high_db", "Treble", -12, 12],
+];
+let micDragging = false;
+const show = (key, value) => key.endsWith("_db") ? (value > 0 ? "+" : "") + Math.round(value) : Math.round(value * 100);
+
+function renderMixer(mixer) {
+  if (micDragging) return;  // do not yank a slider out from under a finger
+  const presets = $("presets");
+  presets.replaceChildren();
+  for (const preset of mixer.presets) {
+    const chip = el("button", {class: "chip", onclick: () => api(`/api/mixer/presets/${enc(preset.name)}/apply`, "POST").then(renderMixer)}, preset.name);
+    if (preset.name === mixer.preset) chip.style.cssText = "background: var(--purple); border-color: var(--purple)";
+    presets.append(chip);
+  }
+  const box = $("mics");
+  box.replaceChildren();
+  const live = mixer.mics.filter((mic) => mic.enabled);
+  if (!live.length) box.append(el("div", {class: "empty"}, "No microphone is switched on. Choose one on the host's Mixer page."));
+  for (const mic of live) {
+    const mute = el("button", {class: "mini" + (mic.mute ? " danger" : " ghost"), onclick: () => api(`/api/mixer/mics/${mic.index}`, "POST", {mute: !mic.mute}).then(renderMixer)}, mic.mute ? "Muted" : "Mute");
+    const head = el("div", {class: "row"}, el("b", {}, `Mic ${mic.index + 1}`), el("span", {class: "s", style: "flex:1;color:var(--muted);font-size:12px"}, mic.device || "System default"), mute);
+    const card = el("div", {class: "now", style: "margin-bottom:10px"}, head);
+    for (const [key, label, min, max] of MIC_SLIDERS) {
+      const output = el("output", {}, String(show(key, mic[key])));
+      const slider = el("input", {type: "range", min, max, step: key.endsWith("_db") ? 1 : 0.01, value: mic[key]});
+      slider.addEventListener("input", () => { micDragging = true; output.textContent = show(key, +slider.value); });
+      slider.addEventListener("change", () => {
+        micDragging = false;
+        api(`/api/mixer/mics/${mic.index}`, "POST", {[key]: +slider.value}).then(renderMixer).catch((e) => toast(e.message, true));
+      });
+      card.append(el("div", {class: "row"}, el("label", {}, label), slider, output));
+    }
+    box.append(card);
+  }
+}
+const loadMixer = () => api("/api/mixer").then(renderMixer).catch(() => {});
+loadMixer();
+
 let openList = null;
-const enc = encodeURIComponent;
 
 async function loadLists() {
   const lists = await api("/api/playlists");
@@ -479,6 +523,7 @@ function connect() {
     if (msg.type === "state") { state = msg.data; render(); }
     else if (msg.type === "position") setProgress(msg.data.position, msg.data.duration);
     else if (msg.type === "playlists") loadLists();
+    else if (msg.type === "mixer") loadMixer();
     else if (msg.type === "score") toast(`Score: ${msg.data.points} · ${msg.data.grade}`);
   };
   ws.onclose = () => setTimeout(connect, 1500);

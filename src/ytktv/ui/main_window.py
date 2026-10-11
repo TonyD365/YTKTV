@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any
 
 from PySide6.QtCore import QDateTime, Qt, QTimer
-from PySide6.QtGui import QCloseEvent, QKeyEvent, QResizeEvent
+from PySide6.QtGui import QAction, QCloseEvent, QKeyEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -13,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QProgressBar,
     QPushButton,
     QSlider,
@@ -59,6 +61,15 @@ NAV = (
     ("mixer", "🎚   Mixer"),
     ("settings", "⚙   Settings"),
 )
+
+
+_MORE_MODES = "More ▾"
+# Vocal modes that work at once, with the label shown on the button when one is active.
+_INSTANT_MODES = {
+    VocalMode.CENTER_CUT: "Vocal Cut",
+    VocalMode.LEFT: "Left Only",
+    VocalMode.RIGHT: "Right Only",
+}
 
 
 def _caption(text: str) -> QLabel:
@@ -289,16 +300,25 @@ class MainWindow(QMainWindow):
         for mode, text, tip, width in (
             (VocalMode.ORIGINAL, "Original", "Play the song with its original vocals", 76),
             (VocalMode.INSTRUMENTAL, "Instrumental", "Play the AI-separated backing track", 100),
-            (VocalMode.CENTER_CUT, "Vocal Cut", "Instant vocal reduction (no waiting)", 78),
-            (VocalMode.LEFT, "L", "Left channel only (split-track KTV videos)", 44),
-            (VocalMode.RIGHT, "R", "Right channel only (split-track KTV videos)", 44),
         ):
             widget = button(text, lambda m=mode: self._choose_mode(m), tip, width)
             widget.setCheckable(True)
-            if mode in (VocalMode.LEFT, VocalMode.RIGHT):
-                widget.setProperty("round", True)
             self.mode_buttons[mode] = widget
-        group("VOCALS", *self.mode_buttons.values())
+        # The instant modes are used less often, so they share one menu button.
+        self.more_modes = QPushButton(_MORE_MODES)
+        self.more_modes.setFixedSize(92, 44)
+        self.more_modes.setCheckable(True)
+        self.more_modes.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.more_modes.setToolTip("Vocal modes that need no preparation")
+        menu = QMenu(self.more_modes)
+        self.mode_actions: dict[VocalMode, QAction] = {}
+        for mode, text in _INSTANT_MODES.items():
+            action = menu.addAction(text, partial(self._choose_mode, mode))
+            action.setCheckable(True)
+            self.mode_actions[mode] = action
+        self.more_modes.clicked.connect(self._show_more_modes)
+        self._more_menu = menu
+        group("VOCALS", *self.mode_buttons.values(), self.more_modes)
 
         # Transport
         self.pause_button = button("⏯", controller.toggle_pause, "Play / Pause", round=True)
@@ -363,8 +383,8 @@ class MainWindow(QMainWindow):
         # Crowd
         group(
             "CROWD",
-            button("Applause", lambda: self._sfx("applause"), "Applause", 80, gold=True),
-            button("Cheer", lambda: self._sfx("cheer"), "Crowd cheer", 68, gold=True),
+            button("Applause", lambda: self._sfx("applause"), "Applause", 74, gold=True),
+            button("Cheer", lambda: self._sfx("cheer"), "Crowd cheer", 58, gold=True),
             button("📣", lambda: self._sfx("airhorn"), "Air horn", round=True),
             button("🥁", lambda: self._sfx("drumroll"), "Drum roll", round=True),
             self._lights_button(),
@@ -373,7 +393,7 @@ class MainWindow(QMainWindow):
 
     def _lights_button(self) -> QPushButton:
         self.lights_button = QPushButton("Lights")
-        self.lights_button.setFixedSize(62, 44)
+        self.lights_button.setFixedSize(56, 44)
         self.lights_button.setCheckable(True)
         self.lights_button.setChecked(self.controller.settings.lights)
         self.lights_button.setToolTip(
@@ -414,6 +434,11 @@ class MainWindow(QMainWindow):
         page = self.pages["search"]
         assert isinstance(page, SearchPage)
         page.search_for(query)
+
+    def _show_more_modes(self) -> None:
+        # Clicking toggles the check mark; put it back to what the state says.
+        self.more_modes.setChecked(self._state["vocal_mode"] in {m.value for m in _INSTANT_MODES})
+        self._more_menu.exec(self.more_modes.mapToGlobal(self.more_modes.rect().topLeft()))
 
     def _choose_mode(self, mode: VocalMode) -> None:
         self.controller.set_vocal_mode(mode)
@@ -548,6 +573,11 @@ class MainWindow(QMainWindow):
 
         for mode, button in self.mode_buttons.items():
             button.setChecked(mode.value == state["vocal_mode"])
+        instant = next((m for m in _INSTANT_MODES if m.value == state["vocal_mode"]), None)
+        for mode, action in self.mode_actions.items():
+            action.setChecked(mode is instant)
+        self.more_modes.setChecked(instant is not None)
+        self.more_modes.setText(_INSTANT_MODES[instant] if instant else _MORE_MODES)
         pitch = state["pitch"]
         self.key_readout.setText(f"{pitch:+d}" if pitch else "0")
         self.key_readout.setEnabled(abs(pitch) < PITCH_RANGE)

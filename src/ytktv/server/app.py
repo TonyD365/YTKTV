@@ -89,8 +89,30 @@ class PlaylistEnqueueIn(BaseModel):
     singer: str = Field(default="", max_length=40)
 
 
+class MicIn(BaseModel):
+    """Any subset of one channel strip's controls."""
+
+    gain: float | None = Field(default=None, ge=0, le=2)
+    low_db: float | None = Field(default=None, ge=-12, le=12)
+    mid_db: float | None = Field(default=None, ge=-12, le=12)
+    high_db: float | None = Field(default=None, ge=-12, le=12)
+    reverb: float | None = Field(default=None, ge=0, le=1)
+    echo: float | None = Field(default=None, ge=0, le=1)
+    pan: float | None = Field(default=None, ge=-1, le=1)
+    fader: float | None = Field(default=None, ge=0, le=1)
+    mute: bool | None = None
+
+
+class PresetIn(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+
+
 class DanmakuIn(BaseModel):
     text: str = Field(min_length=1, max_length=200)
+
+
+# Controller events that are forwarded to phones over the WebSocket.
+_PUSHED_TOPICS = frozenset({"state", "position", "toast", "danmaku", "score", "playlists", "mixer"})
 
 
 class _Broadcaster:
@@ -102,14 +124,7 @@ class _Broadcaster:
 
     def publish(self, topic: str, payload: Any) -> None:
         loop = self.loop
-        if loop is None or topic not in (
-            "state",
-            "position",
-            "toast",
-            "danmaku",
-            "score",
-            "playlists",
-        ):
+        if loop is None or topic not in _PUSHED_TOPICS:
             return
         with contextlib.suppress(RuntimeError):  # loop already closed on shutdown
             loop.call_soon_threadsafe(self._fan_out, topic, payload)
@@ -252,6 +267,38 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
     @app.get("/api/lyrics")
     def lyrics() -> list[dict[str, Any]]:
         return [line.to_dict() for line in controller.lyrics]
+
+    @app.get("/api/mixer")
+    def mixer() -> dict[str, Any]:
+        return controller.mixer_state()
+
+    @app.post("/api/mixer/mics/{index}")
+    def set_mic(index: int, body: MicIn) -> dict[str, Any]:
+        if not 0 <= index < len(controller.settings.mics):
+            raise HTTPException(404, "no such microphone channel")
+        controller.set_mic(index, **body.model_dump(exclude_none=True))
+        return controller.mixer_state()
+
+    @app.post("/api/mixer/presets")
+    def save_preset(body: PresetIn) -> dict[str, str]:
+        try:
+            return {"name": controller.save_preset(body.name)}
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.post("/api/mixer/presets/{name}/apply")
+    def apply_preset(name: str) -> dict[str, Any]:
+        try:
+            controller.apply_preset(name)
+        except KeyError as exc:
+            raise HTTPException(404, "no such preset") from exc
+        return controller.mixer_state()
+
+    @app.delete("/api/mixer/presets/{name}")
+    def delete_preset(name: str) -> dict[str, bool]:
+        if not controller.delete_preset(name):
+            raise HTTPException(404, "no such saved preset")
+        return {"ok": True}
 
     @app.get("/api/playlists")
     def playlists() -> list[dict[str, Any]]:

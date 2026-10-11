@@ -43,7 +43,8 @@ microphones into the music with reverb and echo.
 - **Mixing console.** Four microphone channels laid out like a hardware desk: input selection,
   GAIN, 3-band EQ, ECHO, FX (reverb), PAN, fader, MUTE and PEAK LEDs; MUSIC, MICS and MAIN bus
   faders, an OUTPUT meter for the total level (music and microphones), and output device
-  selection. Each channel has a low cut and a noise gate, so an open microphone stays silent
+  selection. Effect presets (Pop, Ballad, Rock, KTV Hall, Dry, plus your own) set the EQ, reverb
+  and echo of every channel at once, and each microphone can be adjusted from the phone page. Each channel has a low cut and a noise gate, so an open microphone stays silent
   until someone sings. Microphones are mixed into the output
   automatically.
 - **KTV controls.** Queue, Priority (play next), Skip, Replay, Pause, Key up/down (±6 semitones),

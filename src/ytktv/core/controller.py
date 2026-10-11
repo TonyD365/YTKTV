@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Protocol
 
 from ytktv import __version__
+from ytktv.audio import presets
 from ytktv.config import SettingsStore
 from ytktv.core.events import EventBus
 from ytktv.core.library import Library
@@ -604,8 +605,80 @@ class KTVController:
         self.bus.emit("mixer", None)
 
     def mixer_changed(self) -> None:
-        """Call after editing mic strip values in ``settings`` directly."""
+        """Call after editing settings directly (checkboxes and the like)."""
         self._save_soon()
+
+    # -- microphone strips and presets --------------------------------------
+
+    def set_mic(self, index: int, **values: Any) -> None:
+        """Change one channel strip. Values are clamped; unknown names raise KeyError."""
+        mic = self.settings.mics[index]  # IndexError for a channel that does not exist
+        cleaned = {name: presets.clamp(name, value) for name, value in values.items()}
+        for name, value in cleaned.items():
+            setattr(mic, name, value)
+        if any(name in presets.PRESET_FIELDS for name in cleaned):
+            self.settings.mic_preset = self._matching_preset()
+        self._save_soon()
+        self.bus.emit("mixer", None)
+
+    def all_presets(self) -> dict[str, dict[str, float]]:
+        """Built-in presets first, then the user's own."""
+        return {**presets.BUILT_IN, **self.settings.mic_presets}
+
+    def _matching_preset(self) -> str:
+        """Name of the preset every channel currently matches, or "" if none does."""
+        current = [presets.values_of(mic) for mic in self.settings.mics]
+        for name, values in self.all_presets().items():
+            target = {k: round(float(v), 3) for k, v in values.items()}
+            if all(strip == target for strip in current):
+                return name
+        return ""
+
+    def apply_preset(self, name: str) -> None:
+        """Give every microphone channel this preset's EQ, reverb and echo."""
+        values = self.all_presets()[name]  # KeyError for an unknown preset
+        for mic in self.settings.mics:
+            for field in presets.PRESET_FIELDS:
+                setattr(mic, field, presets.clamp(field, values[field]))
+        self.settings.mic_preset = name
+        self._save_soon()
+        self.bus.emit("mixer", None)
+
+    def save_preset(self, name: str) -> str:
+        """Save channel 1's current sound as a preset. Returns the cleaned name."""
+        name = presets.clean_name(name)
+        if name in presets.BUILT_IN:
+            raise ValueError(f"{name!r} is a built-in preset; choose another name")
+        self.settings.mic_presets[name] = presets.values_of(self.settings.mics[0])
+        self.settings.mic_preset = self._matching_preset()
+        self._save_soon()
+        self.bus.emit("mixer", None)
+        return name
+
+    def delete_preset(self, name: str) -> bool:
+        if self.settings.mic_presets.pop(name, None) is None:
+            return False
+        self.settings.mic_preset = self._matching_preset()
+        self._save_soon()
+        self.bus.emit("mixer", None)
+        return True
+
+    def mixer_state(self) -> dict[str, Any]:
+        """Everything a remote needs to draw the microphone mixer."""
+        mics = []
+        for index, mic in enumerate(self.settings.mics):
+            strip: dict[str, Any] = {name: getattr(mic, name) for name in presets.LIMITS}
+            strip.update(index=index, mute=mic.mute, enabled=mic.enabled, device=mic.device or "")
+            mics.append(strip)
+        return {
+            "mics": mics,
+            "presets": [
+                {"name": name, "builtin": name in presets.BUILT_IN} for name in self.all_presets()
+            ],
+            "preset": self.settings.mic_preset,
+            "monitor": self.settings.mic_monitor,
+            "running": bool(self.audio and self.audio.running),
+        }
 
     def play_sfx(self, name: str) -> bool:
         return bool(self.audio and self.audio.play_sfx(name))

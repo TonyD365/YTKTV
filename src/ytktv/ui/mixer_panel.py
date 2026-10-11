@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -71,6 +72,7 @@ class ChannelStrip(_StripFrame):
         self.mic = mic
         self.controller = controller
         self.setFixedWidth(84)
+        self.knobs: dict[str, Knob] = {}
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 8, 6, 8)
@@ -102,6 +104,7 @@ class ChannelStrip(_StripFrame):
             widget.set_value(float(getattr(mic, attr)))
             widget.valueChanged.connect(lambda value, a=attr: self._set(a, value))
             layout.addWidget(widget)
+            self.knobs[attr] = widget
             return widget
 
         knob("GAIN", "gain", 0.0, 2.0, 1.0, "#25c26a")
@@ -140,8 +143,17 @@ class ChannelStrip(_StripFrame):
         layout.addWidget(self.mute)
 
     def _set(self, attr: str, value: Any) -> None:
-        setattr(self.mic, attr, value)
-        self.controller.mixer_changed()
+        self.controller.set_mic(self.index, **{attr: value})
+
+    def refresh(self) -> None:
+        """Move the controls to match the settings (a preset or a phone changed them)."""
+        for attr, knob in self.knobs.items():
+            knob.set_value(float(getattr(self.mic, attr)))
+        self.fader.set_value(self.mic.fader)
+        if self.mute.isChecked() != self.mic.mute:
+            self.mute.blockSignals(True)
+            self.mute.setChecked(self.mic.mute)
+            self.mute.blockSignals(False)
 
     def set_devices(self, names: list[str]) -> None:
         self.device.blockSignals(True)
@@ -268,6 +280,22 @@ class MixerPanel(QWidget):
         buttons.addWidget(rescan)
         master.addLayout(buttons)
 
+        master.addWidget(QLabel("EFFECT PRESET"))
+        self.preset = QComboBox()
+        self.preset.setToolTip("EQ, reverb and echo for every microphone channel")
+        self.preset.activated.connect(self._preset_chosen)
+        master.addWidget(self.preset)
+        preset_buttons = QHBoxLayout()
+        save = QPushButton("SAVE AS")
+        save.setToolTip("Save channel 1's EQ, reverb and echo as a new preset")
+        save.clicked.connect(self._save_preset)
+        self.delete_preset = QPushButton("DELETE")
+        self.delete_preset.setToolTip("Delete the selected saved preset")
+        self.delete_preset.clicked.connect(self._delete_preset)
+        preset_buttons.addWidget(save)
+        preset_buttons.addWidget(self.delete_preset)
+        master.addLayout(preset_buttons)
+
         buses = QHBoxLayout()
         buses.setSpacing(0)
         meter_column = QVBoxLayout()
@@ -324,7 +352,41 @@ class MixerPanel(QWidget):
         strip.set_value(value)
         self.controller.set_volume(name, round(value * 100))
 
+    def _preset_chosen(self, _index: int) -> None:
+        name = self.preset.currentData()
+        if name:
+            self.controller.apply_preset(str(name))
+
+    def _save_preset(self) -> None:
+        name, accepted = QInputDialog.getText(self, "Save preset", "Name for this preset:")
+        if not accepted or not name.strip():
+            return
+        try:
+            self.controller.save_preset(name)
+        except ValueError as exc:
+            self.controller.toast(str(exc), error=True)
+
+    def _delete_preset(self) -> None:
+        name = self.preset.currentData()
+        if name and not self.controller.delete_preset(str(name)):
+            self.controller.toast("Built-in presets cannot be deleted", error=True)
+
+    def _refresh_presets(self) -> None:
+        state = self.controller.mixer_state()
+        self.preset.blockSignals(True)
+        self.preset.clear()
+        self.preset.addItem("Custom", "")
+        for preset in state["presets"]:
+            self.preset.addItem(preset["name"], preset["name"])
+        self.preset.setCurrentIndex(max(0, self.preset.findData(state["preset"])))
+        self.preset.blockSignals(False)
+        saved = {p["name"] for p in state["presets"] if not p["builtin"]}
+        self.delete_preset.setEnabled(state["preset"] in saved)
+
     def apply_state(self) -> None:
+        for strip in self.strips:
+            strip.refresh()
+        self._refresh_presets()
         settings = self.controller.settings
         self.music.set_value(settings.music_volume / 100.0)
         self.mic_bus.set_value(settings.mic_volume / 100.0)

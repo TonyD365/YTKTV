@@ -64,8 +64,15 @@ def test_control_bar_buttons_drive_the_controller(window, qtbot):
     main, controller = window
     from ytktv.core.models import VocalMode
 
-    qtbot.mouseClick(main.mode_buttons[VocalMode.CENTER_CUT], Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(main.mode_buttons[VocalMode.INSTRUMENTAL], Qt.MouseButton.LeftButton)
+    assert controller.vocal_mode == VocalMode.INSTRUMENTAL
+    assert main.more_modes.text() == "More ▾" and not main.more_modes.isChecked()
+
+    main.mode_actions[VocalMode.CENTER_CUT].trigger()  # picked from the More menu
     assert controller.vocal_mode == VocalMode.CENTER_CUT
+    qtbot.waitUntil(lambda: main.more_modes.text() == "Vocal Cut", timeout=3000)
+    assert main.more_modes.isChecked() and main.mode_actions[VocalMode.CENTER_CUT].isChecked()
+    assert not main.mode_buttons[VocalMode.INSTRUMENTAL].isChecked()
     main.music_slider.setValue(33)
     assert controller.settings.music_volume == 33
     assert controller.settings.mic_volume == 80
