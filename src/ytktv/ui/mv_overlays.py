@@ -6,7 +6,7 @@ import colorsys
 import random
 from typing import Any
 
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QPointF, QRect, QRectF, QSizeF, Qt
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -16,6 +16,7 @@ from PySide6.QtGui import (
     QPainter,
     QPaintEvent,
     QPen,
+    QPixmap,
 )
 from PySide6.QtWidgets import QWidget
 
@@ -63,6 +64,62 @@ def _outlined_text(
     painter.setOpacity(1.0)
 
 
+class _TextSprite:
+    """Outlined text drawn once into a pixmap, so later frames only copy it.
+
+    Drawing text this large takes milliseconds per call and the outline needs nine
+    calls, which is far too slow to repeat on every animation frame.
+    """
+
+    def __init__(
+        self,
+        font: QFont,
+        text: str,
+        fill: QColor | tuple[QColor, QColor],  # one colour, or a left-to-right blend
+        ratio: float,
+        outline: bool = True,
+    ) -> None:
+        metrics = QFontMetricsF(font)
+        self.width = metrics.horizontalAdvance(text)
+        edge = max(1.5, font.pixelSize() / 14.0)
+        self._pad = edge + 2.0
+        self._ascent = metrics.ascent()
+        size = QSizeF(self.width + 2 * self._pad, metrics.height() + 2 * self._pad)
+        origin = QPointF(self._pad, self._pad + self._ascent)
+
+        def layer() -> tuple[QPixmap, QPainter]:
+            pixmap = QPixmap((size * ratio).toSize())
+            pixmap.setDevicePixelRatio(ratio)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setFont(font)
+            return pixmap, painter
+
+        self.pixmap, painter = layer()
+        if outline:
+            # One dark copy of the text, stamped around the origin, makes the outline.
+            dark, dark_painter = layer()
+            dark_painter.setPen(QColor(6, 3, 16))
+            dark_painter.drawText(origin, text)
+            dark_painter.end()
+            for dx, dy in _OUTLINE:
+                painter.drawPixmap(QPointF(dx * edge, dy * edge), dark)
+        if isinstance(fill, tuple):
+            blend = QLinearGradient(self._pad, 0, self._pad + self.width, 0)
+            blend.setColorAt(0.0, fill[0])
+            blend.setColorAt(1.0, fill[1])
+            painter.setPen(QPen(QBrush(blend), 1))
+        else:
+            painter.setPen(fill)
+        painter.drawText(origin, text)
+        painter.end()
+
+    def draw(self, painter: QPainter, x: float, baseline: float) -> None:
+        """Paint with the text starting at *x* on *baseline*."""
+        painter.drawPixmap(QPointF(x - self._pad, baseline - self._pad - self._ascent), self.pixmap)
+
+
 class LyricsOverlay(_Overlay):
     """Two lines at the bottom of the screen; the current one fills with colour as it is sung."""
 
@@ -71,10 +128,18 @@ class LyricsOverlay(_Overlay):
         self._lines: list[LyricLine] = []
         self._position = 0.0
         self._shown: tuple[int, int] | None = None  # (line index, progress in 1/200ths)
+        # Each line is drawn once (see _TextSprite); frames in between only copy it.
+        self._cache_key: tuple[int, int, int, float] | None = None
+        self._line: _TextSprite | None = None  # the current line in white
+        self._sung: _TextSprite | None = None  # the same line in the "sung" colours
+        self._next: _TextSprite | None = None  # the line coming up, shown smaller
+        self._text_x = 0.0
+        self._text_width = 0.0
 
     def set_lines(self, lines: list[dict[str, Any]]) -> None:
         self._lines = [LyricLine(float(d["start"]), float(d["end"]), str(d["text"])) for d in lines]
         self._shown = None
+        self._cache_key = None
         self.setVisible(bool(self._lines))
         self.update()
 
@@ -96,8 +161,17 @@ class LyricsOverlay(_Overlay):
         self._position = position
         current = self._current()
         shown = (current[0], int(current[1] * 200)) if current else None
-        if shown != self._shown:  # repaint only when something visibly changed
-            self._shown = shown
+        if shown == self._shown:  # repaint only when something visibly changed
+            return
+        previous, self._shown = self._shown, shown
+        if previous and shown and previous[0] == shown[0] and self._cache_key is not None:
+            # Same line, more of it sung: only the strip between the two positions changed.
+            edges = [
+                self._text_x + self._text_width * step / 200 for step in (previous[1], shown[1])
+            ]
+            left, right = int(min(edges)) - 2, int(max(edges)) + 3
+            self.update(QRect(left, 0, right - left, self.height()))
+        else:
             self.update()
 
     def _fitted_font(self, text: str, pixel_size: float, max_width: float) -> tuple[QFont, float]:
@@ -110,36 +184,47 @@ class LyricsOverlay(_Overlay):
             width = QFontMetricsF(font).horizontalAdvance(text)
         return font, width
 
+    def _prepare(self, index: int) -> None:
+        """Draw line *index* and the one after it into sprites, unless already done."""
+        ratio = self.devicePixelRatioF()
+        key = (index, self.width(), self.height(), ratio)
+        if key == self._cache_key:
+            return
+        self._cache_key = key
+        w, h = float(self.width()), float(self.height())
+        line = self._lines[index]
+        font, width = self._fitted_font(line.text, h * 0.36, w * 0.92)
+        self._text_x, self._text_width = (w - width) / 2, width
+        self._line = _TextSprite(font, line.text, QColor("white"), ratio)
+        self._sung = _TextSprite(
+            font, line.text, (QColor(theme.PINK), QColor(theme.CYAN)), ratio, outline=False
+        )
+        self._next = None
+        if index + 1 < len(self._lines):
+            upcoming = self._lines[index + 1]
+            if upcoming.start - line.end < 8.0:  # not across an instrumental break
+                next_font, _width = self._fitted_font(upcoming.text, h * 0.24, w * 0.88)
+                self._next = _TextSprite(next_font, upcoming.text, QColor("white"), ratio)
+
     def paintEvent(self, _event: QPaintEvent) -> None:
         current = self._current()
         if current is None:
             return
         index, progress = current
+        self._prepare(index)
+        if self._line is None or self._sung is None:
+            return
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = float(self.width()), float(self.height())
-        line = self._lines[index]
-
-        font, width = self._fitted_font(line.text, h * 0.36, w * 0.92)
-        x, baseline = (w - width) / 2, h * 0.46
-        _outlined_text(painter, font, line.text, QPointF(x, baseline), QColor("white"))
+        baseline = h * 0.46
+        self._line.draw(painter, self._text_x, baseline)
+        if self._next is not None:
+            painter.setOpacity(0.6)
+            self._next.draw(painter, (w - self._next.width) / 2, h * 0.84)
+            painter.setOpacity(1.0)
         if progress > 0:
-            sung = QLinearGradient(x, 0, x + width, 0)
-            sung.setColorAt(0.0, QColor(theme.PINK))
-            sung.setColorAt(1.0, QColor(theme.CYAN))
-            painter.save()
-            painter.setClipRect(QRectF(x, 0, width * progress, h))
-            painter.setFont(font)
-            painter.setPen(QPen(QBrush(sung), 1))
-            painter.drawText(QPointF(x, baseline), line.text)
-            painter.restore()
-
-        if index + 1 < len(self._lines):
-            upcoming = self._lines[index + 1]
-            if upcoming.start - line.end < 8.0:  # not across an instrumental break
-                next_font, next_width = self._fitted_font(upcoming.text, h * 0.24, w * 0.88)
-                origin = QPointF((w - next_width) / 2, h * 0.84)
-                _outlined_text(painter, next_font, upcoming.text, origin, QColor("white"), 0.6)
+            painter.setClipRect(QRectF(self._text_x, 0, self._text_width * progress, h))
+            self._sung.draw(painter, self._text_x, baseline)
 
 
 class DanmakuOverlay(_Overlay):
@@ -176,6 +261,7 @@ class DanmakuOverlay(_Overlay):
                 "speed": speed,
                 "width": width,
                 "color": QColor(random.choice(DANMAKU_COLORS)),
+                "sprite": None,  # drawn on first paint, redrawn if the screen size changes
             }
         )
         self.show()
@@ -195,12 +281,13 @@ class DanmakuOverlay(_Overlay):
 
     def paintEvent(self, _event: QPaintEvent) -> None:
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         font = self._font()
+        key = (font.pixelSize(), self.devicePixelRatioF())
         lane_height = self.height() / DANMAKU_LANES
         for item in self._items:
-            baseline = lane_height * (item["lane"] + 0.74)
-            _outlined_text(painter, font, item["text"], QPointF(item["x"], baseline), item["color"])
+            if item["sprite"] is None or item["sprite"][0] != key:
+                item["sprite"] = (key, _TextSprite(font, item["text"], item["color"], key[1]))
+            item["sprite"][1].draw(painter, item["x"], lane_height * (item["lane"] + 0.74))
 
 
 class EdgeLight(_Overlay):

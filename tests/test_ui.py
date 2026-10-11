@@ -209,6 +209,46 @@ def test_lyrics_overlay_follows_playback_time(qtbot):
     assert not overlay.isVisible() and not overlay.has_lines()
 
 
+def test_lyrics_overlay_draws_each_line_once(qtbot, monkeypatch):
+    """Drawing a line is slow, so frames within a line must reuse what was drawn."""
+    from ytktv.ui import mv_overlays
+
+    built = []
+    sprite = mv_overlays._TextSprite
+
+    def counting(font, text, *args, **kwargs):
+        built.append(text)
+        return sprite(font, text, *args, **kwargs)
+
+    monkeypatch.setattr(mv_overlays, "_TextSprite", counting)
+    overlay = mv_overlays.LyricsOverlay()
+    qtbot.addWidget(overlay)
+    overlay.resize(800, 200)
+    overlay.set_lines(
+        [
+            {"start": 0.0, "end": 4.0, "text": "first"},
+            {"start": 4.0, "end": 8.0, "text": "second"},
+        ]
+    )
+    overlay.show()
+    for step in range(30):
+        overlay.set_time(0.5 + step * 0.1)
+        overlay.grab()
+    assert sorted(built) == ["first", "first", "second"]  # white, sung, and the next line
+
+    filled = overlay.grab().toImage()
+    overlay.set_time(0.0)
+    assert overlay.grab().toImage() != filled  # the sung part still follows the time
+
+    built.clear()
+    overlay.set_time(5.0)
+    overlay.grab()
+    assert sorted(built) == ["second", "second"]
+    overlay.resize(1000, 250)  # a different screen size needs the lines drawn again
+    overlay.grab()
+    assert sorted(built) == ["second"] * 4
+
+
 def test_danmaku_flies_across_and_is_removed(qtbot):
     from ytktv.ui.mv_overlays import DANMAKU_LIMIT, DANMAKU_SECONDS, DanmakuOverlay
 
