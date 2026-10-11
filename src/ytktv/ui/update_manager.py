@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 class UpdateManager(QObject):
     status = Signal(str, str)  # text, release page url ("" when none)
+    ready = Signal(bool)  # an installer is downloaded and can be installed now
 
     def __init__(self, controller: KTVController, parent: QWidget) -> None:
         super().__init__(parent)
@@ -74,6 +75,7 @@ class UpdateManager(QObject):
             self._busy = False
             self._installer = path
             self.status.emit(f"YTKTV {info.version} is ready to install", info.page_url)
+            self.ready.emit(True)
             self._idle_timer.start()
             self._prompt_when_idle()
 
@@ -86,22 +88,38 @@ class UpdateManager(QObject):
             lambda: updater.download_update(info, cache_dir() / "updates"), downloaded, failed
         )
 
+    def install_now(self) -> None:
+        """The user asked for the update from Settings: offer it even mid-song."""
+        if self._installer is None or self._info is None:
+            return
+        self._declined = False
+        self._prompt(interrupting=self.controller.status != PlayStatus.IDLE)
+
     def _prompt_when_idle(self) -> None:
         if self._installer is None or self._info is None or self._declined:
             return
         controller = self.controller
         if controller.status != PlayStatus.IDLE or len(controller.queue) > 0:
             return
+        self._prompt(interrupting=False)
+
+    def _prompt(self, interrupting: bool) -> None:
+        if self._installer is None or self._info is None:
+            return
         self._idle_timer.stop()
         box = QMessageBox(self._parent)
         box.setWindowTitle("Update ready")
         box.setText(f"YTKTV {self._info.version} has been downloaded.")
-        box.setInformativeText("Install it now? YTKTV will close and reopen after the update.")
+        detail = "Install it now? YTKTV will close and reopen after the update."
+        if interrupting:
+            detail += "\n\nThe song that is playing will stop and the queue will be lost."
+        box.setInformativeText(detail)
         install = box.addButton("Install and Restart", QMessageBox.ButtonRole.AcceptRole)
         box.addButton("Later", QMessageBox.ButtonRole.RejectRole)
         box.exec()
         if box.clickedButton() is not install:
-            self._declined = True  # ask again on the next launch
+            # Do not ask again by ourselves this session; Settings still offers it.
+            self._declined = True
             return
         try:
             updater.install_update(self._installer)

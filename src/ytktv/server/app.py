@@ -70,6 +70,12 @@ class SoundIn(BaseModel):
     music_volume: int | None = Field(default=None, ge=0, le=100)
     mic_volume: int | None = Field(default=None, ge=0, le=100)
     master_volume: int | None = Field(default=None, ge=0, le=100)
+    guide_vocal: int | None = Field(default=None, ge=0, le=100)
+    lights: bool | None = None
+
+
+class DanmakuIn(BaseModel):
+    text: str = Field(min_length=1, max_length=200)
 
 
 class _Broadcaster:
@@ -81,7 +87,7 @@ class _Broadcaster:
 
     def publish(self, topic: str, payload: Any) -> None:
         loop = self.loop
-        if loop is None or topic not in ("state", "position", "toast"):
+        if loop is None or topic not in ("state", "position", "toast", "danmaku"):
             return
         with contextlib.suppress(RuntimeError):  # loop already closed on shutdown
             loop.call_soon_threadsafe(self._fan_out, topic, payload)
@@ -187,6 +193,10 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
             controller.set_pitch(body.pitch)
         if body.speed is not None:
             controller.set_speed(body.speed)
+        if body.guide_vocal is not None:
+            controller.set_guide_vocal(body.guide_vocal)
+        if body.lights is not None:
+            controller.set_lights(body.lights)
         for name in ("music", "mic", "master"):
             value = getattr(body, f"{name}_volume")
             if value is not None:
@@ -198,6 +208,16 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         if name not in SFX_NAMES:
             raise HTTPException(404, "unknown effect")
         return {"ok": controller.play_sfx(name)}
+
+    @app.post("/api/danmaku")
+    def danmaku(body: DanmakuIn) -> dict[str, bool]:
+        if not controller.send_danmaku(body.text):
+            raise HTTPException(429, "too many messages, slow down")
+        return {"ok": True}
+
+    @app.get("/api/lyrics")
+    def lyrics() -> list[dict[str, Any]]:
+        return [line.to_dict() for line in controller.lyrics]
 
     @app.get("/api/favorites")
     def favorites() -> list[dict[str, Any]]:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import time
+from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import QByteArray, QPointF, QRectF, Qt, QTimer, Signal
@@ -28,6 +30,7 @@ from PySide6.QtWidgets import QLabel, QWidget
 
 from ytktv.player.mpv_player import MpvPlayer
 from ytktv.ui import theme
+from ytktv.ui.mv_overlays import DanmakuOverlay, EdgeLight, LightShow, LyricsOverlay
 from ytktv.ui.support import fade_in, fade_out, qr_pixmap
 
 log = logging.getLogger(__name__)
@@ -234,6 +237,22 @@ class MvWindow(QWidget):
         self._badge_timer.timeout.connect(lambda: fade_out(self.badge, 500))
         self._last_status = ""
 
+        # Overlays, bottom to top: lights, lyrics, danmaku. One timer animates them all.
+        self.lights = {side: EdgeLight(side, self) for side in ("left", "right", "top", "bottom")}
+        self._light_show = LightShow()
+        self._lights_enabled = True
+        self.level_source: Callable[[], tuple[float, float]] | None = None
+        self.lyrics = LyricsOverlay(self)
+        self.danmaku = DanmakuOverlay(self)
+        self._position = 0.0
+        self._position_at = time.monotonic()
+        self._speed = 1.0
+        self._playing = False
+        self._frame = time.monotonic()
+        self._animator = QTimer(self)
+        self._animator.setInterval(33)
+        self._animator.timeout.connect(self._animate)
+
     # -- layout -----------------------------------------------------------
 
     def resizeEvent(self, _event: QResizeEvent) -> None:
@@ -242,6 +261,14 @@ class MvWindow(QWidget):
         self.idle.setGeometry(self.rect())
         self._place_banner()
         self._place_badge()
+        w, h = self.width(), self.height()
+        strip_w, strip_h = int(w * 0.07), int(h * 0.09)
+        self.lights["left"].setGeometry(0, 0, strip_w, h)
+        self.lights["right"].setGeometry(w - strip_w, 0, strip_w, h)
+        self.lights["top"].setGeometry(0, 0, w, strip_h)
+        self.lights["bottom"].setGeometry(0, h - strip_h, w, strip_h)
+        self.lyrics.setGeometry(0, int(h * 0.74), w, int(h * 0.24))
+        self.danmaku.setGeometry(0, int(h * 0.12), w, int(h * 0.42))
 
     def _place_banner(self) -> None:
         unit = max(1.0, self.height() / 100.0)
@@ -269,6 +296,47 @@ class MvWindow(QWidget):
         self.badge.raise_()
         if symbol == "play":
             self._badge_timer.start(1200)
+
+    # -- animated overlays ------------------------------------------------
+
+    def set_lyrics(self, lines: list[dict[str, Any]]) -> None:
+        self.lyrics.set_lines(lines)
+        self.lyrics.raise_()
+        self._sync_animator()
+
+    def add_danmaku(self, text: str) -> None:
+        self.danmaku.add(text)
+        self._sync_animator()
+
+    def _sync_animator(self) -> None:
+        """Run the animation timer only while something on screen is moving."""
+        needed = self.isVisible() and (self._playing or self.danmaku.active())
+        if needed and not self._animator.isActive():
+            self._frame = time.monotonic()
+            self._animator.start()
+        elif not needed and self._animator.isActive():
+            self._animator.stop()
+            for light in self.lights.values():
+                light.set_light(0.0, 0.0)
+
+    def _animate(self) -> None:
+        now = time.monotonic()
+        elapsed, self._frame = min(0.25, now - self._frame), now
+        self.danmaku.advance(elapsed)
+        if self._playing:
+            if self.lyrics.has_lines():
+                # Position reports arrive twice a second; glide between them.
+                self.lyrics.set_time(self._position + (now - self._position_at) * self._speed)
+            if self._lights_enabled and self.level_source is not None:
+                left, right = self.level_source()
+                for side, (intensity, hue) in self._light_show.step(
+                    max(left, right), elapsed
+                ).items():
+                    self.lights[side].set_light(intensity, hue)
+        if not self._playing or not self._lights_enabled:
+            for light in self.lights.values():
+                light.set_light(0.0, 0.0)
+        self._sync_animator()
 
     def place_on_screen(self, screen_index: int, fullscreen: bool) -> None:
         """Show on the chosen display (-1 = the first non-primary one, if any)."""
@@ -338,6 +406,12 @@ class MvWindow(QWidget):
             self._badge_timer.stop()
             fade_out(self.badge, 200)
         self._last_status = str(status)
+        self._playing = status == "playing"
+        self._speed = float(state.get("speed") or 1.0)
+        self._lights_enabled = bool(state.get("lights", True))
+        if status not in ("playing", "paused"):
+            self.lyrics.set_lines([])
+        self._sync_animator()
         showing_video = current is not None and status in ("playing", "paused")
         if showing_video:
             fade_out(self.idle, 800)  # reveal the video underneath
@@ -360,7 +434,8 @@ class MvWindow(QWidget):
             self._next_announced_for = None
 
     def update_position(self, position: float, duration: float, state: dict[str, Any]) -> None:
-        """Announce the next song shortly before the current one ends."""
+        """Track playback time, and announce the next song shortly before this one ends."""
+        self._position, self._position_at = position, time.monotonic()
         current = state.get("current")
         queue = state.get("queue") or []
         if not current or duration <= 0 or duration - position > 20 or position < 5:

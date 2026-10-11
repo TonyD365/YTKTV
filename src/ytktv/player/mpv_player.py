@@ -81,6 +81,7 @@ class MpvPlayer:
         self._want_instrumental = False
         self._dual = False  # both tracks are in the graph and can be crossfaded
         self._mix = 0.0  # 0 = original, 1 = instrumental
+        self._guide = 0.0  # share of the original vocals kept in instrumental mode
         self._fade_generation = 0
         self._rubberband_ok = True
         self._duration = 0.0
@@ -169,7 +170,7 @@ class MpvPlayer:
             # With the instrumental known up front, both tracks load together and the
             # song starts already in the right mode.
             self._dual = instrumental is not None
-            self._mix = 1.0 if (self._dual and use_instrumental) else 0.0
+            self._mix = self._instrumental_mix() if (self._dual and use_instrumental) else 0.0
         agent = source.headers.get("User-Agent")
         if agent:
             self.mpv["user-agent"] = agent
@@ -282,7 +283,7 @@ class MpvPlayer:
             self._want_instrumental = enabled
             if not (self._dual and self._loaded):
                 return
-            target = 1.0 if enabled else 0.0
+            target = self._instrumental_mix() if enabled else 0.0
             if self._mix == target:
                 return
             self._fade_generation += 1
@@ -294,6 +295,19 @@ class MpvPlayer:
             name="ytktv-xfade",
             daemon=True,
         ).start()
+
+    def _instrumental_mix(self) -> float:
+        # The original is instrumental + vocals, so blending a little of it back in
+        # brings the singer back at that level without changing the backing track.
+        return 1.0 - self._guide
+
+    def set_guide(self, level: float) -> None:
+        """Keep this share (0..1) of the original vocals audible in instrumental mode."""
+        with self._lock:
+            self._guide = max(0.0, min(1.0, level))
+            enabled = self._want_instrumental
+        if enabled:
+            self.use_instrumental(True)
 
     def _set_mix(self, mix: float) -> None:
         self.mpv.command("af-command", _MIX_LABEL, "volume", f"{1.0 - mix:.4f}", "volume@orig")

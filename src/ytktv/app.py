@@ -171,8 +171,10 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     from ytktv.ui import theme
+    from ytktv.ui.support import collect_garbage_on_gui_thread
 
     app.setStyleSheet(theme.STYLESHEET)
+    collect_garbage_on_gui_thread(app)
 
     have_mpv = _ensure_libmpv(app)
     ffmpeg = bootstrap.ensure_ffmpeg()
@@ -271,6 +273,8 @@ def main(argv: list[str] | None = None) -> int:
     updates = UpdateManager(controller, window)
     updates.status.connect(window.settings_page.set_update_status)
     window.settings_page.check_updates.connect(lambda: updates.check(manual=True))
+    updates.ready.connect(window.settings_page.set_update_ready)
+    window.settings_page.install_update.connect(updates.install_now)
     if runtime is not None:
         from ytktv.ui.separation_setup import SeparationSetup
 

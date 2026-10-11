@@ -273,6 +273,7 @@ class HistoryPage(Page):
 class SettingsPage(Page):
     display_changed = Signal()
     check_updates = Signal()
+    install_update = Signal()
     install_separation = Signal()
 
     def __init__(self, ctx: Context, server_url: str) -> None:
@@ -341,6 +342,12 @@ class SettingsPage(Page):
             "Download the next songs in the queue ahead of time (smoother playback)",
             "preload_queue",
         )
+        check(display, "Show the video's subtitles as karaoke lyrics", "show_lyrics")
+        check(
+            display,
+            "Use auto-generated captions when a video has no subtitles (often inaccurate)",
+            "lyrics_auto_captions",
+        )
 
         # Vocals
         vocals = card("Vocal Separation")
@@ -382,6 +389,11 @@ class SettingsPage(Page):
         check_now.clicked.connect(self.check_updates.emit)
         self.release_button = QPushButton("Open Release Page")
         self.release_button.hide()
+        self.install_button = QPushButton("Install Now")
+        self.install_button.setProperty("accent", True)
+        self.install_button.hide()
+        self.install_button.clicked.connect(self.install_update.emit)
+        row.addWidget(self.install_button)
         row.addWidget(check_now)
         row.addWidget(self.release_button)
         row.addStretch()
@@ -434,6 +446,9 @@ class SettingsPage(Page):
                 'Not installed. Install it with:  pip install "ytktv[separation]"\n'
                 "Until then, Instrumental falls back to the original audio; Vocal Cut still works."
             )
+
+    def set_update_ready(self, ready: bool) -> None:
+        self.install_button.setVisible(ready)
 
     def set_update_status(self, text: str, release_url: str = "") -> None:
         self.update_label.setText(text)

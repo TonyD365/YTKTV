@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QProgressBar,
     QPushButton,
@@ -78,7 +79,7 @@ class MainWindow(QMainWindow):
         self.server_url = server_url
         self.setWindowTitle("YTKTV")
         self.resize(1440, 900)
-        self.setMinimumSize(1320, 760)
+        self.setMinimumSize(1440, 760)
 
         self.bridge = EventBridge(controller.bus, self)
         self.bridge.received.connect(self._on_event)
@@ -116,6 +117,7 @@ class MainWindow(QMainWindow):
         self._tick_clock()
 
         self.mv_window.set_url(server_url)
+        self.mv_window.level_source = controller.player.levels
         self._apply_state()
 
     # -- construction -----------------------------------------------------
@@ -204,6 +206,18 @@ class MainWindow(QMainWindow):
             self._nav_buttons[key] = button
             layout.addWidget(button)
         layout.addStretch()
+        box = QVBoxLayout()
+        box.setContentsMargins(12, 0, 12, 8)
+        box.setSpacing(6)
+        box.addWidget(_caption("DANMAKU"))
+        self.danmaku_input = QLineEdit()
+        self.danmaku_input.setPlaceholderText("Say something...")
+        self.danmaku_input.setMaxLength(60)
+        self.danmaku_input.setStyleSheet("font-size: 13px; padding: 8px 10px; border-radius: 10px;")
+        self.danmaku_input.setToolTip("Send a message that flies across the MV screen")
+        self.danmaku_input.returnPressed.connect(self._send_danmaku)
+        box.addWidget(self.danmaku_input)
+        layout.addLayout(box)
         mv = QPushButton("⛶   MV Full Screen")
         mv.setCheckable(False)
         mv.clicked.connect(self._toggle_mv)
@@ -317,6 +331,15 @@ class MainWindow(QMainWindow):
         # Volumes
         self.music_slider = self._volume_slider("music")
         self.mic_slider = self._volume_slider("mic")
+        self.guide_slider = QSlider(Qt.Orientation.Horizontal)
+        self.guide_slider.setRange(0, 100)
+        self.guide_slider.setMinimumWidth(70)
+        self.guide_slider.setValue(controller.settings.guide_vocal)
+        self.guide_slider.setToolTip(
+            "Guide vocal: how much of the original singer stays audible in Instrumental mode"
+        )
+        self.guide_slider.valueChanged.connect(controller.set_guide_vocal)
+        group("GUIDE VOCAL", self.guide_slider, stretch=1)
         group("MUSIC VOLUME", self.music_slider, stretch=1)
         group("MIC VOLUME", self.mic_slider, stretch=1)
 
@@ -327,8 +350,30 @@ class MainWindow(QMainWindow):
             button("Cheer", lambda: self._sfx("cheer"), "Crowd cheer", 68, gold=True),
             button("📣", lambda: self._sfx("airhorn"), "Air horn", round=True),
             button("🥁", lambda: self._sfx("drumroll"), "Drum roll", round=True),
+            self._lights_button(),
         )
         return bar
+
+    def _lights_button(self) -> QPushButton:
+        self.lights_button = QPushButton("Lights")
+        self.lights_button.setFixedSize(62, 44)
+        self.lights_button.setCheckable(True)
+        self.lights_button.setChecked(self.controller.settings.lights)
+        self.lights_button.setToolTip(
+            "Light effects around the MV screen that pulse with the music"
+        )
+        self.lights_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.lights_button.clicked.connect(self.controller.set_lights)
+        return self.lights_button
+
+    def _send_danmaku(self) -> None:
+        text = self.danmaku_input.text().strip()
+        if not text:
+            return
+        if self.controller.send_danmaku(text):
+            self.danmaku_input.clear()
+        else:
+            self.show_toast("Too many messages at once. Try again in a moment.", error=True)
 
     def _volume_slider(self, name: str) -> QSlider:
         slider = QSlider(Qt.Orientation.Horizontal)
@@ -426,6 +471,12 @@ class MainWindow(QMainWindow):
             for page in self.pages.values():
                 if isinstance(page, Page):
                     page.on_favorites()
+        elif topic == "lyrics":
+            current = self._state["current"]
+            if payload["id"] is None or (current and current["id"] == payload["id"]):
+                self.mv_window.set_lyrics(payload["lines"])
+        elif topic == "danmaku":
+            self.mv_window.add_danmaku(payload["text"])
         elif topic == "mixer":
             self.mixer_page.apply_state()
 
@@ -466,7 +517,12 @@ class MainWindow(QMainWindow):
         self.key_readout.setText(f"{pitch:+d}" if pitch else "0")
         self.key_readout.setEnabled(abs(pitch) < PITCH_RANGE)
         self.tempo_readout.setText(f"{round(state['speed'] * 100)}%")
-        for slider, name in ((self.music_slider, "music_volume"), (self.mic_slider, "mic_volume")):
+        self.lights_button.setChecked(state["lights"])
+        for slider, name in (
+            (self.music_slider, "music_volume"),
+            (self.mic_slider, "mic_volume"),
+            (self.guide_slider, "guide_vocal"),
+        ):
             if not slider.isSliderDown() and slider.value() != state[name]:
                 slider.blockSignals(True)
                 slider.setValue(state[name])

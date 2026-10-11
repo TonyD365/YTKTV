@@ -21,6 +21,7 @@ class FakePlayer:
         self.channel_mode = VocalMode.ORIGINAL
         self.instrumental: Path | None = None
         self.instrumental_active = False
+        self.guide = 0.0
         self.audio_device: str | None = None
         self.position = 0.0
         self.play_count = 0
@@ -69,6 +70,9 @@ class FakePlayer:
 
     def use_instrumental(self, enabled: bool) -> None:
         self.instrumental_active = enabled and self.instrumental is not None
+
+    def set_guide(self, level: float) -> None:
+        self.guide = level
 
     def set_audio_device(self, description: str | None) -> None:
         self.audio_device = description

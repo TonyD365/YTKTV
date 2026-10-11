@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import gc
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -15,6 +16,7 @@ from PySide6.QtCore import (
     QRunnable,
     Qt,
     QThreadPool,
+    QTimer,
     QUrl,
     Signal,
 )
@@ -25,6 +27,30 @@ from PySide6.QtWidgets import QGraphicsOpacityEffect, QWidget
 from ytktv.core.events import EventBus
 
 log = logging.getLogger(__name__)
+
+
+def collect_garbage_on_gui_thread(parent: QObject) -> QTimer:
+    """Run Python's cyclic garbage collector only on the GUI thread.
+
+    The collector normally runs on whichever thread happens to allocate. When
+    that is a worker thread, it walks Qt wrapper objects while the GUI thread
+    may be in the middle of destroying them (for example song cards after a
+    list refresh), which crashes the process. Automatic collection is turned
+    off and a timer on the GUI thread collects instead.
+    """
+    gc.disable()
+    state = {"ticks": 0}
+
+    def collect() -> None:
+        state["ticks"] += 1
+        # Young objects every second; a full sweep every half minute.
+        gc.collect(2 if state["ticks"] % 30 == 0 else 0)
+
+    timer = QTimer(parent)
+    timer.setInterval(1000)
+    timer.timeout.connect(collect)
+    timer.start()
+    return timer
 
 
 def fade(

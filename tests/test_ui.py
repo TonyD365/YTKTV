@@ -135,3 +135,185 @@ def test_mv_screen_shows_pause_and_play_symbols(window, qtbot):
     qtbot.waitUntil(lambda: mv.badge.isVisible(), timeout=3000)
     controller.skip()  # the song ends while paused: the symbol must not linger
     qtbot.waitUntil(lambda: not mv.badge.isVisible(), timeout=4000)
+
+
+def test_garbage_collection_moves_to_the_gui_thread(qtbot):
+    import gc
+
+    from PySide6.QtCore import QObject
+
+    from ytktv.ui.support import collect_garbage_on_gui_thread
+
+    owner = QObject()
+    was_enabled = gc.isenabled()
+    try:
+        timer = collect_garbage_on_gui_thread(owner)
+        assert not gc.isenabled()  # worker threads can no longer trigger a collection
+        assert timer.isActive() and timer.interval() == 1000
+
+        class Node:
+            pass
+
+        a, b = Node(), Node()
+        a.other, b.other = b, a  # a cycle only the collector can free
+        import weakref
+
+        ref = weakref.ref(a)
+        del a, b
+        assert ref() is not None
+        timer.timeout.emit()  # what the GUI thread does every second
+        assert ref() is None
+    finally:
+        timer.stop()
+        if was_enabled:
+            gc.enable()
+
+
+def test_lyrics_overlay_follows_playback_time(qtbot):
+    from ytktv.ui.mv_overlays import LyricsOverlay
+
+    overlay = LyricsOverlay()
+    qtbot.addWidget(overlay)
+    overlay.resize(800, 200)
+    assert not overlay.isVisible()
+    overlay.set_lines(
+        [
+            {"start": 10.0, "end": 12.0, "text": "first"},
+            {"start": 12.0, "end": 14.0, "text": "second"},
+            {"start": 40.0, "end": 42.0, "text": "after the break"},
+        ]
+    )
+    overlay.show()
+    overlay.set_time(2.0)
+    assert overlay._current() is None  # too early to show anything
+    overlay.set_time(8.0)
+    assert overlay._current() == (0, 0.0)  # shown ahead of time, not yet filling
+    overlay.set_time(11.0)
+    assert overlay._current() == (0, 0.5)
+    overlay.set_time(13.5)
+    index, progress = overlay._current()
+    assert index == 1 and 0.7 < progress < 0.8
+    overlay.set_time(20.0)
+    assert overlay._current() is None  # instrumental break
+    overlay.grab()  # painting must not fail in any of these states
+    overlay.set_time(41.0)
+    overlay.grab()
+    overlay.set_lines([])
+    assert not overlay.isVisible() and not overlay.has_lines()
+
+
+def test_danmaku_flies_across_and_is_removed(qtbot):
+    from ytktv.ui.mv_overlays import DANMAKU_LIMIT, DANMAKU_SECONDS, DanmakuOverlay
+
+    overlay = DanmakuOverlay()
+    qtbot.addWidget(overlay)
+    overlay.resize(1000, 300)
+    assert not overlay.active()
+    overlay.add("hello")
+    overlay.add("world")
+    assert overlay.active() and overlay.isVisible()
+    assert overlay._items[0]["lane"] != overlay._items[1]["lane"]  # no overlap at the edge
+    start = overlay._items[0]["x"]
+    overlay.advance(1.0)
+    assert overlay._items[0]["x"] < start
+    overlay.grab()
+    overlay.advance(DANMAKU_SECONDS + 1)
+    assert not overlay.active() and not overlay.isVisible()
+    for i in range(DANMAKU_LIMIT + 10):
+        overlay.add(f"flood {i}")
+    assert len(overlay._items) == DANMAKU_LIMIT
+
+
+def test_light_show_follows_the_music():
+    from ytktv.ui.mv_overlays import LightShow
+
+    show = LightShow()
+    assert all(intensity == 0.0 for intensity, _ in show.step(0.0, 0.033).values())
+    loud = show.step(0.8, 0.033)
+    assert set(loud) == {"left", "right", "top", "bottom"}
+    assert all(0.5 < intensity <= 1.0 for intensity, _ in loud.values())
+    assert len({round(hue % 1.0, 3) for _, hue in loud.values()}) == 4  # each side its own colour
+    for _ in range(200):  # the music stops: lights fade out rather than cut
+        faded = show.step(0.0, 0.033)
+    assert all(intensity == 0.0 for intensity, _ in faded.values())
+
+
+def test_mv_window_shows_lyrics_and_danmaku_and_console_controls_work(window, qtbot):
+    main, controller = window
+    mv = main.mv_window
+    mv.show()
+    controller.enqueue(make_song(1))
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    qtbot.waitUntil(lambda: mv._playing, timeout=3000)
+
+    controller.bus.emit(
+        "lyrics",
+        {"id": controller.current.id, "lines": [{"start": 0.0, "end": 60.0, "text": "sing"}]},
+    )
+    qtbot.waitUntil(lambda: mv.lyrics.has_lines() and mv.lyrics.isVisible(), timeout=3000)
+    assert mv._animator.isActive()
+
+    main.danmaku_input.setText("nice!")
+    main._send_danmaku()
+    qtbot.waitUntil(lambda: mv.danmaku.active(), timeout=3000)
+    assert main.danmaku_input.text() == ""
+
+    main.guide_slider.setValue(40)
+    assert controller.settings.guide_vocal == 40
+    assert main.lights_button.isChecked()
+    main.lights_button.click()
+    assert controller.settings.lights is False
+
+    controller.skip()  # song gone: lyrics are cleared with it
+    qtbot.waitUntil(lambda: not mv.lyrics.has_lines(), timeout=4000)
+
+
+def test_settings_offers_install_now_when_an_update_is_downloaded(
+    window, qtbot, tmp_path, monkeypatch
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    from ytktv import updater
+    from ytktv.ui.update_manager import UpdateManager
+
+    main, controller = window
+    page = main.settings_page
+    main.show_page("settings")
+    assert not page.install_button.isVisible()
+
+    manager = UpdateManager(controller, main)
+    manager._timer.stop()
+    manager.ready.connect(page.set_update_ready)
+    page.install_update.connect(manager.install_now)
+    installer = tmp_path / "YTKTV-9.9.9-macos-universal.pkg"
+    installer.write_bytes(b"pkg")
+    manager._installer = installer
+    manager._info = updater.UpdateInfo("9.9.9", "v9.9.9", installer.name, "", "", "", "")
+    manager.ready.emit(True)
+    assert page.install_button.isVisible()
+
+    installed = []
+    monkeypatch.setattr(updater, "install_update", installed.append)
+    monkeypatch.setattr(
+        "ytktv.ui.update_manager.QApplication.quit", lambda: installed.append("quit")
+    )
+    shown = []
+
+    def fake_exec(box):
+        shown.append(box.informativeText())
+        # Accept on the second showing only.
+        box.clickedButton = lambda: box.buttons()[0] if len(shown) > 1 else box.buttons()[1]
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+
+    manager._declined = True  # "Later" was chosen earlier this session
+    page.install_button.click()  # the button still works, and this time says Later again
+    assert len(shown) == 1 and installed == []
+    assert "will stop" not in shown[0]  # nothing is playing
+
+    controller.enqueue(make_song(1))
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    page.install_button.click()
+    assert "will stop" in shown[1]  # warns before interrupting a song
+    assert installed == [installer, "quit"]

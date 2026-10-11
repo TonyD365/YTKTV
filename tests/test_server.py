@@ -97,3 +97,21 @@ def test_websocket_pushes_state_changes(client):
                 break
         else:
             pytest.fail("no state update with the new song arrived")
+
+
+def test_danmaku_guide_and_lights_over_http(client):
+    http, controller = client
+    seen = []
+    controller.bus.subscribe(lambda topic, data: seen.append(data) if topic == "danmaku" else None)
+    assert http.post("/api/danmaku", json={"text": "Encore!"}).json() == {"ok": True}
+    assert seen == [{"text": "Encore!"}]
+    assert http.post("/api/danmaku", json={"text": ""}).status_code == 422
+    assert http.post("/api/danmaku", json={"text": "   "}).status_code == 429
+    for _ in range(10):
+        last = http.post("/api/danmaku", json={"text": "spam"})
+    assert last.status_code == 429
+
+    state = http.post("/api/sound", json={"guide_vocal": 25, "lights": False}).json()
+    assert state["guide_vocal"] == 25 and state["lights"] is False
+    assert http.post("/api/sound", json={"guide_vocal": 101}).status_code == 422
+    assert http.get("/api/lyrics").json() == []
