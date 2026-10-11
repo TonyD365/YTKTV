@@ -129,7 +129,7 @@ def install_plan() -> str | None:
     return " ".join(command) if command else None
 
 
-def _install_windows(report: Callable[[str], None]) -> None:
+def install_windows_libmpv(report: Callable[[str], None]) -> None:
     import py7zr
 
     api = f"https://api.github.com/repos/{MPV_WINDOWS_REPO}/releases/latest"
@@ -160,7 +160,7 @@ def install_libmpv(report: Callable[[str], None] = lambda _msg: None) -> bool:
             report("Running: brew install mpv (this can take a few minutes)...")
             subprocess.run([brew, "install", "mpv"], check=True)
         elif system == "Windows":
-            _install_windows(report)
+            install_windows_libmpv(report)
         else:
             command = _linux_install_command()
             if not command:

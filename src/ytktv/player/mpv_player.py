@@ -81,12 +81,8 @@ class MpvPlayer:
 
     @staticmethod
     def _log(level: str, component: str, message: str) -> None:
-        log.log(
-            logging.ERROR if level in ("error", "fatal") else logging.DEBUG,
-            "mpv[%s] %s",
-            component,
-            message.strip(),
-        )
+        levels = {"fatal": logging.ERROR, "error": logging.ERROR, "warn": logging.WARNING}
+        log.log(levels.get(level, logging.DEBUG), "mpv[%s] %s", component, message.strip()[:300])
 
     # -- events (called on python-mpv's event thread) ---------------------
 

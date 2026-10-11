@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 import threading
 import time
 from collections import OrderedDict
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -84,6 +84,9 @@ class YouTube:
     def __init__(self) -> None:
         self._search_cache = _TTLCache(_SEARCH_TTL)
         self._stream_cache = _TTLCache(_STREAM_TTL)
+        self._audio_cache = _TTLCache(_STREAM_TTL)  # video id -> any resolved source
+        self._song_cache = _TTLCache(_STREAM_TTL)
+        self._extract_lock = threading.Lock()
 
     def search(self, query: str, limit: int = 24) -> list[Song]:
         query = query.strip()
@@ -107,57 +110,94 @@ class YouTube:
         return self.search(HOT_CATEGORIES.get(category, category))
 
     def lookup(self, video_id: str) -> Song | None:
+        """Details for one video. Also warms the stream cache, so playing it is instant."""
         try:
-            with _ydl(extract_flat=True) as ydl:
-                info = ydl.extract_info(
-                    f"https://www.youtube.com/watch?v={video_id}", download=False
-                )
+            self.resolve(video_id)
         except Exception:
             log.warning("lookup failed for %s", video_id, exc_info=True)
             return None
-        return entry_to_song(info)
+        song: Song | None = self._song_cache.get(video_id)
+        return song
 
     def resolve(self, video_id: str, max_height: int = 1080) -> MediaSource:
-        """Resolve direct stream URLs. Raises on failure."""
+        """Resolve direct stream URLs. Raises on failure.
+
+        Extractions are serialised and cached: asking YouTube about the same
+        video several times in a burst (lookup, playback, separation) makes it
+        answer some of the resulting stream URLs with 403.
+        """
         key = (video_id, max_height)
         cached = self._stream_cache.get(key)
         if cached is not None:
             return cached
-        # Prefer H.264 + AAC: hardware-decoded everywhere and gapless to start.
-        fmt = (
-            f"bestvideo[height<={max_height}][vcodec^=avc1]+bestaudio[ext=m4a]/"
-            f"bestvideo[height<={max_height}]+bestaudio/best[height<={max_height}]/best"
-        )
-        with _ydl(format=fmt) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-        source = parse_media_source(info)
-        self._stream_cache.put(key, source)
-        return source
+        with self._extract_lock:
+            cached = self._stream_cache.get(key)
+            if cached is not None:
+                return cached
+            # Prefer H.264 + AAC: hardware-decoded everywhere and gapless to start.
+            fmt = (
+                f"bestvideo[height<={max_height}][vcodec^=avc1]+bestaudio[ext=m4a]/"
+                f"bestvideo[height<={max_height}]+bestaudio/best[height<={max_height}]/best"
+            )
+            with _ydl(format=fmt) as ydl:
+                info = ydl.extract_info(
+                    f"https://www.youtube.com/watch?v={video_id}", download=False
+                )
+            source: MediaSource = parse_media_source(info)
+            self._stream_cache.put(key, source)
+            self._audio_cache.put(video_id, source)
+            song = entry_to_song(info)
+            if song is not None:
+                self._song_cache.put(video_id, song)
+            return source
 
     def forget_stream(self, video_id: str, max_height: int = 1080) -> None:
         self._stream_cache.drop((video_id, max_height))
+        self._audio_cache.drop(video_id)
 
     def download_audio(
         self,
         video_id: str,
         dest_dir: Path,
         ffmpeg: str | None = None,
-        progress: Callable[[float], None] | None = None,
     ) -> Path:
-        """Download the best audio-only stream; returns the downloaded file."""
+        """Fetch the song's audio as ``source.wav`` for the vocal separator."""
         dest_dir.mkdir(parents=True, exist_ok=True)
+        output = dest_dir / "source.wav"
+        if ffmpeg:
+            try:
+                self._ffmpeg_audio(video_id, output, ffmpeg)
+                return output
+            except Exception as exc:
+                log.info("direct audio fetch failed for %s (%s); using yt-dlp", video_id, exc)
+                output.unlink(missing_ok=True)
+        self._ytdlp_audio(video_id, dest_dir, ffmpeg)
+        if not output.exists():
+            raise RuntimeError("audio download produced no file (is ffmpeg available?)")
+        return output
 
-        def hook(status: dict[str, Any]) -> None:
-            if progress and status.get("status") == "downloading":
-                total = status.get("total_bytes") or status.get("total_bytes_estimate") or 0
-                if total:
-                    progress(min(1.0, status.get("downloaded_bytes", 0) / total))
+    def _ffmpeg_audio(self, video_id: str, output: Path, ffmpeg: str) -> None:
+        """Convert the already-resolved audio stream; no second YouTube extraction."""
+        source: MediaSource | None = self._audio_cache.get(video_id)
+        if source is None:
+            source = self.resolve(video_id)
+        command = [ffmpeg, "-nostdin", "-y", "-loglevel", "error"]
+        agent = source.headers.get("User-Agent")
+        if agent:
+            command += ["-user_agent", agent]
+        command += ["-i", source.audio_url or source.video_url, "-vn", "-ac", "2"]
+        command += ["-ar", "44100", str(output)]
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        result = subprocess.run(command, capture_output=True, timeout=600, creationflags=flags)
+        if result.returncode != 0 or not output.exists() or output.stat().st_size < 1024:
+            detail = result.stderr.decode("utf-8", "replace").strip()[-200:]
+            raise RuntimeError(detail or "ffmpeg failed")
 
+    def _ytdlp_audio(self, video_id: str, dest_dir: Path, ffmpeg: str | None) -> None:
         options: dict[str, Any] = {
             "skip_download": False,
             "format": "bestaudio[ext=m4a]/bestaudio/best",
             "outtmpl": str(dest_dir / "source.%(ext)s"),
-            "progress_hooks": [hook],
             "noplaylist": True,
             "noprogress": True,
             # The separator reads audio with libsndfile, which cannot open m4a/webm.
@@ -165,18 +205,13 @@ class YouTube:
         }
         if ffmpeg:
             options["ffmpeg_location"] = ffmpeg
-        # YouTube sporadically answers 403 to a download; a fresh extraction fixes it.
         for attempt in range(_DOWNLOAD_ATTEMPTS):
             try:
-                with _ydl(**options) as ydl:
+                with self._extract_lock, _ydl(**options) as ydl:
                     ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=True)
-                break
+                return
             except Exception as exc:
                 if attempt == _DOWNLOAD_ATTEMPTS - 1:
                     raise
                 log.info("audio download attempt %d failed (%s); retrying", attempt + 1, exc)
                 time.sleep(2.0 * (attempt + 1))
-        output = dest_dir / "source.wav"
-        if not output.exists():
-            raise RuntimeError("audio download produced no file (is ffmpeg available?)")
-        return output

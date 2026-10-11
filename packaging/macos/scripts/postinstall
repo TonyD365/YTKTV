@@ -1,0 +1,6 @@
+#!/bin/bash
+# Reopen YTKTV after an install or update, as the logged-in user (not root).
+if [ -n "${USER:-}" ] && [ "$USER" != "root" ]; then
+  sudo -u "$USER" open -a "/Applications/YTKTV.app" || true
+fi
+exit 0

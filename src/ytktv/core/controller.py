@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 PITCH_RANGE = 6  # semitones either way
 SPEEDS = (0.8, 0.9, 1.0, 1.1, 1.2)
 _POSITION_INTERVAL = 0.5
+_OPEN_RETRIES = 2
 
 
 class StreamResolver(Protocol):
@@ -78,7 +79,7 @@ class KTVController:
         self._prefetcher = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ytktv-prefetch")
         self._last_position_emit = 0.0
         self._started = False  # has the current song actually produced playback?
-        self._retried: set[str] = set()
+        self._retries: dict[str, int] = {}
         self._save_timer: threading.Timer | None = None
         self._closed = False
 
@@ -241,9 +242,10 @@ class KTVController:
             return
         if reason == "error":
             self.resolver.forget_stream(item.song.video_id, self.settings.max_height)
-            if not self._started and item.id not in self._retried:
-                # Stream URLs occasionally fail on first open; retry once with fresh ones.
-                self._retried.add(item.id)
+            attempts = self._retries.get(item.id, 0)
+            if not self._started and attempts < _OPEN_RETRIES:
+                # YouTube sporadically refuses a stream's first open; fresh URLs fix it.
+                self._retries = {item.id: attempts + 1}
                 self._executor.submit(self._restart, item.id)
                 return
             self.toast(f"Playback error: {item.song.title}", error=True)

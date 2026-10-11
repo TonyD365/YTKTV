@@ -62,7 +62,7 @@ def test_unplayable_song_is_skipped_with_a_toast(ktv):
     assert controller.state()["history"] == []  # a song that never played is not "sung"
 
 
-def test_stream_error_retries_once_then_moves_on(ktv):
+def test_stream_error_retries_then_moves_on(ktv):
     controller, player, resolver = ktv
     controller.enqueue(make_song(1))
     controller.enqueue(make_song(2))
@@ -72,6 +72,8 @@ def test_stream_error_retries_once_then_moves_on(ktv):
     assert controller.current.song.title == "Song 1"
     assert resolver.forgotten == [make_song(1).video_id]
     player.finish("error")
+    wait_for(lambda: player.play_count == 3)
+    player.finish("error")  # out of retries
     wait_for(lambda: controller.current.song.title == "Song 2")
 
 
