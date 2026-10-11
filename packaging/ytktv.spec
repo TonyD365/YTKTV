@@ -60,6 +60,11 @@ datas = [
 ]
 datas += collect_data_files("imageio_ffmpeg")
 datas += collect_data_files("certifi")
+# HD unlock: yt-dlp finds plugins by scanning sys.path for yt_dlp_plugins folders with
+# real .py files, and its challenge solver needs its JavaScript files.
+datas += collect_data_files("yt_dlp_plugins", include_py_files=True)
+datas += collect_data_files("yt_dlp_ejs")
+datas += copy_metadata("bgutil-ytdlp-pot-provider")
 datas += copy_metadata("ytktv")
 binaries = [(libmpv, ".")]
 hiddenimports = ["uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols.http.auto",

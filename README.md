@@ -145,8 +145,9 @@ ytktv [--port PORT] [--no-mic] [--windowed] [--debug]
 - Vocal separation needs a moment per song (well under a minute on a recent GPU, a few minutes
   on CPU), so songs queued in advance are ready by the time they play. Results are cached, so a
   song is only processed once. The model (about 60 MB) is downloaded the first time.
-- A few videos, mostly ones marked "made for kids", are only offered by YouTube as a single
-  360p stream. They play, at that quality.
+- A few videos, mostly ones marked "made for kids", are restricted by YouTube and play at 360p.
+  **Settings → Restricted Videos** can download an optional component (about 150 MB, 400 MB on
+  disk) that plays them in HD. It adds a few seconds before such a video starts.
 - YouTube changes often. If videos stop playing, update yt-dlp (`pip install -U yt-dlp`) or
   install the newest YTKTV release.
 

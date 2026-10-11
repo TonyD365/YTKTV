@@ -248,6 +248,9 @@ class KTVController:
                     source = MediaSource(video_url=str(local))
                 else:
                     source = self.resolver.resolve(video_id, self.settings.max_height)
+                is_limited = getattr(self.resolver, "is_limited", None)
+                if is_limited is not None and is_limited(video_id):
+                    self.toast("YouTube limits this video to 360p. See Settings to unlock HD.")
                 self.player.set_pitch(0)
                 self.player.set_speed(1.0)
                 self._apply_vocal_mode()

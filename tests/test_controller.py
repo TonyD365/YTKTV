@@ -374,3 +374,23 @@ def test_lyrics_load_for_the_current_song_and_clear_on_the_next(tmp_path):
         assert len(calls) == 2  # turned off: not even fetched
     finally:
         controller.close()
+
+
+def test_low_quality_restricted_video_tells_the_room_why(ktv):
+    controller, _, resolver = ktv
+    resolver.is_limited = lambda video_id: video_id == make_song(1).video_id
+    toasts = []
+    controller.bus.subscribe(
+        lambda topic, data: toasts.append(data["message"]) if topic == "toast" else None
+    )
+    controller.enqueue(make_song(1))
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    assert any("360p" in message for message in toasts)
+    controller.enqueue(make_song(2))
+    controller.skip()
+    wait_for(
+        lambda: (
+            controller.current.song.title == "Song 2" and controller.status == PlayStatus.PLAYING
+        )
+    )
+    assert sum("360p" in message for message in toasts) == 1

@@ -275,6 +275,7 @@ class SettingsPage(Page):
     check_updates = Signal()
     install_update = Signal()
     install_separation = Signal()
+    install_hd_unlock = Signal()
 
     def __init__(self, ctx: Context, server_url: str) -> None:
         super().__init__("Settings", ctx)
@@ -370,6 +371,20 @@ class SettingsPage(Page):
             "wait_for_instrumental",
         )
 
+        # HD unlock for restricted videos
+        self.hd_card = card("Restricted Videos")
+        self.hd_label = QLabel("Not available in this build.")
+        self.hd_label.setWordWrap(True)
+        self.hd_card.addWidget(self.hd_label)
+        self.hd_button = QPushButton()
+        self.hd_button.setProperty("accent", True)
+        self.hd_button.hide()
+        self.hd_button.clicked.connect(self.install_hd_unlock.emit)
+        hd_row = QHBoxLayout()
+        hd_row.addWidget(self.hd_button)
+        hd_row.addStretch()
+        self.hd_card.addLayout(hd_row)
+
         # Phone
         phone = card("Phone Remote")
         url = QLabel(
@@ -423,6 +438,11 @@ class SettingsPage(Page):
     def _quality_chosen(self, _index: int) -> None:
         self.ctx.controller.settings.max_height = int(self.quality.currentData())
         self.ctx.controller.mixer_changed()
+
+    def set_hd_unlock_status(self, text: str, button: str) -> None:
+        self.hd_label.setText(text)
+        self.hd_button.setText(button)
+        self.hd_button.setVisible(bool(button))
 
     def set_runtime_status(self, text: str, button: str) -> None:
         """Status of the downloadable runtime; empty text means "nothing special to say"."""

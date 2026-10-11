@@ -36,6 +36,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--windowed", action="store_true", help="keep the MV screen in a window")
     parser.add_argument("--debug", action="store_true", help="verbose logging")
     parser.add_argument(
+        "--hd-unlock-self-test",
+        action="store_true",
+        help="check that this build can use the HD unlock component, and exit (used by CI)",
+    )
+    parser.add_argument(
         "--separation-self-test",
         action="store_true",
         help="install the separation runtime, separate a test clip, and exit (used by CI)",
@@ -149,6 +154,11 @@ def main(argv: list[str] | None = None) -> int:
         filename=os.environ.get("YTKTV_LOG_FILE") or None,
     )
 
+    if args.hd_unlock_self_test:
+        from ytktv.youtube import hd_unlock
+
+        return hd_unlock.self_check(lambda line: log.info("%s", line))
+
     if args.separation_self_test:
         from ytktv.separation import runtime as separation_runtime
 
@@ -195,6 +205,11 @@ def main(argv: list[str] | None = None) -> int:
         player = FakePlayer()
 
     youtube = YouTube()
+    from ytktv.youtube.hd_unlock import HdUnlock
+
+    unlock = HdUnlock()
+    if unlock.supported():
+        youtube.hd_unlock = unlock
     bus = EventBus()
     audio = None
     if not args.no_mic:
@@ -292,6 +307,13 @@ def main(argv: list[str] | None = None) -> int:
         window.settings_page.install_separation.connect(setup.install_recommended)
         setup.status.connect(window.settings_page.set_runtime_status)
         setup.start()
+    if youtube.hd_unlock is not None:
+        from ytktv.ui.hd_unlock_setup import HdUnlockSetup
+
+        hd_setup = HdUnlockSetup(controller, youtube, window)
+        hd_setup.status.connect(window.settings_page.set_hd_unlock_status)
+        window.settings_page.install_hd_unlock.connect(hd_setup.install)
+        hd_setup.publish()
     window.show()
     window.place_mv()
     if not have_mpv:
