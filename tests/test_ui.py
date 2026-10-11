@@ -53,8 +53,8 @@ def test_search_page_lists_results_and_select_enqueues(window, qtbot):
     page = main.pages["search"]
     page.input.setText("anything")
     page.search()
-    qtbot.waitUntil(lambda: len(page._songs) > 0, timeout=3000)
-    first = page._songs[0]
+    qtbot.waitUntil(lambda: len(page._browse_songs) > 0, timeout=3000)
+    first = page._browse_songs[0]
     controller.enqueue(first)
     wait_for(lambda: controller.current is not None)
     assert controller.current.song.video_id == first.video_id

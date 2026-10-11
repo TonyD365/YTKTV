@@ -662,6 +662,29 @@ class KTVController:
         self.bus.emit("favorites", None)
         return result
 
+    # -- search helpers ---------------------------------------------------
+
+    def remember_search(self, query: str) -> None:
+        if self.library.add_search(query):
+            self.bus.emit("searches", None)
+
+    def clear_searches(self) -> None:
+        self.library.clear_searches()
+        self.bus.emit("searches", None)
+
+    def queued_ids(self) -> set[str]:
+        """Video ids that are playing or waiting in the queue."""
+        with self._lock:
+            ids = {self.current.song.video_id} if self.current else set()
+        return ids | {item.song.video_id for item in self.queue.snapshot()}
+
+    def song_marks(self, song: Song) -> dict[str, Any]:
+        """Extra facts shown on a song card: is its instrumental ready, is it queued."""
+        return {
+            "stem": self.stem_status(song.video_id).value,
+            "queued": song.video_id in self.queued_ids(),
+        }
+
     # -- playlists --------------------------------------------------------
 
     def playlists(self) -> list[dict[str, Any]]:

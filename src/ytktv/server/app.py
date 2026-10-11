@@ -20,7 +20,7 @@ from ytktv.audio.sfx import SFX_NAMES
 from ytktv.core.controller import KTVController
 from ytktv.core.models import Song, VocalMode
 from ytktv.youtube.parse import extract_video_id
-from ytktv.youtube.search import HOT_CATEGORIES
+from ytktv.youtube.search import ARTISTS, HOT_CATEGORIES
 
 log = logging.getLogger(__name__)
 
@@ -148,7 +148,17 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         except Exception as exc:
             log.warning("search failed: %s", exc)
             raise HTTPException(502, "YouTube search failed") from exc
-        return [song.to_dict() for song in songs]
+        controller.remember_search(q)
+        return [{**song.to_dict(), **controller.song_marks(song)} for song in songs]
+
+    @app.get("/api/suggest")
+    def suggest(q: str) -> list[str]:
+        suggest_fn = getattr(source, "suggest", None)
+        return suggest_fn(q[:100]) if suggest_fn else []
+
+    @app.get("/api/artists")
+    def artists() -> dict[str, list[str]]:
+        return {group: list(names) for group, names in ARTISTS.items()}
 
     @app.get("/api/categories")
     def categories() -> list[str]:
@@ -159,7 +169,7 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         if category not in HOT_CATEGORIES:
             raise HTTPException(404, "unknown category")
         try:
-            return [song.to_dict() for song in source.hot(category)]
+            return [{**s.to_dict(), **controller.song_marks(s)} for s in source.hot(category)]
         except Exception as exc:
             raise HTTPException(502, "YouTube search failed") from exc
 

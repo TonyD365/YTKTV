@@ -51,6 +51,9 @@ class FakeSource:
     def hot(self, category: str) -> list[Song]:
         return self.songs[:5]
 
+    def suggest(self, text: str, limit: int = 8) -> list[str]:
+        return [f"{text} karaoke", f"{text} lyrics"]
+
     def lookup(self, video_id: str) -> Song | None:
         return Song(video_id=video_id, title="Looked up")
 

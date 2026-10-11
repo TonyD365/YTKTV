@@ -8,6 +8,8 @@ import logging
 import subprocess
 import threading
 import time
+import urllib.parse
+import urllib.request
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any
@@ -40,6 +42,101 @@ HOT_CATEGORIES: dict[str, str] = {
     "Duets": "duet karaoke with lyrics",
     "Party": "party karaoke songs",
 }
+
+# Starting points for the Artists page; each name is simply searched for.
+ARTISTS: dict[str, tuple[str, ...]] = {
+    "Mandopop": (
+        "周杰倫",
+        "林俊傑",
+        "鄧紫棋",
+        "五月天",
+        "張惠妹",
+        "蔡依林",
+        "孫燕姿",
+        "王力宏",
+        "田馥甄",
+        "李榮浩",
+        "薛之謙",
+        "毛不易",
+        "周深",
+        "告五人",
+        "張韶涵",
+        "任賢齊",
+    ),
+    "Cantopop": (
+        "陳奕迅",
+        "張學友",
+        "容祖兒",
+        "楊千嬅",
+        "古巨基",
+        "李克勤",
+        "Beyond",
+        "謝霆鋒",
+        "鄭秀文",
+        "林家謙",
+        "姜濤",
+        "MIRROR",
+        "王菲",
+        "劉德華",
+        "梅艷芳",
+        "張國榮",
+    ),
+    "English": (
+        "Taylor Swift",
+        "Ed Sheeran",
+        "Adele",
+        "Bruno Mars",
+        "Coldplay",
+        "Queen",
+        "The Beatles",
+        "ABBA",
+        "Lady Gaga",
+        "Billie Eilish",
+        "Maroon 5",
+        "Backstreet Boys",
+        "Whitney Houston",
+        "Celine Dion",
+        "Bon Jovi",
+        "Michael Jackson",
+    ),
+    "K-Pop": (
+        "BTS",
+        "BLACKPINK",
+        "IU",
+        "TWICE",
+        "NewJeans",
+        "EXO",
+        "BIGBANG",
+        "SEVENTEEN",
+        "aespa",
+        "Stray Kids",
+        "(G)I-DLE",
+        "PSY",
+        "Red Velvet",
+        "TAEYEON",
+        "ITZY",
+        "LE SSERAFIM",
+    ),
+    "J-Pop": (
+        "YOASOBI",
+        "米津玄師",
+        "あいみょん",
+        "Official髭男dism",
+        "宇多田ヒカル",
+        "嵐",
+        "back number",
+        "King Gnu",
+        "Ado",
+        "中島美嘉",
+        "藤井風",
+        "スピッツ",
+        "Mrs. GREEN APPLE",
+        "優里",
+        "LiSA",
+        "Vaundy",
+    ),
+}
+_SUGGEST_URL = "https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q="
 
 _SEARCH_TTL = 600.0
 _DOWNLOAD_ATTEMPTS = 3
@@ -124,6 +221,29 @@ class YouTube:
         songs = parse_search_results(info)
         self._search_cache.put(key, songs)
         return songs
+
+    def suggest(self, text: str, limit: int = 8) -> list[str]:
+        """Search suggestions for what has been typed so far. Never raises: no network, no list."""
+        text = text.strip()
+        if len(text) < 2 or "://" in text:
+            return []
+        key = ("suggest", text.lower())
+        cached = self._search_cache.get(key)
+        if cached is not None:
+            return list(cached)[:limit]
+        try:
+            request = urllib.request.Request(
+                _SUGGEST_URL + urllib.parse.quote(text), headers={"User-Agent": "Mozilla/5.0"}
+            )
+            with urlopen(request, timeout=5) as response:
+                charset = response.headers.get_content_charset() or "utf-8"
+                payload = json.loads(response.read().decode(charset, "replace"))
+            suggestions = [str(item) for item in payload[1] if isinstance(item, str)]
+        except Exception:
+            log.debug("suggestions unavailable", exc_info=True)
+            return []
+        self._search_cache.put(key, suggestions)
+        return suggestions[:limit]
 
     def hot(self, category: str) -> list[Song]:
         return self.search(HOT_CATEGORIES.get(category, category))

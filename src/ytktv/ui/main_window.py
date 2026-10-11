@@ -26,6 +26,7 @@ from ytktv.core.models import VocalMode
 from ytktv.ui.mixer_panel import MixerPanel
 from ytktv.ui.mv_window import MvWindow
 from ytktv.ui.pages import (
+    ArtistsPage,
     Context,
     FavoritesPage,
     HistoryPage,
@@ -50,6 +51,7 @@ from ytktv.youtube.search import YouTube
 NAV = (
     ("search", "🔍   Search"),
     ("hot", "🔥   Hot Songs"),
+    ("artists", "★   Artists"),
     ("favorites", "♥   Favorites"),
     ("playlists", "≡   Playlists"),
     ("queue", "🎤   Selected"),
@@ -86,6 +88,7 @@ class MainWindow(QMainWindow):
         self.bridge = EventBridge(controller.bus, self)
         self.bridge.received.connect(self._on_event)
         self.ctx = Context(controller, youtube, ThumbnailLoader(self))
+        self.ctx.open_search = self.open_search
         self._state: dict[str, Any] = controller.state()
         self._last_current_id: str | None = None
         self._last_status = ""
@@ -234,6 +237,7 @@ class MainWindow(QMainWindow):
         self.pages: dict[str, QWidget] = {
             "search": SearchPage(self.ctx),
             "hot": HotPage(self.ctx),
+            "artists": ArtistsPage(self.ctx),
             "favorites": FavoritesPage(self.ctx),
             "playlists": PlaylistsPage(self.ctx),
             "queue": QueuePage(self.ctx),
@@ -405,6 +409,12 @@ class MainWindow(QMainWindow):
             fade(page, 1.0, 200, start=0.0)
         self._nav_buttons[key].setChecked(True)
 
+    def open_search(self, query: str) -> None:
+        self.show_page("search")
+        page = self.pages["search"]
+        assert isinstance(page, SearchPage)
+        page.search_for(query)
+
     def _choose_mode(self, mode: VocalMode) -> None:
         self.controller.set_vocal_mode(mode)
         if mode == VocalMode.INSTRUMENTAL:
@@ -485,6 +495,10 @@ class MainWindow(QMainWindow):
             for page in self.pages.values():
                 if isinstance(page, Page):
                     page.on_favorites()
+        elif topic == "searches":
+            for page in self.pages.values():
+                if isinstance(page, Page):
+                    page.on_searches()
         elif topic == "playlists":
             for page in self.pages.values():
                 if isinstance(page, Page):

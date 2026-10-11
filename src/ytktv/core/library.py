@@ -12,6 +12,7 @@ from ytktv.core.models import Song
 log = logging.getLogger(__name__)
 
 PLAYLIST_NAME_LENGTH = 60
+SEARCH_HISTORY = 20
 
 
 class Library:
@@ -20,6 +21,7 @@ class Library:
         self._lock = threading.RLock()
         self._favorites: list[Song] = []
         self._playlists: dict[str, list[Song]] = {}  # insertion order is display order
+        self._searches: list[str] = []  # most recent first
         self.history: list[Song] = []
         self._load()
 
@@ -30,6 +32,7 @@ class Library:
             data = json.loads(self.path.read_text(encoding="utf-8"))
             self._favorites = [Song.from_dict(s) for s in data.get("favorites", [])]
             self.history = [Song.from_dict(s) for s in data.get("history", [])]
+            self._searches = [str(q) for q in data.get("searches", [])][:SEARCH_HISTORY]
             self._playlists = {
                 str(name): [Song.from_dict(s) for s in songs]
                 for name, songs in (data.get("playlists") or {}).items()
@@ -46,6 +49,7 @@ class Library:
             data = {
                 "favorites": [s.to_dict() for s in self._favorites],
                 "history": [s.to_dict() for s in self.history],
+                "searches": list(self._searches),
                 "playlists": {
                     name: [s.to_dict() for s in songs] for name, songs in self._playlists.items()
                 },
@@ -75,6 +79,31 @@ class Library:
     def remove_favorite(self, video_id: str) -> None:
         with self._lock:
             self._favorites = [s for s in self._favorites if s.video_id != video_id]
+        self.save()
+
+    # -- recent searches ----------------------------------------------------
+
+    def searches(self) -> list[str]:
+        with self._lock:
+            return list(self._searches)
+
+    def add_search(self, query: str) -> bool:
+        """Remember a search, most recent first. Returns False if nothing changed."""
+        query = " ".join(query.split())
+        if not query or len(query) > 100 or "://" in query:  # pasted links are not worth keeping
+            return False
+        with self._lock:
+            if self._searches[:1] == [query]:
+                return False
+            lowered = query.lower()
+            self._searches = [query] + [q for q in self._searches if q.lower() != lowered]
+            del self._searches[SEARCH_HISTORY:]
+        self.save()
+        return True
+
+    def clear_searches(self) -> None:
+        with self._lock:
+            self._searches = []
         self.save()
 
     # -- playlists ----------------------------------------------------------

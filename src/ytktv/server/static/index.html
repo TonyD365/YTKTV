@@ -94,10 +94,14 @@
 <main>
   <section id="tab-search" class="active">
     <form class="search" id="search-form">
-      <input type="search" id="q" placeholder="Song, artist or YouTube link" autocomplete="off" enterkeyhint="search">
+      <input type="search" id="q" list="suggestions" placeholder="Song, artist or YouTube link" autocomplete="off" enterkeyhint="search">
+      <datalist id="suggestions"></datalist>
       <button class="btn" type="submit">Search</button>
     </form>
+    <div class="chips" id="recent"></div>
     <div class="chips" id="chips"></div>
+    <div class="chips" id="artist-groups"></div>
+    <div class="chips" id="artists"></div>
     <div id="results"><div class="empty">Search for a song or tap a category.</div></div>
   </section>
 
@@ -230,6 +234,13 @@ async function add(song, priority) {
   } catch (e) { toast(e.message, true); }
 }
 
+function marks(song) {
+  const extra = document.createDocumentFragment();
+  if (song.queued) extra.append(el("span", {class: "tag"}, "Selected"));
+  if (song.stem === "ready") extra.append(el("span", {class: "tag ready"}, "Instrumental ready"));
+  return extra;
+}
+
 function renderResults(songs) {
   const box = $("results");
   box.replaceChildren();
@@ -239,9 +250,41 @@ function renderResults(songs) {
       el("button", {class: "mini pink", onclick: () => add(song, false)}, "Select"),
       el("button", {class: "mini", onclick: () => add(song, true)}, "Priority"),
       el("button", {class: "mini ghost", onclick: () => addToList(song)}, "+ List"),
-    ]));
+    ], marks(song)));
   }
 }
+
+// Recent searches are kept on this phone.
+function recentSearches() {
+  try { return JSON.parse(localStorage.getItem("recent") || "[]"); } catch (e) { return []; }
+}
+function renderRecent() {
+  const box = $("recent");
+  box.replaceChildren();
+  const recent = recentSearches();
+  for (const q of recent) box.append(el("button", {class: "chip", onclick: () => searchFor(q)}, q));
+  if (recent.length) box.append(el("button", {class: "chip", onclick: () => { localStorage.removeItem("recent"); renderRecent(); }}, "Clear"));
+}
+function rememberSearch(q) {
+  if (q.includes("://")) return;
+  const recent = [q, ...recentSearches().filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 8);
+  localStorage.setItem("recent", JSON.stringify(recent));
+  renderRecent();
+}
+function searchFor(q) {
+  $("q").value = q;
+  rememberSearch(q);
+  load("/api/search?q=" + encodeURIComponent(q));
+}
+let suggestTimer;
+$("q").addEventListener("input", () => {
+  clearTimeout(suggestTimer);
+  const text = $("q").value.trim();
+  suggestTimer = setTimeout(async () => {
+    const list = text.length >= 2 ? await api("/api/suggest?q=" + encodeURIComponent(text)).catch(() => []) : [];
+    $("suggestions").replaceChildren(...list.map((value) => el("option", {value})));
+  }, 250);
+});
 
 async function load(path) {
   $("results").replaceChildren(el("div", {class: "empty"}, "Searching…"));
@@ -252,7 +295,7 @@ async function load(path) {
 $("search-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const q = $("q").value.trim();
-  if (q) { $("q").blur(); load("/api/search?q=" + encodeURIComponent(q)); }
+  if (q) { $("q").blur(); searchFor(q); }
 });
 
 function render() {
@@ -341,6 +384,14 @@ for (const text of ["👏👏👏", "🔥🔥🔥", "Encore!", "666", "好听！
 $("singer").value = localStorage.getItem("singer") || "";
 $("singer").addEventListener("change", () => localStorage.setItem("singer", $("singer").value));
 
+renderRecent();
+api("/api/artists").then((groups) => {
+  for (const [group, names] of Object.entries(groups)) {
+    $("artist-groups").append(el("button", {class: "chip", onclick: () => {
+      $("artists").replaceChildren(...names.map((name) => el("button", {class: "chip", onclick: () => searchFor(name)}, name)));
+    }}, "★ " + group));
+  }
+});
 api("/api/categories").then((names) => {
   for (const name of names) {
     $("chips").append(el("button", {class: "chip", onclick: () => load("/api/hot?category=" + encodeURIComponent(name))}, name));
