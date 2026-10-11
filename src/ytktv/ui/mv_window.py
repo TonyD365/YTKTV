@@ -6,7 +6,7 @@ import ctypes
 import logging
 from typing import Any
 
-from PySide6.QtCore import QByteArray, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QByteArray, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -20,6 +20,7 @@ from PySide6.QtGui import (
     QPaintEvent,
     QPen,
     QPixmap,
+    QPolygonF,
     QResizeEvent,
 )
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
@@ -164,6 +165,52 @@ class IdleCard(QWidget):
             )
 
 
+class TransportBadge(QWidget):
+    """The pause / play symbol a KTV screen shows in its corner."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.symbol = "pause"
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        # Only the disc is drawn; the video must show through the corners.
+        self.setStyleSheet("background: transparent;")
+        self.hide()
+
+    def set_symbol(self, symbol: str) -> None:
+        self.symbol = symbol
+        self.update()
+
+    def paintEvent(self, _event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        side = float(min(self.width(), self.height()))
+        ring = max(2.0, side * 0.045)
+        disc = QRectF(ring, ring, side - 2 * ring, side - 2 * ring)
+        painter.setPen(QPen(QColor(theme.PINK), ring))
+        painter.setBrush(QColor(8, 4, 20, 200))
+        painter.drawEllipse(disc)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("white"))
+        if self.symbol == "pause":
+            bar_w, bar_h = side * 0.12, side * 0.38
+            top = (side - bar_h) / 2
+            for x in (side * 0.34, side * 0.54):
+                painter.drawRoundedRect(QRectF(x, top, bar_w, bar_h), bar_w * 0.25, bar_w * 0.25)
+        else:
+            # Shifted right a little: a triangle centred on its box looks off-centre.
+            left, right = side * 0.40, side * 0.70
+            painter.drawPolygon(
+                QPolygonF(
+                    [
+                        QPointF(left, side * 0.31),
+                        QPointF(right, side * 0.50),
+                        QPointF(left, side * 0.69),
+                    ]
+                )
+            )
+
+
 class MvWindow(QWidget):
     closed = Signal()
 
@@ -181,6 +228,11 @@ class MvWindow(QWidget):
         self._banner_timer.setSingleShot(True)
         self._banner_timer.timeout.connect(lambda: fade_out(self.banner, 500))
         self._next_announced_for: str | None = None
+        self.badge = TransportBadge(self)
+        self._badge_timer = QTimer(self)
+        self._badge_timer.setSingleShot(True)
+        self._badge_timer.timeout.connect(lambda: fade_out(self.badge, 500))
+        self._last_status = ""
 
     # -- layout -----------------------------------------------------------
 
@@ -189,6 +241,7 @@ class MvWindow(QWidget):
             self.video.setGeometry(self.rect())
         self.idle.setGeometry(self.rect())
         self._place_banner()
+        self._place_badge()
 
     def _place_banner(self) -> None:
         unit = max(1.0, self.height() / 100.0)
@@ -201,6 +254,21 @@ class MvWindow(QWidget):
         self.banner.setMaximumWidth(int(self.width() * 0.8))
         self.banner.adjustSize()
         self.banner.move(int(unit * 3), int(unit * 4))
+
+    def _place_badge(self) -> None:
+        unit = max(1.0, self.height() / 100.0)
+        side = int(unit * 11)
+        self.badge.setGeometry(self.width() - side - int(unit * 3), int(unit * 4), side, side)
+
+    def show_transport(self, symbol: str) -> None:
+        """Show the pause symbol (stays while paused) or the play symbol (brief)."""
+        self._badge_timer.stop()
+        self.badge.set_symbol(symbol)
+        self._place_badge()
+        fade_in(self.badge, 180)
+        self.badge.raise_()
+        if symbol == "play":
+            self._badge_timer.start(1200)
 
     def place_on_screen(self, screen_index: int, fullscreen: bool) -> None:
         """Show on the chosen display (-1 = the first non-primary one, if any)."""
@@ -261,7 +329,16 @@ class MvWindow(QWidget):
     def apply_state(self, state: dict[str, Any]) -> None:
         """React to a controller state snapshot."""
         current = state.get("current")
-        showing_video = current is not None and state.get("status") in ("playing", "paused")
+        status = state.get("status")
+        if status == "paused" and self._last_status != "paused":
+            self.show_transport("pause")
+        elif status == "playing" and self._last_status == "paused":
+            self.show_transport("play")
+        elif status not in ("playing", "paused"):
+            self._badge_timer.stop()
+            fade_out(self.badge, 200)
+        self._last_status = str(status)
+        showing_video = current is not None and status in ("playing", "paused")
         if showing_video:
             fade_out(self.idle, 800)  # reveal the video underneath
         else:
