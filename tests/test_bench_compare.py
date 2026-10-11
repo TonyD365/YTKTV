@@ -29,7 +29,7 @@ def test_regression_needs_both_median_and_min_to_slow_down(tmp_path, capsys):
     )
     out = tmp_path / "report.md"
     code = compare.main(["--base", str(base), "--head", str(head), "--output", str(out)])
-    report = out.read_text()
+    report = out.read_text(encoding="utf-8")
     assert code == 1
     assert "| `a` | 1.00 ms | 2.00 ms | +100.0% | regression |" in report
     assert "| `noisy` | 1.00 ms | 2.00 ms | +100.0% |  |" in report
