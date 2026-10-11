@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import shutil
@@ -28,10 +29,8 @@ class StemCache:
         path = self.target(video_id)
         if not path.exists():
             return None
-        try:
+        with contextlib.suppress(OSError):
             os.utime(path.parent)  # mark as recently used for LRU
-        except OSError:
-            pass
         return path
 
     def _entries(self) -> list[tuple[float, int, Path]]:

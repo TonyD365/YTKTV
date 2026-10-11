@@ -80,5 +80,6 @@ exclude = ["_version\\.py$"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-q"
 qt_api = "pyside6"

@@ -1,0 +1,26 @@
+{
+ "id": "enmHYsoCMkQ",
+ "title": "Example",
+ "duration": 468,
+ "requested_formats": [
+  {
+   "format_id": "137",
+   "vcodec": "avc1.640028",
+   "acodec": "none",
+   "height": 1080,
+   "url": "https://example.invalid/videoplayback?itag=137&sig=a%2Cb;c",
+   "http_headers": {
+    "User-Agent": "Mozilla/5.0 Test"
+   }
+  },
+  {
+   "format_id": "140",
+   "vcodec": "none",
+   "acodec": "mp4a.40.2",
+   "url": "https://example.invalid/videoplayback?itag=140",
+   "http_headers": {
+    "User-Agent": "Mozilla/5.0 Test"
+   }
+  }
+ ]
+}

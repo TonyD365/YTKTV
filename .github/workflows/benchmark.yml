@@ -1,0 +1,96 @@
+name: Benchmark
+
+# Runs the benchmark suite for the base branch and for the pull request on the
+# same runner, back to back, so the comparison is not skewed by different
+# hardware. Fails when a benchmark regresses by more than THRESHOLD percent.
+
+on:
+  pull_request:
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  THRESHOLD: "25"
+  QT_QPA_PLATFORM: offscreen
+
+jobs:
+  benchmark:
+    name: Compare with base
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: head
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: head/pyproject.toml
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libportaudio2 libegl1 libgl1
+      - name: Install dependencies
+        run: python -m pip install -e "./head[dev]"
+
+      - name: Benchmark base
+        id: base
+        working-directory: base
+        run: |
+          if [ -d benchmarks ] && [ -d src/ytktv ]; then
+            PYTHONPATH="$PWD/src:$PWD" python -m pytest benchmarks --benchmark-only \
+              --benchmark-json="$RUNNER_TEMP/base.json" -q -p no:cacheprovider
+          else
+            echo "The base branch has no benchmarks yet; skipping the baseline."
+          fi
+
+      - name: Benchmark head
+        working-directory: head
+        run: |
+          PYTHONPATH="$PWD/src:$PWD" python -m pytest benchmarks --benchmark-only \
+            --benchmark-json="$RUNNER_TEMP/head.json" -q -p no:cacheprovider
+
+      - name: Compare
+        id: compare
+        working-directory: head
+        run: |
+          set +e
+          python benchmarks/compare.py --base "$RUNNER_TEMP/base.json" --head "$RUNNER_TEMP/head.json" \
+            --threshold "$THRESHOLD" --output "$RUNNER_TEMP/report.md"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on the pull request
+        # Pull requests from forks get a read-only token; the job summary still has the report.
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync(`${process.env.RUNNER_TEMP}/report.md`, 'utf8');
+            const marker = '<!-- ytktv-benchmark-report -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const previous = comments.find((c) => c.body && c.body.includes(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Fail on regression
+        if: steps.compare.outputs.status != '0'
+        run: |
+          echo "::error::A benchmark regressed by more than ${THRESHOLD}%. See the job summary."
+          exit 1

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -90,10 +91,9 @@ class EventBridge(QObject):
         self._unsubscribe = bus.subscribe(self._forward)
 
     def _forward(self, topic: str, payload: Any) -> None:
-        try:
+        # the QObject is already gone during shutdown
+        with contextlib.suppress(RuntimeError):
             self.received.emit(topic, payload)
-        except RuntimeError:
-            pass  # the QObject is already gone during shutdown
 
     def close(self) -> None:
         self._unsubscribe()
@@ -178,10 +178,9 @@ class ThumbnailLoader(QObject):
             self._cache.clear()
         self._cache[url] = pixmap
         for callback in callbacks:
-            try:
+            # the label was deleted while we were downloading
+            with contextlib.suppress(RuntimeError):
                 callback(pixmap)
-            except RuntimeError:
-                pass  # the label was deleted while we were downloading
 
 
 def qr_pixmap(text: str, size: int, dark: str = "#0d0720", light: str = "#ffffff") -> QPixmap:
