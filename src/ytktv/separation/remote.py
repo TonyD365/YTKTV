@@ -117,12 +117,15 @@ class SubprocessSeparator:
             self._ensure_started()
             return self.device_label
 
-    def separate(self, source: Path, out_path: Path) -> None:
+    def separate(self, source: Path, out_path: Path, pitch_path: Path | None = None) -> None:
+        request = {"source": str(source), "output": str(out_path)}
+        if pitch_path is not None:
+            request["pitch"] = str(pitch_path)
         with self._lock:
             process = self._ensure_started()
             assert process.stdin is not None
             try:
-                process.stdin.write(json.dumps({"source": str(source), "output": str(out_path)}))
+                process.stdin.write(json.dumps(request))
                 process.stdin.write("\n")
                 process.stdin.flush()
                 reply = self._read_message(process)

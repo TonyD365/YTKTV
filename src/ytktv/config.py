@@ -55,6 +55,9 @@ class Settings:
     master_volume: int = 100
     mics: list[MicSettings] = field(default_factory=_default_mics)
     mic_monitor: bool = True  # mix microphones into the output automatically
+    # Effect presets saved by the user: name -> the EQ / reverb / echo values.
+    mic_presets: dict[str, dict[str, float]] = field(default_factory=dict)
+    mic_preset: str = ""  # the preset the channels currently match, if any
 
     default_vocal_mode: str = "instrumental"
     auto_separate: bool = True
@@ -71,6 +74,8 @@ class Settings:
     lyrics_auto_captions: bool = False
     # Music-reactive glow around the MV screen.
     lights: bool = True
+    # Score each song by comparing the microphones with the original singer's melody.
+    scoring: bool = True
     # Runtime variant the user said no to downloading; do not ask about it again.
     separation_declined: str = ""
 

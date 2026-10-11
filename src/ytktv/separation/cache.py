@@ -11,6 +11,7 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 STEM_NAME = "instrumental.flac"
+PITCH_NAME = "melody.json"  # the original singer's pitch, for scoring
 
 
 class StemCache:
@@ -24,6 +25,13 @@ class StemCache:
 
     def target(self, video_id: str) -> Path:
         return self.folder(video_id) / STEM_NAME
+
+    def pitch_target(self, video_id: str) -> Path:
+        return self.folder(video_id) / PITCH_NAME
+
+    def pitch(self, video_id: str) -> Path | None:
+        path = self.pitch_target(video_id)
+        return path if path.exists() else None
 
     def get(self, video_id: str) -> Path | None:
         path = self.target(video_id)

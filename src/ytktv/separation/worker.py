@@ -44,8 +44,12 @@ class StemManager:
         self._pending: list[str] = []
         self._active: str | None = None
         self._cancelled: set[str] = set()
+        self._no_pitch: set[str] = set()  # melody extraction was tried and did not work
         self._stop = False
         self._thread: threading.Thread | None = None
+        # Also extract the singer's melody (needed for scoring). Songs separated without
+        # it are processed again when it is switched on.
+        self.want_pitch = False
 
     def start(self) -> None:
         if self._thread is None:
@@ -70,11 +74,26 @@ class StemManager:
     def path(self, video_id: str) -> Path | None:
         return self.cache.get(video_id)
 
+    def pitch(self, video_id: str) -> Path | None:
+        """The melody file for a song, if it has been extracted."""
+        return self.cache.pitch(video_id)
+
     def request(self, video_id: str) -> StemStatus:
         """Ask for a stem; returns immediately with the current status."""
         if self.cache.get(video_id):
             with self._cond:
                 self._status[video_id] = StemStatus.READY
+                # The instrumental is there but the melody is not: redo the song quietly.
+                redo = (
+                    self.want_pitch
+                    and self.cache.pitch(video_id) is None
+                    and video_id not in self._pending
+                    and video_id != self._active
+                    and video_id not in self._no_pitch
+                )
+                if redo:
+                    self._pending.append(video_id)
+                    self._cond.notify_all()
             return StemStatus.READY
         with self._cond:
             current = self._status.get(video_id)
@@ -154,25 +173,43 @@ class StemManager:
     def process(self, video_id: str) -> None:
         """Download + separate one song synchronously (the worker's unit of work)."""
         work = self.cache.folder(video_id) / "work"
+        # A song that already has its instrumental is only here to gain a melody file;
+        # it stays READY throughout and a failure must not take the instrumental away.
+        refresh = self.cache.get(video_id) is not None
         with self._cond:
             self._active = video_id
             self._cancelled.discard(video_id)
         try:
-            self._set(video_id, StemStatus.DOWNLOADING)
+            if not refresh:
+                self._set(video_id, StemStatus.DOWNLOADING)
             source = self._downloader(video_id, work)
             if self._is_cancelled(video_id):
                 raise _Cancelled
-            self._set(video_id, StemStatus.SEPARATING)
+            if not refresh:
+                self._set(video_id, StemStatus.SEPARATING)
             partial = work / "instrumental.partial.flac"
-            self._separator.separate(source, partial)
-            partial.replace(self.cache.target(video_id))
+            melody = work / "melody.partial.json" if self.want_pitch else None
+            self._separator.separate(source, partial, melody)
+            if melody is not None and melody.exists():
+                melody.replace(self.cache.pitch_target(video_id))
+            elif melody is not None:
+                with self._cond:
+                    self._no_pitch.add(video_id)  # do not retry forever
+            if not refresh:
+                partial.replace(self.cache.target(video_id))
         except Exception as exc:
             cancelled = self._is_cancelled(video_id)
             with self._cond:
                 self._active = None
                 self._cancelled.discard(video_id)
-                if cancelled:
+                if cancelled and not refresh:
                     self._status.pop(video_id, None)
+                if refresh and not cancelled:
+                    self._no_pitch.add(video_id)
+            if refresh:
+                shutil.rmtree(work, ignore_errors=True)
+                log.info("melody extraction for %s did not finish: %s", video_id, exc)
+                return
             shutil.rmtree(self.cache.folder(video_id), ignore_errors=True)
             if cancelled:
                 log.info("separation of %s cancelled: no longer in the queue", video_id)

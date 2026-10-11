@@ -7,17 +7,20 @@ this class, so they can never disagree about what is playing.
 from __future__ import annotations
 
 import logging
+import random
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Protocol
 
 from ytktv import __version__
+from ytktv.audio import presets
 from ytktv.config import SettingsStore
 from ytktv.core.events import EventBus
 from ytktv.core.library import Library
 from ytktv.core.models import PlayStatus, QueueItem, Song, StemStatus, VocalMode
 from ytktv.core.queue import SongQueue
+from ytktv.core.scoring import Melody, ScoreKeeper, ScoringLoop
 from ytktv.player.base import PlayerBackend
 from ytktv.youtube.parse import MediaSource
 
@@ -92,6 +95,9 @@ class KTVController:
         self._awaiting_start = False  # play() was called and the first frame is pending
         self.lyrics: list[Any] = []  # timed lines for the current song, if its video has subtitles
         self._danmaku_times: list[float] = []
+        self._keeper: ScoreKeeper | None = None  # scores the song that is playing
+        self.last_score: dict[str, Any] | None = None
+        self._scoring_loop: ScoringLoop | None = None
         self._wake = threading.Event()
         self._retries: dict[str, int] = {}
         self._save_timer: threading.Timer | None = None
@@ -104,6 +110,11 @@ class KTVController:
             stems.order = self._stem_order
         if preloader is not None:
             preloader.on_change = lambda _video_id: self._emit_state()
+        if stems is not None:
+            stems.want_pitch = self.settings.scoring
+        if audio is not None:
+            self._scoring_loop = ScoringLoop(audio.mic_pitch, self._scoring_target)
+            self._scoring_loop.start()
         self._apply_volume()
         player.set_guide(self.settings.guide_vocal / 100.0)
         player.set_audio_device(self.settings.output_device)
@@ -125,6 +136,29 @@ class KTVController:
         self.toast(f"Added: {song.title}")
         self._emit_state()
         return item
+
+    def enqueue_many(self, songs: list[Song], singer: str = "", shuffle: bool = False) -> int:
+        """Queue several songs at once (a playlist). Returns how many were added."""
+        songs = list(songs)
+        if shuffle:
+            random.shuffle(songs)
+        if not songs:
+            return 0
+        for song in songs:
+            self.queue.add(song, singer=singer)
+            if self.stems is not None and self.settings.auto_separate:
+                self.stems.request(song.video_id)
+        with self._lock:
+            start = self.current is None and self.status == PlayStatus.IDLE
+            if start:
+                self.status = PlayStatus.LOADING
+        if start:
+            self._executor.submit(self._advance, None)
+        else:
+            self._prefetch_next()
+        self.toast(f"Added {len(songs)} songs")
+        self._emit_state()
+        return len(songs)
 
     def remove(self, item_id: str) -> bool:
         ok = self.queue.remove(item_id)
@@ -219,6 +253,8 @@ class KTVController:
                 if self.current is not None and self._started:
                     self.queue.add_history(self.current.song)
                     self.library.save(self.queue.history())
+                    self._announce_score(self.current)
+                self._keeper = None
                 self._started = False
                 item = self.queue.pop_next()
                 self.current = item
@@ -248,6 +284,9 @@ class KTVController:
                     source = MediaSource(video_url=str(local))
                 else:
                     source = self.resolver.resolve(video_id, self.settings.max_height)
+                is_limited = getattr(self.resolver, "is_limited", None)
+                if is_limited is not None and is_limited(video_id):
+                    self.toast("YouTube limits this video to 360p. See Settings to unlock HD.")
                 self.player.set_pitch(0)
                 self.player.set_speed(1.0)
                 self._apply_vocal_mode()
@@ -266,6 +305,7 @@ class KTVController:
                 expected_id = item.id
                 continue
             # Status stays LOADING until the player reports its first position.
+            self._load_melody(item)
             self._load_lyrics(item)
             self._prefetch_next()
             return
@@ -361,7 +401,10 @@ class KTVController:
         now = time.monotonic()
         if now - self._last_position_emit >= _POSITION_INTERVAL:
             self._last_position_emit = now
-            self.bus.emit("position", {"position": position, "duration": self.duration})
+            self.bus.emit(
+                "position",
+                {"position": position, "duration": self.duration, "score": self.live_score()},
+            )
 
     def _sync_preload(self) -> None:
         """Tell the background workers which songs still matter after a queue change."""
@@ -425,6 +468,60 @@ class KTVController:
         self._save_soon()
         self._emit_state()
 
+    # -- scoring ----------------------------------------------------------
+
+    def set_scoring(self, enabled: bool) -> None:
+        self.settings.scoring = bool(enabled)
+        if self.stems is not None:
+            self.stems.want_pitch = self.settings.scoring
+            if self.settings.scoring:
+                # Songs separated before scoring was on have no melody yet: fetch it.
+                for video_id in self._stem_order():
+                    self.stems.request(video_id)
+        with self._lock:
+            item = self.current
+            if not self.settings.scoring:
+                self._keeper = None
+        if self.settings.scoring and item is not None:
+            self._load_melody(item)
+        self._save_soon()
+        self._emit_state()
+
+    def _load_melody(self, item: QueueItem) -> None:
+        """Start scoring *item* if scoring is on and its melody has been extracted."""
+        if not self.settings.scoring or self.stems is None:
+            return
+        path = self.stems.pitch(item.song.video_id)
+        if path is None:
+            return
+        try:
+            melody = Melody.load(path)
+        except Exception:
+            log.warning("unreadable melody for %s", item.song.video_id, exc_info=True)
+            return
+        with self._lock:
+            if self.current is item and self._keeper is None:
+                self._keeper = ScoreKeeper(melody, transpose=float(self.pitch))
+
+    def _scoring_target(self) -> tuple[ScoreKeeper, float] | None:
+        with self._lock:
+            if self._keeper is None or self.status != PlayStatus.PLAYING:
+                return None
+            return self._keeper, self.position
+
+    def live_score(self) -> int | None:
+        keeper = self._keeper
+        result = keeper.result() if keeper is not None else None
+        return result.points if result is not None else None
+
+    def _announce_score(self, item: QueueItem) -> None:
+        keeper = self._keeper
+        result = keeper.result() if keeper is not None else None
+        if result is None:
+            return
+        self.last_score = {**result.to_dict(), "title": item.song.title, "singer": item.singer}
+        self.bus.emit("score", self.last_score)
+
     def set_lights(self, enabled: bool) -> None:
         self.settings.lights = bool(enabled)
         self._save_soon()
@@ -471,6 +568,9 @@ class KTVController:
     def set_pitch(self, semitones: int) -> None:
         self.pitch = max(-PITCH_RANGE, min(PITCH_RANGE, int(semitones)))
         self.player.set_pitch(self.pitch)
+        keeper = self._keeper
+        if keeper is not None:
+            keeper.transpose = float(self.pitch)  # the melody moves with the key
         self._emit_state()
 
     def set_speed(self, speed: float) -> None:
@@ -505,8 +605,80 @@ class KTVController:
         self.bus.emit("mixer", None)
 
     def mixer_changed(self) -> None:
-        """Call after editing mic strip values in ``settings`` directly."""
+        """Call after editing settings directly (checkboxes and the like)."""
         self._save_soon()
+
+    # -- microphone strips and presets --------------------------------------
+
+    def set_mic(self, index: int, **values: Any) -> None:
+        """Change one channel strip. Values are clamped; unknown names raise KeyError."""
+        mic = self.settings.mics[index]  # IndexError for a channel that does not exist
+        cleaned = {name: presets.clamp(name, value) for name, value in values.items()}
+        for name, value in cleaned.items():
+            setattr(mic, name, value)
+        if any(name in presets.PRESET_FIELDS for name in cleaned):
+            self.settings.mic_preset = self._matching_preset()
+        self._save_soon()
+        self.bus.emit("mixer", None)
+
+    def all_presets(self) -> dict[str, dict[str, float]]:
+        """Built-in presets first, then the user's own."""
+        return {**presets.BUILT_IN, **self.settings.mic_presets}
+
+    def _matching_preset(self) -> str:
+        """Name of the preset every channel currently matches, or "" if none does."""
+        current = [presets.values_of(mic) for mic in self.settings.mics]
+        for name, values in self.all_presets().items():
+            target = {k: round(float(v), 3) for k, v in values.items()}
+            if all(strip == target for strip in current):
+                return name
+        return ""
+
+    def apply_preset(self, name: str) -> None:
+        """Give every microphone channel this preset's EQ, reverb and echo."""
+        values = self.all_presets()[name]  # KeyError for an unknown preset
+        for mic in self.settings.mics:
+            for field in presets.PRESET_FIELDS:
+                setattr(mic, field, presets.clamp(field, values[field]))
+        self.settings.mic_preset = name
+        self._save_soon()
+        self.bus.emit("mixer", None)
+
+    def save_preset(self, name: str) -> str:
+        """Save channel 1's current sound as a preset. Returns the cleaned name."""
+        name = presets.clean_name(name)
+        if name in presets.BUILT_IN:
+            raise ValueError(f"{name!r} is a built-in preset; choose another name")
+        self.settings.mic_presets[name] = presets.values_of(self.settings.mics[0])
+        self.settings.mic_preset = self._matching_preset()
+        self._save_soon()
+        self.bus.emit("mixer", None)
+        return name
+
+    def delete_preset(self, name: str) -> bool:
+        if self.settings.mic_presets.pop(name, None) is None:
+            return False
+        self.settings.mic_preset = self._matching_preset()
+        self._save_soon()
+        self.bus.emit("mixer", None)
+        return True
+
+    def mixer_state(self) -> dict[str, Any]:
+        """Everything a remote needs to draw the microphone mixer."""
+        mics = []
+        for index, mic in enumerate(self.settings.mics):
+            strip: dict[str, Any] = {name: getattr(mic, name) for name in presets.LIMITS}
+            strip.update(index=index, mute=mic.mute, enabled=mic.enabled, device=mic.device or "")
+            mics.append(strip)
+        return {
+            "mics": mics,
+            "presets": [
+                {"name": name, "builtin": name in presets.BUILT_IN} for name in self.all_presets()
+            ],
+            "preset": self.settings.mic_preset,
+            "monitor": self.settings.mic_monitor,
+            "running": bool(self.audio and self.audio.running),
+        }
 
     def play_sfx(self, name: str) -> bool:
         return bool(self.audio and self.audio.play_sfx(name))
@@ -541,6 +713,10 @@ class KTVController:
             if is_current and path is not None:
                 self.player.attach_instrumental(path)
                 self.player.use_instrumental(self.vocal_mode == VocalMode.INSTRUMENTAL)
+            with self._lock:
+                playing = self.current if is_current else None
+            if playing is not None:
+                self._load_melody(playing)
         self._emit_state()
 
     def stem_status(self, video_id: str) -> StemStatus:
@@ -558,6 +734,87 @@ class KTVController:
             result = True
         self.bus.emit("favorites", None)
         return result
+
+    # -- search helpers ---------------------------------------------------
+
+    def remember_search(self, query: str) -> None:
+        if self.library.add_search(query):
+            self.bus.emit("searches", None)
+
+    def clear_searches(self) -> None:
+        self.library.clear_searches()
+        self.bus.emit("searches", None)
+
+    def queued_ids(self) -> set[str]:
+        """Video ids that are playing or waiting in the queue."""
+        with self._lock:
+            ids = {self.current.song.video_id} if self.current else set()
+        return ids | {item.song.video_id for item in self.queue.snapshot()}
+
+    def song_marks(self, song: Song) -> dict[str, Any]:
+        """Extra facts shown on a song card: is its instrumental ready, is it queued."""
+        return {
+            "stem": self.stem_status(song.video_id).value,
+            "queued": song.video_id in self.queued_ids(),
+        }
+
+    # -- playlists --------------------------------------------------------
+
+    def playlists(self) -> list[dict[str, Any]]:
+        library = self.library
+        return [
+            {"name": name, "count": len(library.playlist(name) or [])}
+            for name in library.playlist_names()
+        ]
+
+    def create_playlist(self, name: str, songs: list[Song] | None = None) -> str:
+        created = self.library.create_playlist(name, songs)
+        self.bus.emit("playlists", None)
+        return created
+
+    def delete_playlist(self, name: str) -> bool:
+        ok = self.library.delete_playlist(name)
+        if ok:
+            self.bus.emit("playlists", None)
+        return ok
+
+    def add_to_playlist(self, name: str, song: Song) -> bool:
+        ok = self.library.add_to_playlist(name, song)
+        if ok:
+            self.bus.emit("playlists", None)
+            self.toast(f"Added to {name}")
+        return ok
+
+    def remove_from_playlist(self, name: str, video_id: str) -> bool:
+        ok = self.library.remove_from_playlist(name, video_id)
+        if ok:
+            self.bus.emit("playlists", None)
+        return ok
+
+    def save_queue_as_playlist(self, name: str) -> str:
+        """Save what is playing plus everything queued as a new playlist."""
+        with self._lock:
+            songs = [self.current.song] if self.current else []
+        songs += [item.song for item in self.queue.snapshot()]
+        if not songs:
+            raise ValueError("there is nothing in the queue to save")
+        return self.create_playlist(name, songs)
+
+    def import_playlist(self, url: str) -> str:
+        """Import a YouTube playlist (network; call off the GUI thread). Returns its name."""
+        fetch = getattr(self.resolver, "playlist", None)
+        if fetch is None:
+            raise ValueError("playlist import is not available")
+        title, songs = fetch(url)
+        name = self.create_playlist(self.library.unique_playlist_name(title), songs)
+        self.toast(f"Imported {len(songs)} songs into {name}")
+        return name
+
+    def enqueue_playlist(self, name: str, shuffle: bool = False, singer: str = "") -> int:
+        songs = self.library.playlist(name)
+        if songs is None:
+            raise KeyError(name)
+        return self.enqueue_many(songs, singer=singer, shuffle=shuffle)
 
     # -- state ------------------------------------------------------------
 
@@ -590,6 +847,9 @@ class KTVController:
             "guide_vocal": settings.guide_vocal,
             "lyrics": bool(self.lyrics),
             "lights": settings.lights,
+            "scoring": settings.scoring,
+            "scoring_active": self._keeper is not None,
+            "last_score": self.last_score,
             "music_volume": settings.music_volume,
             "mic_volume": settings.mic_volume,
             "master_volume": settings.master_volume,
@@ -618,6 +878,8 @@ class KTVController:
         self._executor.shutdown(wait=False, cancel_futures=True)
         self._prefetcher.shutdown(wait=False, cancel_futures=True)
         self._wake.set()
+        if self._scoring_loop is not None:
+            self._scoring_loop.stop()
         if self.stems is not None:
             self.stems.stop()
         if self.preloader is not None:

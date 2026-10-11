@@ -17,6 +17,7 @@ from ytktv.audio import devices
 from ytktv.audio.dsp import Limiter, MicChain
 from ytktv.audio.sfx import SfxBank
 from ytktv.config import Settings
+from ytktv.separation import pitch_core
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +79,34 @@ class RingBuffer:
         return out
 
 
+class PitchTap:
+    """The most recent raw microphone audio, for the scoring pitch detector."""
+
+    def __init__(self, size: int) -> None:
+        self._data = np.zeros(size, dtype=np.float32)
+        self._size = size
+        self._pos = 0
+        self._lock = threading.Lock()
+
+    def write(self, samples: np.ndarray) -> None:
+        n = len(samples)
+        if n >= self._size:
+            samples, n = samples[-self._size :], self._size
+        with self._lock:
+            first = min(n, self._size - self._pos)
+            self._data[self._pos : self._pos + first] = samples[:first]
+            self._data[: n - first] = samples[first:]
+            self._pos = (self._pos + n) % self._size
+
+    def latest(self, n: int) -> np.ndarray:
+        n = min(n, self._size)
+        with self._lock:
+            start = (self._pos - n) % self._size
+            if start + n <= self._size:
+                return self._data[start : start + n].copy()
+            return np.concatenate((self._data[start:], self._data[: start + n - self._size]))
+
+
 class Mixer:
     """Device-independent mixing maths; the engine feeds it from real streams."""
 
@@ -91,6 +120,7 @@ class Mixer:
         self._voice_lock = threading.Lock()
         self.mic_peaks = [0.0] * len(settings.mics)
         self.master_peak = (0.0, 0.0)
+        self.tap = PitchTap(int(sample_rate * 0.25))
 
     def trigger(self, name: str) -> bool:
         samples = self.sfx.get(name)
@@ -105,6 +135,10 @@ class Mixer:
         """Mix one block. ``inputs[i]`` is mic i's mono block, or None when unused."""
         settings = self.settings
         bus = np.zeros((frames, 2), dtype=np.float32)
+        live = [block for block in inputs if block is not None]
+        if live:
+            # All microphones together, before any effects: this is what gets scored.
+            self.tap.write(live[0] if len(live) == 1 else np.sum(live, axis=0))
         for i, block in enumerate(inputs):
             if block is None:
                 self.mic_peaks[i] = 0.0
@@ -235,6 +269,15 @@ class AudioEngine:
 
     def play_sfx(self, name: str) -> bool:
         return self.running and self.mixer.trigger(name)
+
+    def mic_pitch(self) -> float | None:
+        """The note being sung into the microphones right now (MIDI), or None."""
+        if not self.running:
+            return None
+        samples, rate = pitch_core.decimate(
+            self.mixer.tap.latest(int(self.sample_rate * 0.1)).astype(np.float64), self.sample_rate
+        )
+        return pitch_core.detect(samples[-pitch_core.FRAME :], rate)
 
     def levels(self) -> dict[str, Any]:
         return {"mics": list(self.mixer.mic_peaks), "master": list(self.mixer.master_peak)}

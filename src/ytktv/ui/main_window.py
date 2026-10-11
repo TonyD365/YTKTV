@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any
 
 from PySide6.QtCore import QDateTime, Qt, QTimer
-from PySide6.QtGui import QCloseEvent, QKeyEvent, QResizeEvent
+from PySide6.QtGui import QAction, QCloseEvent, QKeyEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -13,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QProgressBar,
     QPushButton,
     QSlider,
@@ -26,11 +28,13 @@ from ytktv.core.models import VocalMode
 from ytktv.ui.mixer_panel import MixerPanel
 from ytktv.ui.mv_window import MvWindow
 from ytktv.ui.pages import (
+    ArtistsPage,
     Context,
     FavoritesPage,
     HistoryPage,
     HotPage,
     Page,
+    PlaylistsPage,
     QueuePage,
     SearchPage,
     SettingsPage,
@@ -49,12 +53,23 @@ from ytktv.youtube.search import YouTube
 NAV = (
     ("search", "🔍   Search"),
     ("hot", "🔥   Hot Songs"),
+    ("artists", "★   Artists"),
     ("favorites", "♥   Favorites"),
+    ("playlists", "≡   Playlists"),
     ("queue", "🎤   Selected"),
     ("history", "✓   Sung"),
     ("mixer", "🎚   Mixer"),
     ("settings", "⚙   Settings"),
 )
+
+
+_MORE_MODES = "More ▾"
+# Vocal modes that work at once, with the label shown on the button when one is active.
+_INSTANT_MODES = {
+    VocalMode.CENTER_CUT: "Vocal Cut",
+    VocalMode.LEFT: "Left Only",
+    VocalMode.RIGHT: "Right Only",
+}
 
 
 def _caption(text: str) -> QLabel:
@@ -84,6 +99,7 @@ class MainWindow(QMainWindow):
         self.bridge = EventBridge(controller.bus, self)
         self.bridge.received.connect(self._on_event)
         self.ctx = Context(controller, youtube, ThumbnailLoader(self))
+        self.ctx.open_search = self.open_search
         self._state: dict[str, Any] = controller.state()
         self._last_current_id: str | None = None
         self._last_status = ""
@@ -232,7 +248,9 @@ class MainWindow(QMainWindow):
         self.pages: dict[str, QWidget] = {
             "search": SearchPage(self.ctx),
             "hot": HotPage(self.ctx),
+            "artists": ArtistsPage(self.ctx),
             "favorites": FavoritesPage(self.ctx),
+            "playlists": PlaylistsPage(self.ctx),
             "queue": QueuePage(self.ctx),
             "history": HistoryPage(self.ctx),
             "mixer": self.mixer_page,
@@ -282,24 +300,43 @@ class MainWindow(QMainWindow):
         for mode, text, tip, width in (
             (VocalMode.ORIGINAL, "Original", "Play the song with its original vocals", 76),
             (VocalMode.INSTRUMENTAL, "Instrumental", "Play the AI-separated backing track", 100),
-            (VocalMode.CENTER_CUT, "Vocal Cut", "Instant vocal reduction (no waiting)", 78),
-            (VocalMode.LEFT, "L", "Left channel only (split-track KTV videos)", 44),
-            (VocalMode.RIGHT, "R", "Right channel only (split-track KTV videos)", 44),
         ):
             widget = button(text, lambda m=mode: self._choose_mode(m), tip, width)
             widget.setCheckable(True)
-            if mode in (VocalMode.LEFT, VocalMode.RIGHT):
-                widget.setProperty("round", True)
             self.mode_buttons[mode] = widget
-        group("VOCALS", *self.mode_buttons.values())
+        # The instant modes are used less often, so they share one menu button.
+        self.more_modes = QPushButton(_MORE_MODES)
+        self.more_modes.setFixedSize(92, 44)
+        self.more_modes.setCheckable(True)
+        self.more_modes.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.more_modes.setToolTip("Vocal modes that need no preparation")
+        menu = QMenu(self.more_modes)
+        self.mode_actions: dict[VocalMode, QAction] = {}
+        for mode, text in _INSTANT_MODES.items():
+            action = menu.addAction(text, partial(self._choose_mode, mode))
+            action.setCheckable(True)
+            self.mode_actions[mode] = action
+        self.more_modes.clicked.connect(self._show_more_modes)
+        self._more_menu = menu
+        group("VOCALS", *self.mode_buttons.values(), self.more_modes)
 
         # Transport
         self.pause_button = button("⏯", controller.toggle_pause, "Play / Pause", round=True)
+        self.score_button = QPushButton("Score")
+        self.score_button.setFixedSize(58, 44)
+        self.score_button.setCheckable(True)
+        self.score_button.setChecked(controller.settings.scoring)
+        self.score_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.score_button.setToolTip(
+            "Score each song: the microphones are compared with the original singer's melody"
+        )
+        self.score_button.clicked.connect(controller.set_scoring)
         group(
             "PLAYBACK",
             button("⏮", controller.replay, "Replay from the start", round=True),
             self.pause_button,
             button("⏭", controller.skip, "Skip to the next song", round=True),
+            self.score_button,
         )
 
         # Key and tempo
@@ -346,8 +383,8 @@ class MainWindow(QMainWindow):
         # Crowd
         group(
             "CROWD",
-            button("Applause", lambda: self._sfx("applause"), "Applause", 80, gold=True),
-            button("Cheer", lambda: self._sfx("cheer"), "Crowd cheer", 68, gold=True),
+            button("Applause", lambda: self._sfx("applause"), "Applause", 74, gold=True),
+            button("Cheer", lambda: self._sfx("cheer"), "Crowd cheer", 58, gold=True),
             button("📣", lambda: self._sfx("airhorn"), "Air horn", round=True),
             button("🥁", lambda: self._sfx("drumroll"), "Drum roll", round=True),
             self._lights_button(),
@@ -356,7 +393,7 @@ class MainWindow(QMainWindow):
 
     def _lights_button(self) -> QPushButton:
         self.lights_button = QPushButton("Lights")
-        self.lights_button.setFixedSize(62, 44)
+        self.lights_button.setFixedSize(56, 44)
         self.lights_button.setCheckable(True)
         self.lights_button.setChecked(self.controller.settings.lights)
         self.lights_button.setToolTip(
@@ -391,6 +428,17 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(page)
             fade(page, 1.0, 200, start=0.0)
         self._nav_buttons[key].setChecked(True)
+
+    def open_search(self, query: str) -> None:
+        self.show_page("search")
+        page = self.pages["search"]
+        assert isinstance(page, SearchPage)
+        page.search_for(query)
+
+    def _show_more_modes(self) -> None:
+        # Clicking toggles the check mark; put it back to what the state says.
+        self.more_modes.setChecked(self._state["vocal_mode"] in {m.value for m in _INSTANT_MODES})
+        self._more_menu.exec(self.more_modes.mapToGlobal(self.more_modes.rect().topLeft()))
 
     def _choose_mode(self, mode: VocalMode) -> None:
         self.controller.set_vocal_mode(mode)
@@ -465,18 +513,30 @@ class MainWindow(QMainWindow):
             self._apply_state()
         elif topic == "position":
             self._apply_position(payload["position"], payload["duration"])
+            self.mv_window.set_live_score(payload.get("score"))
         elif topic == "toast":
             self.show_toast(payload["message"], payload.get("error", False))
         elif topic == "favorites":
             for page in self.pages.values():
                 if isinstance(page, Page):
                     page.on_favorites()
+        elif topic == "searches":
+            for page in self.pages.values():
+                if isinstance(page, Page):
+                    page.on_searches()
+        elif topic == "playlists":
+            for page in self.pages.values():
+                if isinstance(page, Page):
+                    page.on_playlists()
         elif topic == "lyrics":
             current = self._state["current"]
             if payload["id"] is None or (current and current["id"] == payload["id"]):
                 self.mv_window.set_lyrics(payload["lines"])
         elif topic == "danmaku":
             self.mv_window.add_danmaku(payload["text"])
+        elif topic == "score":
+            self.mv_window.show_score(payload)
+            self.show_toast(f"Score: {payload['points']}  ·  {payload['grade']}")
         elif topic == "mixer":
             self.mixer_page.apply_state()
 
@@ -513,11 +573,24 @@ class MainWindow(QMainWindow):
 
         for mode, button in self.mode_buttons.items():
             button.setChecked(mode.value == state["vocal_mode"])
+        instant = next((m for m in _INSTANT_MODES if m.value == state["vocal_mode"]), None)
+        for mode, action in self.mode_actions.items():
+            action.setChecked(mode is instant)
+        self.more_modes.setChecked(instant is not None)
+        self.more_modes.setText(_INSTANT_MODES[instant] if instant else _MORE_MODES)
         pitch = state["pitch"]
         self.key_readout.setText(f"{pitch:+d}" if pitch else "0")
         self.key_readout.setEnabled(abs(pitch) < PITCH_RANGE)
         self.tempo_readout.setText(f"{round(state['speed'] * 100)}%")
         self.lights_button.setChecked(state["lights"])
+        self.score_button.setChecked(state["scoring"])
+        if state["scoring"] and not state["separation"]:
+            tip = "Scoring needs vocal separation, which is not installed"
+        elif state["scoring"] and state["current"] and not state["scoring_active"]:
+            tip = "No score for this song yet: its melody is still being prepared"
+        else:
+            tip = "Score each song: the microphones are compared with the original singer's melody"
+        self.score_button.setToolTip(tip)
         for slider, name in (
             (self.music_slider, "music_volume"),
             (self.mic_slider, "mic_volume"),

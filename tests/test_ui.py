@@ -53,8 +53,8 @@ def test_search_page_lists_results_and_select_enqueues(window, qtbot):
     page = main.pages["search"]
     page.input.setText("anything")
     page.search()
-    qtbot.waitUntil(lambda: len(page._songs) > 0, timeout=3000)
-    first = page._songs[0]
+    qtbot.waitUntil(lambda: len(page._browse_songs) > 0, timeout=3000)
+    first = page._browse_songs[0]
     controller.enqueue(first)
     wait_for(lambda: controller.current is not None)
     assert controller.current.song.video_id == first.video_id
@@ -64,8 +64,15 @@ def test_control_bar_buttons_drive_the_controller(window, qtbot):
     main, controller = window
     from ytktv.core.models import VocalMode
 
-    qtbot.mouseClick(main.mode_buttons[VocalMode.CENTER_CUT], Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(main.mode_buttons[VocalMode.INSTRUMENTAL], Qt.MouseButton.LeftButton)
+    assert controller.vocal_mode == VocalMode.INSTRUMENTAL
+    assert main.more_modes.text() == "More ▾" and not main.more_modes.isChecked()
+
+    main.mode_actions[VocalMode.CENTER_CUT].trigger()  # picked from the More menu
     assert controller.vocal_mode == VocalMode.CENTER_CUT
+    qtbot.waitUntil(lambda: main.more_modes.text() == "Vocal Cut", timeout=3000)
+    assert main.more_modes.isChecked() and main.mode_actions[VocalMode.CENTER_CUT].isChecked()
+    assert not main.mode_buttons[VocalMode.INSTRUMENTAL].isChecked()
     main.music_slider.setValue(33)
     assert controller.settings.music_volume == 33
     assert controller.settings.mic_volume == 80
@@ -317,3 +324,29 @@ def test_settings_offers_install_now_when_an_update_is_downloaded(
     page.install_button.click()
     assert "will stop" in shown[1]  # warns before interrupting a song
     assert installed == [installer, "quit"]
+
+
+def test_score_toggle_live_score_and_score_card(window, qtbot):
+    main, controller = window
+    mv = main.mv_window
+    mv.show()
+    assert main.score_button.isChecked()
+    main.score_button.click()
+    assert controller.settings.scoring is False
+    main.score_button.click()
+    assert controller.settings.scoring is True
+
+    assert not mv.live_score.isVisible()
+    controller.bus.emit("position", {"position": 30.0, "duration": 200.0, "score": 87})
+    qtbot.waitUntil(
+        lambda: mv.live_score.isVisible() and "87" in mv.live_score.text(), timeout=3000
+    )
+    controller.bus.emit("position", {"position": 31.0, "duration": 200.0, "score": None})
+    qtbot.waitUntil(lambda: not mv.live_score.isVisible(), timeout=3000)
+
+    score = {"points": 92, "grade": "Amazing!", "title": "Song 1", "singer": "Ann"}
+    controller.bus.emit("score", score)
+    qtbot.waitUntil(lambda: mv.score_card.isVisible(), timeout=3000)
+    assert mv.score_card._points == 92 and "Ann" in mv.score_card._caption
+    mv.score_card.grab()  # painting must not fail
+    assert "92" in main.toast.text()

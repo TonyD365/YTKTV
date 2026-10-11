@@ -20,7 +20,7 @@ from ytktv.audio.sfx import SFX_NAMES
 from ytktv.core.controller import KTVController
 from ytktv.core.models import Song, VocalMode
 from ytktv.youtube.parse import extract_video_id
-from ytktv.youtube.search import HOT_CATEGORIES
+from ytktv.youtube.search import ARTISTS, HOT_CATEGORIES
 
 log = logging.getLogger(__name__)
 
@@ -72,10 +72,47 @@ class SoundIn(BaseModel):
     master_volume: int | None = Field(default=None, ge=0, le=100)
     guide_vocal: int | None = Field(default=None, ge=0, le=100)
     lights: bool | None = None
+    scoring: bool | None = None
+
+
+class PlaylistIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    from_queue: bool = False
+
+
+class PlaylistImportIn(BaseModel):
+    url: str = Field(min_length=1, max_length=400)
+
+
+class PlaylistEnqueueIn(BaseModel):
+    shuffle: bool = False
+    singer: str = Field(default="", max_length=40)
+
+
+class MicIn(BaseModel):
+    """Any subset of one channel strip's controls."""
+
+    gain: float | None = Field(default=None, ge=0, le=2)
+    low_db: float | None = Field(default=None, ge=-12, le=12)
+    mid_db: float | None = Field(default=None, ge=-12, le=12)
+    high_db: float | None = Field(default=None, ge=-12, le=12)
+    reverb: float | None = Field(default=None, ge=0, le=1)
+    echo: float | None = Field(default=None, ge=0, le=1)
+    pan: float | None = Field(default=None, ge=-1, le=1)
+    fader: float | None = Field(default=None, ge=0, le=1)
+    mute: bool | None = None
+
+
+class PresetIn(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
 
 
 class DanmakuIn(BaseModel):
     text: str = Field(min_length=1, max_length=200)
+
+
+# Controller events that are forwarded to phones over the WebSocket.
+_PUSHED_TOPICS = frozenset({"state", "position", "toast", "danmaku", "score", "playlists", "mixer"})
 
 
 class _Broadcaster:
@@ -87,7 +124,7 @@ class _Broadcaster:
 
     def publish(self, topic: str, payload: Any) -> None:
         loop = self.loop
-        if loop is None or topic not in ("state", "position", "toast", "danmaku"):
+        if loop is None or topic not in _PUSHED_TOPICS:
             return
         with contextlib.suppress(RuntimeError):  # loop already closed on shutdown
             loop.call_soon_threadsafe(self._fan_out, topic, payload)
@@ -126,7 +163,17 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         except Exception as exc:
             log.warning("search failed: %s", exc)
             raise HTTPException(502, "YouTube search failed") from exc
-        return [song.to_dict() for song in songs]
+        controller.remember_search(q)
+        return [{**song.to_dict(), **controller.song_marks(song)} for song in songs]
+
+    @app.get("/api/suggest")
+    def suggest(q: str) -> list[str]:
+        suggest_fn = getattr(source, "suggest", None)
+        return suggest_fn(q[:100]) if suggest_fn else []
+
+    @app.get("/api/artists")
+    def artists() -> dict[str, list[str]]:
+        return {group: list(names) for group, names in ARTISTS.items()}
 
     @app.get("/api/categories")
     def categories() -> list[str]:
@@ -137,7 +184,7 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         if category not in HOT_CATEGORIES:
             raise HTTPException(404, "unknown category")
         try:
-            return [song.to_dict() for song in source.hot(category)]
+            return [{**s.to_dict(), **controller.song_marks(s)} for s in source.hot(category)]
         except Exception as exc:
             raise HTTPException(502, "YouTube search failed") from exc
 
@@ -197,6 +244,8 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
             controller.set_guide_vocal(body.guide_vocal)
         if body.lights is not None:
             controller.set_lights(body.lights)
+        if body.scoring is not None:
+            controller.set_scoring(body.scoring)
         for name in ("music", "mic", "master"):
             value = getattr(body, f"{name}_volume")
             if value is not None:
@@ -218,6 +267,94 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
     @app.get("/api/lyrics")
     def lyrics() -> list[dict[str, Any]]:
         return [line.to_dict() for line in controller.lyrics]
+
+    @app.get("/api/mixer")
+    def mixer() -> dict[str, Any]:
+        return controller.mixer_state()
+
+    @app.post("/api/mixer/mics/{index}")
+    def set_mic(index: int, body: MicIn) -> dict[str, Any]:
+        if not 0 <= index < len(controller.settings.mics):
+            raise HTTPException(404, "no such microphone channel")
+        controller.set_mic(index, **body.model_dump(exclude_none=True))
+        return controller.mixer_state()
+
+    @app.post("/api/mixer/presets")
+    def save_preset(body: PresetIn) -> dict[str, str]:
+        try:
+            return {"name": controller.save_preset(body.name)}
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.post("/api/mixer/presets/{name}/apply")
+    def apply_preset(name: str) -> dict[str, Any]:
+        try:
+            controller.apply_preset(name)
+        except KeyError as exc:
+            raise HTTPException(404, "no such preset") from exc
+        return controller.mixer_state()
+
+    @app.delete("/api/mixer/presets/{name}")
+    def delete_preset(name: str) -> dict[str, bool]:
+        if not controller.delete_preset(name):
+            raise HTTPException(404, "no such saved preset")
+        return {"ok": True}
+
+    @app.get("/api/playlists")
+    def playlists() -> list[dict[str, Any]]:
+        return controller.playlists()
+
+    @app.post("/api/playlists")
+    def create_playlist(body: PlaylistIn) -> dict[str, str]:
+        try:
+            if body.from_queue:
+                return {"name": controller.save_queue_as_playlist(body.name)}
+            return {"name": controller.create_playlist(body.name)}
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.post("/api/playlists/import")
+    def import_playlist(body: PlaylistImportIn) -> dict[str, str]:
+        try:
+            return {"name": controller.import_playlist(body.url)}
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:
+            log.warning("playlist import failed: %s", exc)
+            raise HTTPException(502, "could not read that playlist from YouTube") from exc
+
+    @app.get("/api/playlists/{name}")
+    def playlist(name: str) -> list[dict[str, Any]]:
+        songs = controller.library.playlist(name)
+        if songs is None:
+            raise HTTPException(404, "no such playlist")
+        return [song.to_dict() for song in songs]
+
+    @app.delete("/api/playlists/{name}")
+    def delete_playlist(name: str) -> dict[str, bool]:
+        if not controller.delete_playlist(name):
+            raise HTTPException(404, "no such playlist")
+        return {"ok": True}
+
+    @app.post("/api/playlists/{name}/songs")
+    def add_to_playlist(name: str, body: SongIn) -> dict[str, bool]:
+        if controller.library.playlist(name) is None:
+            raise HTTPException(404, "no such playlist")
+        return {"added": controller.add_to_playlist(name, body.to_song())}
+
+    @app.delete("/api/playlists/{name}/songs/{video_id}")
+    def remove_from_playlist(name: str, video_id: str) -> dict[str, bool]:
+        if not controller.remove_from_playlist(name, video_id):
+            raise HTTPException(404, "not in that playlist")
+        return {"ok": True}
+
+    @app.post("/api/playlists/{name}/enqueue")
+    def enqueue_playlist(name: str, body: PlaylistEnqueueIn) -> dict[str, int]:
+        try:
+            added = controller.enqueue_playlist(name, body.shuffle, body.singer.strip())
+        except KeyError as exc:
+            raise HTTPException(404, "no such playlist") from exc
+        return {"added": added}
 
     @app.get("/api/favorites")
     def favorites() -> list[dict[str, Any]]:

@@ -8,16 +8,20 @@ import logging
 import subprocess
 import threading
 import time
+import urllib.parse
+import urllib.request
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
 from ytktv.core.models import Song
 from ytktv.net import urlopen
+from ytktv.youtube.hd_unlock import HdUnlock
 from ytktv.youtube.lyrics import LyricLine, parse_json3, pick_track
 from ytktv.youtube.parse import (
     MediaSource,
     entry_to_song,
+    extract_playlist_id,
     extract_video_id,
     parse_media_source,
     parse_search_results,
@@ -39,10 +43,104 @@ HOT_CATEGORIES: dict[str, str] = {
     "Party": "party karaoke songs",
 }
 
+# Starting points for the Artists page; each name is simply searched for.
+ARTISTS: dict[str, tuple[str, ...]] = {
+    "Mandopop": (
+        "周杰倫",
+        "林俊傑",
+        "鄧紫棋",
+        "五月天",
+        "張惠妹",
+        "蔡依林",
+        "孫燕姿",
+        "王力宏",
+        "田馥甄",
+        "李榮浩",
+        "薛之謙",
+        "毛不易",
+        "周深",
+        "告五人",
+        "張韶涵",
+        "任賢齊",
+    ),
+    "Cantopop": (
+        "陳奕迅",
+        "張學友",
+        "容祖兒",
+        "楊千嬅",
+        "古巨基",
+        "李克勤",
+        "Beyond",
+        "謝霆鋒",
+        "鄭秀文",
+        "林家謙",
+        "姜濤",
+        "MIRROR",
+        "王菲",
+        "劉德華",
+        "梅艷芳",
+        "張國榮",
+    ),
+    "English": (
+        "Taylor Swift",
+        "Ed Sheeran",
+        "Adele",
+        "Bruno Mars",
+        "Coldplay",
+        "Queen",
+        "The Beatles",
+        "ABBA",
+        "Lady Gaga",
+        "Billie Eilish",
+        "Maroon 5",
+        "Backstreet Boys",
+        "Whitney Houston",
+        "Celine Dion",
+        "Bon Jovi",
+        "Michael Jackson",
+    ),
+    "K-Pop": (
+        "BTS",
+        "BLACKPINK",
+        "IU",
+        "TWICE",
+        "NewJeans",
+        "EXO",
+        "BIGBANG",
+        "SEVENTEEN",
+        "aespa",
+        "Stray Kids",
+        "(G)I-DLE",
+        "PSY",
+        "Red Velvet",
+        "TAEYEON",
+        "ITZY",
+        "LE SSERAFIM",
+    ),
+    "J-Pop": (
+        "YOASOBI",
+        "米津玄師",
+        "あいみょん",
+        "Official髭男dism",
+        "宇多田ヒカル",
+        "嵐",
+        "back number",
+        "King Gnu",
+        "Ado",
+        "中島美嘉",
+        "藤井風",
+        "スピッツ",
+        "Mrs. GREEN APPLE",
+        "優里",
+        "LiSA",
+        "Vaundy",
+    ),
+}
+_SUGGEST_URL = "https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q="
+
 _SEARCH_TTL = 600.0
 _DOWNLOAD_ATTEMPTS = 3
-# yt-dlp player clients to try in order; None means yt-dlp's own default choice.
-_CLIENT_ATTEMPTS: tuple[tuple[str, ...] | None, ...] = (None, ("android",))
+PLAYLIST_LIMIT = 200  # songs taken from an imported playlist
 _STREAM_TTL = 3600.0  # googlevideo URLs live ~6h; stay well inside that
 
 
@@ -103,6 +201,8 @@ class YouTube:
         self._info_cache = _TTLCache(_STREAM_TTL, size=16)  # full yt-dlp info, for downloads
         self._lyrics_cache = _TTLCache(_STREAM_TTL)
         self._extract_lock = threading.Lock()
+        self._limited: set[str] = set()
+        self.hd_unlock: HdUnlock | None = None  # set by the app when the platform supports it
 
     def search(self, query: str, limit: int = 24) -> list[Song]:
         query = query.strip()
@@ -122,8 +222,45 @@ class YouTube:
         self._search_cache.put(key, songs)
         return songs
 
+    def suggest(self, text: str, limit: int = 8) -> list[str]:
+        """Search suggestions for what has been typed so far. Never raises: no network, no list."""
+        text = text.strip()
+        if len(text) < 2 or "://" in text:
+            return []
+        key = ("suggest", text.lower())
+        cached = self._search_cache.get(key)
+        if cached is not None:
+            return list(cached)[:limit]
+        try:
+            request = urllib.request.Request(
+                _SUGGEST_URL + urllib.parse.quote(text), headers={"User-Agent": "Mozilla/5.0"}
+            )
+            with urlopen(request, timeout=5) as response:
+                charset = response.headers.get_content_charset() or "utf-8"
+                payload = json.loads(response.read().decode(charset, "replace"))
+            suggestions = [str(item) for item in payload[1] if isinstance(item, str)]
+        except Exception:
+            log.debug("suggestions unavailable", exc_info=True)
+            return []
+        self._search_cache.put(key, suggestions)
+        return suggestions[:limit]
+
     def hot(self, category: str) -> list[Song]:
         return self.search(HOT_CATEGORIES.get(category, category))
+
+    def playlist(self, url: str, limit: int = PLAYLIST_LIMIT) -> tuple[str, list[Song]]:
+        """Title and songs of a YouTube playlist (at most *limit* of them)."""
+        playlist_id = extract_playlist_id(url)
+        if playlist_id is None:
+            raise ValueError("that is not a YouTube playlist link")
+        with _ydl(extract_flat=True, playlistend=limit) as ydl:
+            info = ydl.extract_info(
+                f"https://www.youtube.com/playlist?list={playlist_id}", download=False
+            )
+        songs = parse_search_results(info)[:limit]
+        if not songs:
+            raise ValueError("the playlist is empty or private")
+        return str((info or {}).get("title") or "Imported playlist"), songs
 
     def lookup(self, video_id: str) -> Song | None:
         """Details for one video. Also warms the stream cache, so playing it is instant."""
@@ -160,30 +297,59 @@ class YouTube:
                 self._song_cache.put(video_id, song)
             return source
 
-    def _extract(self, video_id: str, max_height: int) -> tuple[dict[str, Any], Any]:
-        """Extract stream info, trying yt-dlp's default clients first, then the fallbacks.
+    def _attempts(self) -> list[tuple[str, dict[str, Any]]]:
+        """(label, extra yt-dlp options) to try in order when resolving a video."""
+        attempts: list[tuple[str, dict[str, Any]]] = [
+            # yt-dlp's own choice of clients. JavaScript runtimes are switched off so a
+            # Deno that happens to be on PATH cannot change which formats come back.
+            ("default", {"js_runtimes": {}}),
+        ]
+        unlock = self.hd_unlock
+        if unlock is not None and unlock.installed():
+            unlock.activate()
+            attempts.append(("hd-unlock", unlock.ytdlp_options()))
+        # Last resort: serves restricted videos without credentials, but only at 360p.
+        android = {"js_runtimes": {}, "extractor_args": {"youtube": {"player_client": ["android"]}}}
+        attempts.append(("android", android))
+        return attempts
 
-        Some videos (notably "made for kids" ones) are refused by the default
-        clients with "This video is not available". The Android client still
-        serves them, though only as a single 360p stream, so it is the last resort.
+    def _extract(self, video_id: str, max_height: int) -> tuple[dict[str, Any], Any]:
+        """Extract stream info, falling back when the default clients refuse the video.
+
+        Some videos (notably "made for kids" ones) get "This video is not
+        available" from the default clients. With the HD unlock component they
+        are fetched through the TV client with a PO token; without it, through
+        the Android client at 360p.
         """
         url = f"https://www.youtube.com/watch?v={video_id}"
         first_error: Exception | None = None
-        for clients in _CLIENT_ATTEMPTS:
-            options: dict[str, Any] = {"format": _video_format(max_height)}
-            if clients:
-                options["extractor_args"] = {"youtube": {"player_client": list(clients)}}
+        for label, extra in self._attempts():
             try:
-                with _ydl(**options) as ydl:
+                with _ydl(format=_video_format(max_height), **extra) as ydl:
                     info = ydl.extract_info(url, download=False)
             except Exception as exc:
                 first_error = first_error or exc
                 continue
-            if clients:
-                log.info("%s is only available through the %s client", video_id, "/".join(clients))
+            if label != "default":
+                log.info("%s was refused by the default clients; resolved via %s", video_id, label)
+            if label == "android":
+                self._limited.add(video_id)
+            else:
+                self._limited.discard(video_id)
             return info, ydl
         assert first_error is not None
         raise first_error
+
+    def forget_limited(self) -> None:
+        """Drop cached low-quality results (call after installing the HD unlock component)."""
+        for video_id in list(self._limited):
+            for height in (720, 1080, 1440, 2160):
+                self.forget_stream(video_id, height)
+        self._limited.clear()
+
+    def is_limited(self, video_id: str) -> bool:
+        """True when YouTube only let us have this video at low quality."""
+        return video_id in self._limited
 
     def forget_stream(self, video_id: str, max_height: int = 1080) -> None:
         self._stream_cache.drop((video_id, max_height))

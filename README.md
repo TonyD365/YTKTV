@@ -25,6 +25,16 @@ microphones into the music with reverb and echo.
   Instrumental mode, for songs you only half know.
 - **Karaoke lyrics.** When a video has subtitles, they are shown at the bottom of the MV screen
   and fill with colour line by line as the song plays. Videos without subtitles show no lyrics.
+- **Finding songs.** Suggestions appear as you type, recent searches stay one tap away, and the
+  Artists page lists well-known artists by scene. Song cards show whether a song is already
+  selected and whether its instrumental is ready, so you can pick one that starts at once.
+- **Playlists.** Build playlists with "＋ List" on any song, save the current queue as one, or
+  paste a YouTube playlist link to import it (up to 200 songs). Play or shuffle a whole playlist
+  from the console or a phone.
+- **Scoring.** With the Score button on, each song is scored out of 100 by comparing the
+  microphones with the original singer's melody, which is extracted while the instrumental is
+  prepared. A running score shows in the corner and a score card appears when the song ends.
+  Octaves do not matter, so anyone can sing in their own range.
 - **Danmaku and lights.** Anyone can send a short message from the console or a phone and it
   flies across the MV screen. A glow around the screen pulses with the music.
 - **Smooth playback.** The next songs in the queue are downloaded ahead of time and played from
@@ -33,7 +43,8 @@ microphones into the music with reverb and echo.
 - **Mixing console.** Four microphone channels laid out like a hardware desk: input selection,
   GAIN, 3-band EQ, ECHO, FX (reverb), PAN, fader, MUTE and PEAK LEDs; MUSIC, MICS and MAIN bus
   faders, an OUTPUT meter for the total level (music and microphones), and output device
-  selection. Each channel has a low cut and a noise gate, so an open microphone stays silent
+  selection. Effect presets (Pop, Ballad, Rock, KTV Hall, Dry, plus your own) set the EQ, reverb
+  and echo of every channel at once, and each microphone can be adjusted from the phone page. Each channel has a low cut and a noise gate, so an open microphone stays silent
   until someone sings. Microphones are mixed into the output
   automatically.
 - **KTV controls.** Queue, Priority (play next), Skip, Replay, Pause, Key up/down (±6 semitones),
@@ -145,8 +156,9 @@ ytktv [--port PORT] [--no-mic] [--windowed] [--debug]
 - Vocal separation needs a moment per song (well under a minute on a recent GPU, a few minutes
   on CPU), so songs queued in advance are ready by the time they play. Results are cached, so a
   song is only processed once. The model (about 60 MB) is downloaded the first time.
-- A few videos, mostly ones marked "made for kids", are only offered by YouTube as a single
-  360p stream. They play, at that quality.
+- A few videos, mostly ones marked "made for kids", are restricted by YouTube and play at 360p.
+  **Settings → Restricted Videos** can download an optional component (about 150 MB, 400 MB on
+  disk) that plays them in HD. It adds a few seconds before such a video starts.
 - YouTube changes often. If videos stop playing, update yt-dlp (`pip install -U yt-dlp`) or
   install the newest YTKTV release.
 

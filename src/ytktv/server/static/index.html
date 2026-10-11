@@ -94,10 +94,14 @@
 <main>
   <section id="tab-search" class="active">
     <form class="search" id="search-form">
-      <input type="search" id="q" placeholder="Song, artist or YouTube link" autocomplete="off" enterkeyhint="search">
+      <input type="search" id="q" list="suggestions" placeholder="Song, artist or YouTube link" autocomplete="off" enterkeyhint="search">
+      <datalist id="suggestions"></datalist>
       <button class="btn" type="submit">Search</button>
     </form>
+    <div class="chips" id="recent"></div>
     <div class="chips" id="chips"></div>
+    <div class="chips" id="artist-groups"></div>
+    <div class="chips" id="artists"></div>
     <div id="results"><div class="empty">Search for a song or tap a category.</div></div>
   </section>
 
@@ -108,12 +112,25 @@
     <div id="history"></div>
   </section>
 
+  <section id="tab-lists">
+    <form class="search" id="import-form">
+      <input type="text" id="import-url" placeholder="Paste a YouTube playlist link" autocomplete="off">
+      <button class="btn" type="submit">Import</button>
+    </form>
+    <div class="pad" style="margin-bottom:12px">
+      <button id="save-queue" class="wide">Save the queue as a playlist</button>
+    </div>
+    <div id="lists"></div>
+    <div id="list-songs"></div>
+  </section>
+
   <section id="tab-remote">
     <h3>Playback</h3>
     <div class="pad">
       <button data-act="pause" id="btn-pause">Pause</button>
       <button data-act="replay">Replay</button>
       <button data-act="skip">Skip</button>
+      <button id="scoring" class="wide">Scoring</button>
     </div>
     <h3>Vocals</h3>
     <div class="pad" id="modes">
@@ -132,6 +149,9 @@
     <h3>Volume</h3>
     <div class="row"><label>Music</label><input type="range" min="0" max="100" id="vol-music"><output id="out-music"></output></div>
     <div class="row"><label>Mic</label><input type="range" min="0" max="100" id="vol-mic"><output id="out-mic"></output></div>
+    <h3>Microphones</h3>
+    <div class="chips" id="presets"></div>
+    <div id="mics"></div>
     <h3>Crowd</h3>
     <div class="pad">
       <button data-sfx="applause">Applause</button>
@@ -154,6 +174,7 @@
 <nav>
   <button data-tab="search" class="active">SEARCH</button>
   <button data-tab="queue">QUEUE<span class="badge" id="count">0</span></button>
+  <button data-tab="lists">LISTS</button>
   <button data-tab="remote">REMOTE</button>
 </nav>
 <div id="toast"></div>
@@ -161,6 +182,7 @@
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
+const enc = encodeURIComponent;
 let state = null;
 let dragging = {};
 const SLIDERS = [["music", "music_volume"], ["mic", "mic_volume"], ["guide", "guide_vocal"]];
@@ -216,6 +238,13 @@ async function add(song, priority) {
   } catch (e) { toast(e.message, true); }
 }
 
+function marks(song) {
+  const extra = document.createDocumentFragment();
+  if (song.queued) extra.append(el("span", {class: "tag"}, "Selected"));
+  if (song.stem === "ready") extra.append(el("span", {class: "tag ready"}, "Instrumental ready"));
+  return extra;
+}
+
 function renderResults(songs) {
   const box = $("results");
   box.replaceChildren();
@@ -224,9 +253,42 @@ function renderResults(songs) {
     box.append(songCard(song, [
       el("button", {class: "mini pink", onclick: () => add(song, false)}, "Select"),
       el("button", {class: "mini", onclick: () => add(song, true)}, "Priority"),
-    ]));
+      el("button", {class: "mini ghost", onclick: () => addToList(song)}, "+ List"),
+    ], marks(song)));
   }
 }
+
+// Recent searches are kept on this phone.
+function recentSearches() {
+  try { return JSON.parse(localStorage.getItem("recent") || "[]"); } catch (e) { return []; }
+}
+function renderRecent() {
+  const box = $("recent");
+  box.replaceChildren();
+  const recent = recentSearches();
+  for (const q of recent) box.append(el("button", {class: "chip", onclick: () => searchFor(q)}, q));
+  if (recent.length) box.append(el("button", {class: "chip", onclick: () => { localStorage.removeItem("recent"); renderRecent(); }}, "Clear"));
+}
+function rememberSearch(q) {
+  if (q.includes("://")) return;
+  const recent = [q, ...recentSearches().filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 8);
+  localStorage.setItem("recent", JSON.stringify(recent));
+  renderRecent();
+}
+function searchFor(q) {
+  $("q").value = q;
+  rememberSearch(q);
+  load("/api/search?q=" + encodeURIComponent(q));
+}
+let suggestTimer;
+$("q").addEventListener("input", () => {
+  clearTimeout(suggestTimer);
+  const text = $("q").value.trim();
+  suggestTimer = setTimeout(async () => {
+    const list = text.length >= 2 ? await api("/api/suggest?q=" + encodeURIComponent(text)).catch(() => []) : [];
+    $("suggestions").replaceChildren(...list.map((value) => el("option", {value})));
+  }, 250);
+});
 
 async function load(path) {
   $("results").replaceChildren(el("div", {class: "empty"}, "Searching…"));
@@ -237,7 +299,7 @@ async function load(path) {
 $("search-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const q = $("q").value.trim();
-  if (q) { $("q").blur(); load("/api/search?q=" + encodeURIComponent(q)); }
+  if (q) { $("q").blur(); searchFor(q); }
 });
 
 function render() {
@@ -255,6 +317,8 @@ function render() {
     $("out-" + name).textContent = $("vol-" + name).value;
   }
   $("lights").classList.toggle("on", state.lights);
+  $("scoring").classList.toggle("on", state.scoring);
+  $("scoring").textContent = state.scoring ? "Scoring: On" : "Scoring: Off";
   setProgress(state.position, state.duration);
 
   const q = $("queue");
@@ -308,6 +372,7 @@ for (const [name, key] of SLIDERS) {
   slider.addEventListener("change", () => { dragging[name] = false; sound({[key]: +slider.value}); });
 }
 $("lights").onclick = () => state && sound({lights: !state.lights});
+$("scoring").onclick = () => state && sound({scoring: !state.scoring});
 async function danmaku(text) {
   try { await api("/api/danmaku", "POST", {text}); return true; }
   catch (e) { toast(e.message, true); return false; }
@@ -323,11 +388,133 @@ for (const text of ["👏👏👏", "🔥🔥🔥", "Encore!", "666", "好听！
 $("singer").value = localStorage.getItem("singer") || "";
 $("singer").addEventListener("change", () => localStorage.setItem("singer", $("singer").value));
 
+renderRecent();
+api("/api/artists").then((groups) => {
+  for (const [group, names] of Object.entries(groups)) {
+    $("artist-groups").append(el("button", {class: "chip", onclick: () => {
+      $("artists").replaceChildren(...names.map((name) => el("button", {class: "chip", onclick: () => searchFor(name)}, name)));
+    }}, "★ " + group));
+  }
+});
 api("/api/categories").then((names) => {
   for (const name of names) {
     $("chips").append(el("button", {class: "chip", onclick: () => load("/api/hot?category=" + encodeURIComponent(name))}, name));
   }
 });
+
+// --- microphone mixer ---
+const MIC_SLIDERS = [
+  ["fader", "Volume", 0, 1], ["reverb", "Reverb", 0, 1], ["echo", "Echo", 0, 1],
+  ["low_db", "Bass", -12, 12], ["mid_db", "Mid", -12, 12], ["high_db", "Treble", -12, 12],
+];
+let micDragging = false;
+const show = (key, value) => key.endsWith("_db") ? (value > 0 ? "+" : "") + Math.round(value) : Math.round(value * 100);
+
+function renderMixer(mixer) {
+  if (micDragging) return;  // do not yank a slider out from under a finger
+  const presets = $("presets");
+  presets.replaceChildren();
+  for (const preset of mixer.presets) {
+    const chip = el("button", {class: "chip", onclick: () => api(`/api/mixer/presets/${enc(preset.name)}/apply`, "POST").then(renderMixer)}, preset.name);
+    if (preset.name === mixer.preset) chip.style.cssText = "background: var(--purple); border-color: var(--purple)";
+    presets.append(chip);
+  }
+  const box = $("mics");
+  box.replaceChildren();
+  const live = mixer.mics.filter((mic) => mic.enabled);
+  if (!live.length) box.append(el("div", {class: "empty"}, "No microphone is switched on. Choose one on the host's Mixer page."));
+  for (const mic of live) {
+    const mute = el("button", {class: "mini" + (mic.mute ? " danger" : " ghost"), onclick: () => api(`/api/mixer/mics/${mic.index}`, "POST", {mute: !mic.mute}).then(renderMixer)}, mic.mute ? "Muted" : "Mute");
+    const head = el("div", {class: "row"}, el("b", {}, `Mic ${mic.index + 1}`), el("span", {class: "s", style: "flex:1;color:var(--muted);font-size:12px"}, mic.device || "System default"), mute);
+    const card = el("div", {class: "now", style: "margin-bottom:10px"}, head);
+    for (const [key, label, min, max] of MIC_SLIDERS) {
+      const output = el("output", {}, String(show(key, mic[key])));
+      const slider = el("input", {type: "range", min, max, step: key.endsWith("_db") ? 1 : 0.01, value: mic[key]});
+      slider.addEventListener("input", () => { micDragging = true; output.textContent = show(key, +slider.value); });
+      slider.addEventListener("change", () => {
+        micDragging = false;
+        api(`/api/mixer/mics/${mic.index}`, "POST", {[key]: +slider.value}).then(renderMixer).catch((e) => toast(e.message, true));
+      });
+      card.append(el("div", {class: "row"}, el("label", {}, label), slider, output));
+    }
+    box.append(card);
+  }
+}
+const loadMixer = () => api("/api/mixer").then(renderMixer).catch(() => {});
+loadMixer();
+
+let openList = null;
+
+async function loadLists() {
+  const lists = await api("/api/playlists");
+  const box = $("lists");
+  box.replaceChildren();
+  if (!lists.length) box.append(el("div", {class: "empty"}, "No playlists yet."));
+  for (const list of lists) {
+    const meta = el("div", {class: "meta"}, el("div", {class: "t"}, list.name), el("div", {class: "s"}, `${list.count} songs`));
+    meta.addEventListener("click", () => { openList = openList === list.name ? null : list.name; loadListSongs(); });
+    box.append(el("div", {class: "card"}, meta, el("div", {class: "acts"},
+      el("button", {class: "mini pink", onclick: () => playList(list.name, false)}, "Play All"),
+      el("button", {class: "mini", onclick: () => playList(list.name, true)}, "Shuffle"))));
+  }
+  if (openList && !lists.some((l) => l.name === openList)) openList = null;
+  loadListSongs();
+}
+
+async function loadListSongs() {
+  const box = $("list-songs");
+  box.replaceChildren();
+  if (!openList) return;
+  box.append(el("h3", {}, openList));
+  const songs = await api(`/api/playlists/${enc(openList)}`).catch(() => []);
+  if (!songs.length) box.append(el("div", {class: "empty"}, "This playlist is empty."));
+  for (const song of songs) {
+    box.append(songCard(song, [
+      el("button", {class: "mini pink", onclick: () => add(song, false)}, "Select"),
+      el("button", {class: "mini danger", onclick: () => api(`/api/playlists/${enc(openList)}/songs/${song.video_id}`, "DELETE")}, "Remove"),
+    ]));
+  }
+}
+
+async function playList(name, shuffle) {
+  try {
+    const result = await api(`/api/playlists/${enc(name)}/enqueue`, "POST", {shuffle, singer: $("singer").value});
+    toast(`Added ${result.added} songs`);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function addToList(song) {
+  const lists = await api("/api/playlists");
+  const names = lists.map((l) => l.name);
+  const hint = names.length ? `Add to which playlist?\n${names.join("\n")}\n\n(or type a new name)` : "Name for a new playlist:";
+  const name = (prompt(hint, names[0] || "") || "").trim();
+  if (!name) return;
+  try {
+    if (!names.includes(name)) await api("/api/playlists", "POST", {name});
+    const result = await api(`/api/playlists/${enc(name)}/songs`, "POST", song);
+    toast(result.added ? `Added to ${name}` : `Already in ${name}`);
+  } catch (e) { toast(e.message, true); }
+}
+
+$("import-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const url = $("import-url").value.trim();
+  if (!url) return;
+  toast("Importing...");
+  try {
+    const result = await api("/api/playlists/import", "POST", {url});
+    $("import-url").value = "";
+    openList = result.name;
+    toast(`Imported ${result.name}`);
+  } catch (e) { toast(e.message, true); }
+});
+$("save-queue").onclick = async () => {
+  const name = (prompt("Name for the playlist:") || "").trim();
+  if (!name) return;
+  try { await api("/api/playlists", "POST", {name, from_queue: true}); toast(`Saved ${name}`); }
+  catch (e) { toast(e.message, true); }
+};
+loadLists();
 
 function connect() {
   const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
@@ -335,6 +522,9 @@ function connect() {
     const msg = JSON.parse(event.data);
     if (msg.type === "state") { state = msg.data; render(); }
     else if (msg.type === "position") setProgress(msg.data.position, msg.data.duration);
+    else if (msg.type === "playlists") loadLists();
+    else if (msg.type === "mixer") loadMixer();
+    else if (msg.type === "score") toast(`Score: ${msg.data.points} · ${msg.data.grade}`);
   };
   ws.onclose = () => setTimeout(connect, 1500);
 }

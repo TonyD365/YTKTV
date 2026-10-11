@@ -10,7 +10,7 @@ through ``ytktv --separation-worker``. It speaks a tiny line protocol on stdout;
 protocol line starts with ``@@YTKTV`` so library chatter can be ignored.
 
     worker -> app   @@YTKTV {"event": "ready", "device": "GPU: ... (CUDA)", "kind": "cuda"}
-    app -> worker   {"source": "in.wav", "output": "out.flac"}
+    app -> worker   {"source": "in.wav", "output": "out.flac", "pitch": "melody.json"}
     worker -> app   @@YTKTV {"ok": true}   or   @@YTKTV {"ok": false, "error": "..."}
 """
 
@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 PREFIX = "@@YTKTV "
+HOP_SECONDS = 0.05  # one melody value every 50 ms
 
 
 def send(message):
@@ -107,26 +108,59 @@ class Worker:
                 log_level=logging.WARNING,
                 model_file_dir=self.args.model_dir,
                 output_dir=self.args.work_dir,
-                output_format="FLAC",
-                output_single_stem="Instrumental",
+                output_format="FLAC",  # both stems: the vocals give the melody for scoring
                 use_directml=self.args.directml,
             )
             separator.load_model(model_filename=self.args.model)
             self.separator = separator
         return self.separator
 
-    def separate(self, source, output):
-        outputs = self.load().separate(source)
-        if not outputs:
-            raise RuntimeError("separation produced no output")
+    def _resolve(self, name):
         work_dir = Path(self.args.work_dir)
-        produced = Path(outputs[0])
+        produced = Path(name)
         if not produced.is_absolute():
             produced = work_dir / produced
         if not produced.exists():
             produced = work_dir / produced.name
-        Path(output).parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(produced), output)
+        return produced
+
+    def separate(self, source, output, pitch=None):
+        outputs = [self._resolve(name) for name in self.load().separate(source)]
+        instrumental = next((p for p in outputs if "instrumental" in p.name.lower()), None)
+        vocals = next((p for p in outputs if "vocals" in p.name.lower()), None)
+        try:
+            if instrumental is None:
+                raise RuntimeError("separation produced no instrumental")
+            if pitch and vocals is not None:
+                # The singer's melody, used as the reference for scoring. A failure here
+                # must not cost the song its instrumental.
+                try:
+                    write_pitch(vocals, pitch)
+                except Exception as exc:
+                    sys.stderr.write(f"melody extraction failed: {exc}\n")
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(instrumental), output)
+        finally:
+            for leftover in outputs:
+                if leftover.exists():
+                    leftover.unlink()
+
+
+def write_pitch(vocals, destination):
+    """Track the pitch of the separated vocals and save it as compact JSON."""
+    import soundfile
+
+    try:
+        from ytktv.separation import pitch_core
+    except ImportError:  # running as a plain script in the downloaded environment
+        import pitch_core  # type: ignore[no-redef]
+
+    samples, rate = soundfile.read(str(vocals), dtype="float32", always_2d=True)
+    notes = pitch_core.track(samples.mean(axis=1), rate, HOP_SECONDS)
+    data = {"hop": HOP_SECONDS, "notes": [None if n is None else round(n, 2) for n in notes]}
+    Path(destination).parent.mkdir(parents=True, exist_ok=True)
+    with open(destination, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, separators=(",", ":"))
 
 
 def main(argv=None):
@@ -154,7 +188,7 @@ def main(argv=None):
             continue
         try:
             request = json.loads(line)
-            worker.separate(request["source"], request["output"])
+            worker.separate(request["source"], request["output"], request.get("pitch"))
         except Exception as exc:
             send({"ok": False, "error": f"{type(exc).__name__}: {exc}"})
         else:

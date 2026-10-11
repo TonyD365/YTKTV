@@ -125,6 +125,26 @@ jobs:
           chmod +x appimagetool && sudo mv appimagetool /usr/local/bin/appimagetool
           APPIMAGE_EXTRACT_AND_RUN=1 PYTHON=python packaging/linux/build_appimage.sh
 
+      # The HD unlock needs yt-dlp to find a bundled plugin and the solver's JavaScript;
+      # both are easy to lose when freezing, so ask the packaged app to check itself.
+      - name: Check the packaged app can use HD unlock (macOS)
+        if: runner.os == 'macOS'
+        run: dist/YTKTV.app/Contents/MacOS/YTKTV --hd-unlock-self-test
+
+      - name: Check the packaged app can use HD unlock (Linux)
+        if: runner.os == 'Linux'
+        run: dist/YTKTV/YTKTV --hd-unlock-self-test
+
+      - name: Check the packaged app can use HD unlock (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          YTKTV_LOG_FILE: ${{ runner.temp }}\hd-unlock.log
+        run: |
+          $process = Start-Process -FilePath dist\YTKTV\YTKTV.exe -ArgumentList '--hd-unlock-self-test' -Wait -PassThru
+          Get-Content $env:YTKTV_LOG_FILE -ErrorAction SilentlyContinue
+          exit $process.ExitCode
+
       # Prove the packaged app can fetch a runtime and separate audio with it. CI machines
       # have no GPU, so this exercises the CPU runtime; the GPU ones use the same path.
       - name: Test the downloadable separation runtime (Linux)
