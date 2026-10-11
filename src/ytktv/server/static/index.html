@@ -108,6 +108,18 @@
     <div id="history"></div>
   </section>
 
+  <section id="tab-lists">
+    <form class="search" id="import-form">
+      <input type="text" id="import-url" placeholder="Paste a YouTube playlist link" autocomplete="off">
+      <button class="btn" type="submit">Import</button>
+    </form>
+    <div class="pad" style="margin-bottom:12px">
+      <button id="save-queue" class="wide">Save the queue as a playlist</button>
+    </div>
+    <div id="lists"></div>
+    <div id="list-songs"></div>
+  </section>
+
   <section id="tab-remote">
     <h3>Playback</h3>
     <div class="pad">
@@ -155,6 +167,7 @@
 <nav>
   <button data-tab="search" class="active">SEARCH</button>
   <button data-tab="queue">QUEUE<span class="badge" id="count">0</span></button>
+  <button data-tab="lists">LISTS</button>
   <button data-tab="remote">REMOTE</button>
 </nav>
 <div id="toast"></div>
@@ -225,6 +238,7 @@ function renderResults(songs) {
     box.append(songCard(song, [
       el("button", {class: "mini pink", onclick: () => add(song, false)}, "Select"),
       el("button", {class: "mini", onclick: () => add(song, true)}, "Priority"),
+      el("button", {class: "mini ghost", onclick: () => addToList(song)}, "+ List"),
     ]));
   }
 }
@@ -333,12 +347,87 @@ api("/api/categories").then((names) => {
   }
 });
 
+let openList = null;
+const enc = encodeURIComponent;
+
+async function loadLists() {
+  const lists = await api("/api/playlists");
+  const box = $("lists");
+  box.replaceChildren();
+  if (!lists.length) box.append(el("div", {class: "empty"}, "No playlists yet."));
+  for (const list of lists) {
+    const meta = el("div", {class: "meta"}, el("div", {class: "t"}, list.name), el("div", {class: "s"}, `${list.count} songs`));
+    meta.addEventListener("click", () => { openList = openList === list.name ? null : list.name; loadListSongs(); });
+    box.append(el("div", {class: "card"}, meta, el("div", {class: "acts"},
+      el("button", {class: "mini pink", onclick: () => playList(list.name, false)}, "Play All"),
+      el("button", {class: "mini", onclick: () => playList(list.name, true)}, "Shuffle"))));
+  }
+  if (openList && !lists.some((l) => l.name === openList)) openList = null;
+  loadListSongs();
+}
+
+async function loadListSongs() {
+  const box = $("list-songs");
+  box.replaceChildren();
+  if (!openList) return;
+  box.append(el("h3", {}, openList));
+  const songs = await api(`/api/playlists/${enc(openList)}`).catch(() => []);
+  if (!songs.length) box.append(el("div", {class: "empty"}, "This playlist is empty."));
+  for (const song of songs) {
+    box.append(songCard(song, [
+      el("button", {class: "mini pink", onclick: () => add(song, false)}, "Select"),
+      el("button", {class: "mini danger", onclick: () => api(`/api/playlists/${enc(openList)}/songs/${song.video_id}`, "DELETE")}, "Remove"),
+    ]));
+  }
+}
+
+async function playList(name, shuffle) {
+  try {
+    const result = await api(`/api/playlists/${enc(name)}/enqueue`, "POST", {shuffle, singer: $("singer").value});
+    toast(`Added ${result.added} songs`);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function addToList(song) {
+  const lists = await api("/api/playlists");
+  const names = lists.map((l) => l.name);
+  const hint = names.length ? `Add to which playlist?\n${names.join("\n")}\n\n(or type a new name)` : "Name for a new playlist:";
+  const name = (prompt(hint, names[0] || "") || "").trim();
+  if (!name) return;
+  try {
+    if (!names.includes(name)) await api("/api/playlists", "POST", {name});
+    const result = await api(`/api/playlists/${enc(name)}/songs`, "POST", song);
+    toast(result.added ? `Added to ${name}` : `Already in ${name}`);
+  } catch (e) { toast(e.message, true); }
+}
+
+$("import-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const url = $("import-url").value.trim();
+  if (!url) return;
+  toast("Importing...");
+  try {
+    const result = await api("/api/playlists/import", "POST", {url});
+    $("import-url").value = "";
+    openList = result.name;
+    toast(`Imported ${result.name}`);
+  } catch (e) { toast(e.message, true); }
+});
+$("save-queue").onclick = async () => {
+  const name = (prompt("Name for the playlist:") || "").trim();
+  if (!name) return;
+  try { await api("/api/playlists", "POST", {name, from_queue: true}); toast(`Saved ${name}`); }
+  catch (e) { toast(e.message, true); }
+};
+loadLists();
+
 function connect() {
   const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === "state") { state = msg.data; render(); }
     else if (msg.type === "position") setProgress(msg.data.position, msg.data.duration);
+    else if (msg.type === "playlists") loadLists();
     else if (msg.type === "score") toast(`Score: ${msg.data.points} · ${msg.data.grade}`);
   };
   ws.onclose = () => setTimeout(connect, 1500);

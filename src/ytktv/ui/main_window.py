@@ -31,6 +31,7 @@ from ytktv.ui.pages import (
     HistoryPage,
     HotPage,
     Page,
+    PlaylistsPage,
     QueuePage,
     SearchPage,
     SettingsPage,
@@ -50,6 +51,7 @@ NAV = (
     ("search", "🔍   Search"),
     ("hot", "🔥   Hot Songs"),
     ("favorites", "♥   Favorites"),
+    ("playlists", "≡   Playlists"),
     ("queue", "🎤   Selected"),
     ("history", "✓   Sung"),
     ("mixer", "🎚   Mixer"),
@@ -233,6 +235,7 @@ class MainWindow(QMainWindow):
             "search": SearchPage(self.ctx),
             "hot": HotPage(self.ctx),
             "favorites": FavoritesPage(self.ctx),
+            "playlists": PlaylistsPage(self.ctx),
             "queue": QueuePage(self.ctx),
             "history": HistoryPage(self.ctx),
             "mixer": self.mixer_page,
@@ -482,6 +485,10 @@ class MainWindow(QMainWindow):
             for page in self.pages.values():
                 if isinstance(page, Page):
                     page.on_favorites()
+        elif topic == "playlists":
+            for page in self.pages.values():
+                if isinstance(page, Page):
+                    page.on_playlists()
         elif topic == "lyrics":
             current = self._state["current"]
             if payload["id"] is None or (current and current["id"] == payload["id"]):

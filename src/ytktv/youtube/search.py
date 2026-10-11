@@ -19,6 +19,7 @@ from ytktv.youtube.lyrics import LyricLine, parse_json3, pick_track
 from ytktv.youtube.parse import (
     MediaSource,
     entry_to_song,
+    extract_playlist_id,
     extract_video_id,
     parse_media_source,
     parse_search_results,
@@ -42,6 +43,7 @@ HOT_CATEGORIES: dict[str, str] = {
 
 _SEARCH_TTL = 600.0
 _DOWNLOAD_ATTEMPTS = 3
+PLAYLIST_LIMIT = 200  # songs taken from an imported playlist
 _STREAM_TTL = 3600.0  # googlevideo URLs live ~6h; stay well inside that
 
 
@@ -125,6 +127,20 @@ class YouTube:
 
     def hot(self, category: str) -> list[Song]:
         return self.search(HOT_CATEGORIES.get(category, category))
+
+    def playlist(self, url: str, limit: int = PLAYLIST_LIMIT) -> tuple[str, list[Song]]:
+        """Title and songs of a YouTube playlist (at most *limit* of them)."""
+        playlist_id = extract_playlist_id(url)
+        if playlist_id is None:
+            raise ValueError("that is not a YouTube playlist link")
+        with _ydl(extract_flat=True, playlistend=limit) as ydl:
+            info = ydl.extract_info(
+                f"https://www.youtube.com/playlist?list={playlist_id}", download=False
+            )
+        songs = parse_search_results(info)[:limit]
+        if not songs:
+            raise ValueError("the playlist is empty or private")
+        return str((info or {}).get("title") or "Imported playlist"), songs
 
     def lookup(self, video_id: str) -> Song | None:
         """Details for one video. Also warms the stream cache, so playing it is instant."""

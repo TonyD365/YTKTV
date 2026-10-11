@@ -23,6 +23,20 @@ def extract_video_id(text: str) -> str | None:
     return match.group(1) if match else None
 
 
+_PLAYLIST_RE = re.compile(r"[?&]list=([A-Za-z0-9_-]{10,})")
+
+
+def extract_playlist_id(text: str) -> str | None:
+    """The playlist id in a YouTube URL, or None. Bare ids starting with PL/OL/UU/RD also work."""
+    text = text.strip()
+    match = _PLAYLIST_RE.search(text)
+    if match:
+        return match.group(1)
+    if re.fullmatch(r"(PL|OL|UU|FL|RD)[A-Za-z0-9_-]{10,}", text):
+        return text
+    return None
+
+
 def _pick_thumbnail(entry: dict[str, Any], video_id: str) -> str:
     best_url = ""
     best_width = -1

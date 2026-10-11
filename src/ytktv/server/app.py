@@ -75,6 +75,20 @@ class SoundIn(BaseModel):
     scoring: bool | None = None
 
 
+class PlaylistIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    from_queue: bool = False
+
+
+class PlaylistImportIn(BaseModel):
+    url: str = Field(min_length=1, max_length=400)
+
+
+class PlaylistEnqueueIn(BaseModel):
+    shuffle: bool = False
+    singer: str = Field(default="", max_length=40)
+
+
 class DanmakuIn(BaseModel):
     text: str = Field(min_length=1, max_length=200)
 
@@ -88,7 +102,14 @@ class _Broadcaster:
 
     def publish(self, topic: str, payload: Any) -> None:
         loop = self.loop
-        if loop is None or topic not in ("state", "position", "toast", "danmaku", "score"):
+        if loop is None or topic not in (
+            "state",
+            "position",
+            "toast",
+            "danmaku",
+            "score",
+            "playlists",
+        ):
             return
         with contextlib.suppress(RuntimeError):  # loop already closed on shutdown
             loop.call_soon_threadsafe(self._fan_out, topic, payload)
@@ -221,6 +242,62 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
     @app.get("/api/lyrics")
     def lyrics() -> list[dict[str, Any]]:
         return [line.to_dict() for line in controller.lyrics]
+
+    @app.get("/api/playlists")
+    def playlists() -> list[dict[str, Any]]:
+        return controller.playlists()
+
+    @app.post("/api/playlists")
+    def create_playlist(body: PlaylistIn) -> dict[str, str]:
+        try:
+            if body.from_queue:
+                return {"name": controller.save_queue_as_playlist(body.name)}
+            return {"name": controller.create_playlist(body.name)}
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.post("/api/playlists/import")
+    def import_playlist(body: PlaylistImportIn) -> dict[str, str]:
+        try:
+            return {"name": controller.import_playlist(body.url)}
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:
+            log.warning("playlist import failed: %s", exc)
+            raise HTTPException(502, "could not read that playlist from YouTube") from exc
+
+    @app.get("/api/playlists/{name}")
+    def playlist(name: str) -> list[dict[str, Any]]:
+        songs = controller.library.playlist(name)
+        if songs is None:
+            raise HTTPException(404, "no such playlist")
+        return [song.to_dict() for song in songs]
+
+    @app.delete("/api/playlists/{name}")
+    def delete_playlist(name: str) -> dict[str, bool]:
+        if not controller.delete_playlist(name):
+            raise HTTPException(404, "no such playlist")
+        return {"ok": True}
+
+    @app.post("/api/playlists/{name}/songs")
+    def add_to_playlist(name: str, body: SongIn) -> dict[str, bool]:
+        if controller.library.playlist(name) is None:
+            raise HTTPException(404, "no such playlist")
+        return {"added": controller.add_to_playlist(name, body.to_song())}
+
+    @app.delete("/api/playlists/{name}/songs/{video_id}")
+    def remove_from_playlist(name: str, video_id: str) -> dict[str, bool]:
+        if not controller.remove_from_playlist(name, video_id):
+            raise HTTPException(404, "not in that playlist")
+        return {"ok": True}
+
+    @app.post("/api/playlists/{name}/enqueue")
+    def enqueue_playlist(name: str, body: PlaylistEnqueueIn) -> dict[str, int]:
+        try:
+            added = controller.enqueue_playlist(name, body.shuffle, body.singer.strip())
+        except KeyError as exc:
+            raise HTTPException(404, "no such playlist") from exc
+        return {"added": added}
 
     @app.get("/api/favorites")
     def favorites() -> list[dict[str, Any]]:

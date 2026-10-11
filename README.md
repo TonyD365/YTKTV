@@ -25,6 +25,9 @@ microphones into the music with reverb and echo.
   Instrumental mode, for songs you only half know.
 - **Karaoke lyrics.** When a video has subtitles, they are shown at the bottom of the MV screen
   and fill with colour line by line as the song plays. Videos without subtitles show no lyrics.
+- **Playlists.** Build playlists with "＋ List" on any song, save the current queue as one, or
+  paste a YouTube playlist link to import it (up to 200 songs). Play or shuffle a whole playlist
+  from the console or a phone.
 - **Scoring.** With the Score button on, each song is scored out of 100 by comparing the
   microphones with the original singer's melody, which is extracted while the instrumental is
   prepared. A running score shows in the corner and a score card appears when the song ends.

@@ -8,7 +8,7 @@ from functools import partial
 from typing import Any
 
 from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QGuiApplication
+from PySide6.QtGui import QCursor, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -16,8 +16,11 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
+    QMenu,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -30,6 +33,12 @@ from ytktv.core.models import Song
 from ytktv.ui.song_list import STEM_TAGS, Action, SongList, SongRow, tag
 from ytktv.ui.support import ThumbnailLoader, run_async
 from ytktv.youtube.search import HOT_CATEGORIES, YouTube
+
+
+def ask_text(parent: QWidget, title: str, label: str, text: str = "") -> str:
+    """A one-line text prompt; returns "" when cancelled or left empty."""
+    value, accepted = QInputDialog.getText(parent, title, label, text=text)
+    return value.strip() if accepted else ""
 
 
 @dataclass
@@ -60,6 +69,7 @@ class Page(QWidget):
         for song in songs:
             favorite = controller.library.is_favorite(song.video_id)
             actions: list[Action] = [
+                ("＋ List", "", partial(self.choose_playlist, song)),
                 ("♥" if favorite else "♡", "", partial(controller.toggle_favorite, song)),
                 ("Priority", "", partial(controller.enqueue, song, priority=True)),
                 ("Select", "accent", partial(controller.enqueue, song)),
@@ -67,7 +77,35 @@ class Page(QWidget):
             rows.append(SongRow(song, actions, self.ctx.thumbnails))
         return rows
 
+    def choose_playlist(self, song: Song) -> None:
+        """Pop up the playlists at the cursor and add *song* to the chosen one."""
+        controller = self.ctx.controller
+        menu = QMenu(self)
+        for name in controller.library.playlist_names():
+            menu.addAction(name, partial(self._add_to_playlist, name, song))
+        if controller.library.playlist_names():
+            menu.addSeparator()
+        menu.addAction("New playlist...", partial(self._add_to_new_playlist, song))
+        menu.exec(QCursor.pos())
+
+    def _add_to_playlist(self, name: str, song: Song) -> None:
+        if not self.ctx.controller.add_to_playlist(name, song):
+            self.ctx.controller.toast(f"Already in {name}")
+
+    def _add_to_new_playlist(self, song: Song) -> None:
+        name = ask_text(self, "New playlist", "Name for the new playlist:")
+        if name:
+            try:
+                created = self.ctx.controller.create_playlist(name, [song])
+            except ValueError as exc:
+                self.ctx.controller.toast(str(exc), error=True)
+                return
+            self.ctx.controller.toast(f"Created {created}")
+
     def on_state(self, state: dict[str, Any]) -> None:  # noqa: B027 - optional hook
+        pass
+
+    def on_playlists(self) -> None:  # noqa: B027 - optional hook
         pass
 
     def on_favorites(self) -> None:  # noqa: B027 - optional hook
@@ -216,11 +254,25 @@ class QueuePage(Page):
         clear = QPushButton("Clear All")
         clear.setProperty("danger", True)
         clear.clicked.connect(ctx.controller.clear_queue)
+        save = QPushButton("Save as Playlist")
+        save.clicked.connect(self._save_as_playlist)
+        self.header.addWidget(save)
         self.header.addWidget(shuffle)
         self.header.addWidget(clear)
         self.list = SongList("Nothing selected yet. Find a song and press Select.")
         self.body.addWidget(self.list, stretch=1)
         self._signature: Any = None
+
+    def _save_as_playlist(self) -> None:
+        name = ask_text(self, "Save as playlist", "Name for the playlist:")
+        if not name:
+            return
+        try:
+            created = self.ctx.controller.save_queue_as_playlist(name)
+        except ValueError as exc:
+            self.ctx.controller.toast(str(exc), error=True)
+            return
+        self.ctx.controller.toast(f"Saved {created}")
 
     def on_state(self, state: dict[str, Any]) -> None:
         queue = state["queue"]
@@ -248,6 +300,117 @@ class QueuePage(Page):
             ]
             rows.append(SongRow(song, actions, self.ctx.thumbnails, tags, index=i + 1))
         self.list.set_rows(rows)
+
+
+class PlaylistsPage(Page):
+    """Saved playlists: build your own, or import one from YouTube."""
+
+    def __init__(self, ctx: Context) -> None:
+        super().__init__("Playlists", ctx)
+        controller = ctx.controller
+        bar = QHBoxLayout()
+        bar.setSpacing(8)
+        self.picker = QComboBox()
+        self.picker.setMinimumWidth(280)
+        self.picker.currentIndexChanged.connect(lambda _index: self._show_songs())
+        bar.addWidget(self.picker, stretch=1)
+        for text, slot, style in (
+            ("Play All", lambda: self._enqueue(False), "accent"),
+            ("Shuffle Play", lambda: self._enqueue(True), ""),
+            ("New", self._new, ""),
+            ("Import from YouTube", self._import, ""),
+            ("Delete", self._delete, "danger"),
+        ):
+            button = QPushButton(text)
+            if style:
+                button.setProperty(style, True)
+            button.clicked.connect(lambda _checked=False, s=slot: s())
+            bar.addWidget(button)
+        self.body.addLayout(bar)
+        self.list = SongList(
+            'No playlists yet. Press New, use "＋ List" on any song, '
+            "or import a playlist from a YouTube link."
+        )
+        self.body.addWidget(self.list, stretch=1)
+        self._controller = controller
+        self.on_playlists()
+
+    def on_playlists(self) -> None:
+        selected = self.selected()  # keep the same playlist open across refreshes
+        names = self._controller.library.playlist_names()
+        self.picker.blockSignals(True)
+        self.picker.clear()
+        for name in names:
+            count = len(self._controller.library.playlist(name) or [])
+            self.picker.addItem(f"{name}   ({count})", name)
+        index = max(0, self.picker.findData(selected)) if names else -1
+        self.picker.setCurrentIndex(index)
+        self.picker.blockSignals(False)
+        self._show_songs()
+
+    def selected(self) -> str:
+        data = self.picker.currentData()
+        return str(data) if data else ""
+
+    def _show_songs(self) -> None:
+        name = self.selected()
+        songs = self._controller.library.playlist(name) if name else None
+        if not songs:
+            self.list.show_message(
+                self.list._empty_text
+                if not name
+                else 'This playlist is empty. Add songs with "＋ List".'
+            )
+            return
+        controller = self._controller
+        rows = []
+        for i, song in enumerate(songs):
+            actions: list[Action] = [
+                ("Remove", "danger", partial(controller.remove_from_playlist, name, song.video_id)),
+                ("Priority", "", partial(controller.enqueue, song, priority=True)),
+                ("Select", "accent", partial(controller.enqueue, song)),
+            ]
+            rows.append(SongRow(song, actions, self.ctx.thumbnails, index=i + 1))
+        self.list.set_rows(rows)
+
+    def _enqueue(self, shuffle: bool) -> None:
+        name = self.selected()
+        if name:
+            self._controller.enqueue_playlist(name, shuffle=shuffle)
+
+    def _new(self) -> None:
+        name = ask_text(self, "New playlist", "Name for the new playlist:")
+        if not name:
+            return
+        try:
+            created = self._controller.create_playlist(name)
+        except ValueError as exc:
+            self._controller.toast(str(exc), error=True)
+            return
+        self.picker.setCurrentIndex(self.picker.findData(created))
+
+    def _delete(self) -> None:
+        name = self.selected()
+        if not name:
+            return
+        answer = QMessageBox.question(self, "Delete playlist", f'Delete the playlist "{name}"?')
+        if answer == QMessageBox.StandardButton.Yes:
+            self._controller.delete_playlist(name)
+
+    def _import(self) -> None:
+        url = ask_text(self, "Import from YouTube", "Paste the link of a YouTube playlist:")
+        if not url:
+            return
+        self._controller.toast("Importing the playlist...")
+
+        def done(name: str) -> None:
+            self.picker.setCurrentIndex(self.picker.findData(name))
+
+        def failed(exc: Exception) -> None:
+            reason = str(exc) if isinstance(exc, ValueError) else "could not read that playlist"
+            self._controller.toast(f"Import failed: {reason}", error=True)
+
+        run_async(lambda: self._controller.import_playlist(url), done, failed)
 
 
 class HistoryPage(Page):

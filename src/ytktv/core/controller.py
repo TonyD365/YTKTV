@@ -7,6 +7,7 @@ this class, so they can never disagree about what is playing.
 from __future__ import annotations
 
 import logging
+import random
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -134,6 +135,29 @@ class KTVController:
         self.toast(f"Added: {song.title}")
         self._emit_state()
         return item
+
+    def enqueue_many(self, songs: list[Song], singer: str = "", shuffle: bool = False) -> int:
+        """Queue several songs at once (a playlist). Returns how many were added."""
+        songs = list(songs)
+        if shuffle:
+            random.shuffle(songs)
+        if not songs:
+            return 0
+        for song in songs:
+            self.queue.add(song, singer=singer)
+            if self.stems is not None and self.settings.auto_separate:
+                self.stems.request(song.video_id)
+        with self._lock:
+            start = self.current is None and self.status == PlayStatus.IDLE
+            if start:
+                self.status = PlayStatus.LOADING
+        if start:
+            self._executor.submit(self._advance, None)
+        else:
+            self._prefetch_next()
+        self.toast(f"Added {len(songs)} songs")
+        self._emit_state()
+        return len(songs)
 
     def remove(self, item_id: str) -> bool:
         ok = self.queue.remove(item_id)
@@ -637,6 +661,64 @@ class KTVController:
             result = True
         self.bus.emit("favorites", None)
         return result
+
+    # -- playlists --------------------------------------------------------
+
+    def playlists(self) -> list[dict[str, Any]]:
+        library = self.library
+        return [
+            {"name": name, "count": len(library.playlist(name) or [])}
+            for name in library.playlist_names()
+        ]
+
+    def create_playlist(self, name: str, songs: list[Song] | None = None) -> str:
+        created = self.library.create_playlist(name, songs)
+        self.bus.emit("playlists", None)
+        return created
+
+    def delete_playlist(self, name: str) -> bool:
+        ok = self.library.delete_playlist(name)
+        if ok:
+            self.bus.emit("playlists", None)
+        return ok
+
+    def add_to_playlist(self, name: str, song: Song) -> bool:
+        ok = self.library.add_to_playlist(name, song)
+        if ok:
+            self.bus.emit("playlists", None)
+            self.toast(f"Added to {name}")
+        return ok
+
+    def remove_from_playlist(self, name: str, video_id: str) -> bool:
+        ok = self.library.remove_from_playlist(name, video_id)
+        if ok:
+            self.bus.emit("playlists", None)
+        return ok
+
+    def save_queue_as_playlist(self, name: str) -> str:
+        """Save what is playing plus everything queued as a new playlist."""
+        with self._lock:
+            songs = [self.current.song] if self.current else []
+        songs += [item.song for item in self.queue.snapshot()]
+        if not songs:
+            raise ValueError("there is nothing in the queue to save")
+        return self.create_playlist(name, songs)
+
+    def import_playlist(self, url: str) -> str:
+        """Import a YouTube playlist (network; call off the GUI thread). Returns its name."""
+        fetch = getattr(self.resolver, "playlist", None)
+        if fetch is None:
+            raise ValueError("playlist import is not available")
+        title, songs = fetch(url)
+        name = self.create_playlist(self.library.unique_playlist_name(title), songs)
+        self.toast(f"Imported {len(songs)} songs into {name}")
+        return name
+
+    def enqueue_playlist(self, name: str, shuffle: bool = False, singer: str = "") -> int:
+        songs = self.library.playlist(name)
+        if songs is None:
+            raise KeyError(name)
+        return self.enqueue_many(songs, singer=singer, shuffle=shuffle)
 
     # -- state ------------------------------------------------------------
 
