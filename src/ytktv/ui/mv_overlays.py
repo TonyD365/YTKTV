@@ -92,39 +92,45 @@ class _TextSprite:
         self._size = QSizeF(self.width + 2 * self._pad, metrics.height() + 2 * self._pad)
         self.pixmap = QPixmap()
 
-    def _layer(self) -> tuple[QPixmap, QPainter]:
+    def _blank(self) -> QPixmap:
         pixmap = QPixmap((self._size * self._ratio).toSize())
         pixmap.setDevicePixelRatio(self._ratio)
         pixmap.fill(Qt.GlobalColor.transparent)
+        return pixmap
+
+    def _write(self, pixmap: QPixmap, pen: QPen | QColor) -> None:
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setFont(self._font)
-        return pixmap, painter
+        painter.setPen(pen)
+        painter.drawText(QPointF(self._pad, self._pad + self._ascent), self._text)
+        painter.end()
 
     def steps(self) -> Iterator[None]:
-        """Draw the sprite, yielding between pieces of work of a few milliseconds each."""
-        origin = QPointF(self._pad, self._pad + self._ascent)
-        pixmap, painter = self._layer()
+        """Draw the sprite, yielding between pieces of work of a few milliseconds each.
+
+        No painter stays open across a yield: an unfinished run may simply be dropped,
+        and a pixmap must not be destroyed while it is being painted on.
+        """
+        pixmap = self._blank()
         yield
         if self._edge:
             # One dark copy of the text, stamped around the origin, makes the outline.
-            dark, dark_painter = self._layer()
-            dark_painter.setPen(QColor(6, 3, 16))
-            dark_painter.drawText(origin, self._text)
-            dark_painter.end()
+            dark = self._blank()
+            self._write(dark, QColor(6, 3, 16))
             yield
             for dx, dy in _OUTLINE:
+                painter = QPainter(pixmap)
                 painter.drawPixmap(QPointF(dx * self._edge, dy * self._edge), dark)
+                painter.end()
                 yield
         if isinstance(self._fill, tuple):
             blend = QLinearGradient(self._pad, 0, self._pad + self.width, 0)
             blend.setColorAt(0.0, self._fill[0])
             blend.setColorAt(1.0, self._fill[1])
-            painter.setPen(QPen(QBrush(blend), 1))
+            self._write(pixmap, QPen(QBrush(blend), 1))
         else:
-            painter.setPen(self._fill)
-        painter.drawText(origin, self._text)
-        painter.end()
+            self._write(pixmap, self._fill)
         self.pixmap = pixmap
 
     def finish(self) -> _TextSprite:

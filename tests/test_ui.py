@@ -273,6 +273,29 @@ def test_lyrics_overlay_finishes_a_line_when_playback_jumps_to_it(qtbot):
     assert all(index in (4, 5) for index in overlay._art)  # older lines are dropped
 
 
+def test_lyrics_overlay_survives_dropping_unfinished_drawing(qtbot):
+    """A line half drawn when playback jumps away is discarded without harm."""
+    import gc
+
+    from ytktv.ui.mv_overlays import LyricsOverlay
+
+    overlay = LyricsOverlay()
+    qtbot.addWidget(overlay)
+    overlay.resize(800, 200)
+    overlay.set_lines(
+        [{"start": i * 4.0, "end": i * 4.0 + 4.0, "text": f"line {i}"} for i in range(30)]
+    )
+    overlay.show()
+    for jump in range(60):
+        for step in range(jump % 13):  # stop at every possible point in the drawing
+            overlay.set_time((jump % 28) * 4.0 + 0.01 * step)
+        overlay.set_time(((jump + 9) % 28) * 4.0)
+        gc.collect()
+    overlay.set_lines([])
+    gc.collect()
+    overlay.grab()
+
+
 def test_danmaku_flies_across_and_is_removed(qtbot):
     from ytktv.ui.mv_overlays import DANMAKU_LIMIT, DANMAKU_SECONDS, DanmakuOverlay
 
