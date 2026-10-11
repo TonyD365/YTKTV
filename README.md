@@ -25,6 +25,10 @@ microphones into the music with reverb and echo.
   Instrumental mode, for songs you only half know.
 - **Karaoke lyrics.** When a video has subtitles, they are shown at the bottom of the MV screen
   and fill with colour line by line as the song plays. Videos without subtitles show no lyrics.
+- **Scoring.** With the Score button on, each song is scored out of 100 by comparing the
+  microphones with the original singer's melody, which is extracted while the instrumental is
+  prepared. A running score shows in the corner and a score card appears when the song ends.
+  Octaves do not matter, so anyone can sing in their own range.
 - **Danmaku and lights.** Anyone can send a short message from the console or a phone and it
   flies across the MV screen. A glow around the screen pulses with the music.
 - **Smooth playback.** The next songs in the queue are downloaded ahead of time and played from

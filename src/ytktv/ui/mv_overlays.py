@@ -271,3 +271,47 @@ class LightShow:
             min(1.0, (self._level**0.5) * 0.85 + self._flash * 0.25) if self._level > 0.004 else 0.0
         )
         return {side: (intensity, self._hue + offset) for side, offset in self._OFFSETS.items()}
+
+
+class ScoreCard(_Overlay):
+    """The big end-of-song score, in the middle of the screen."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._points = 0
+        self._grade = ""
+        self._caption = ""
+
+    def set_score(self, points: int, grade: str, caption: str) -> None:
+        self._points, self._grade, self._caption = points, grade, caption
+        self.update()
+
+    def paintEvent(self, _event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = float(self.width()), float(self.height())
+        panel = QRectF(0, 0, w, h)
+        painter.setPen(QPen(QColor(theme.PINK), max(2.0, h * 0.012)))
+        painter.setBrush(QColor(8, 4, 20, 225))
+        painter.drawRoundedRect(panel.adjusted(2, 2, -2, -2), h * 0.08, h * 0.08)
+
+        def centred(
+            text: str, pixel_size: float, y: float, fill: QBrush | QColor, weight: Any
+        ) -> None:
+            font = QFont()
+            font.setWeight(weight)
+            font.setPixelSize(max(8, int(pixel_size)))
+            width = QFontMetricsF(font).horizontalAdvance(text)
+            if width > w * 0.9:
+                font.setPixelSize(max(8, int(pixel_size * w * 0.9 / width)))
+                width = QFontMetricsF(font).horizontalAdvance(text)
+            _outlined_text(painter, font, text, QPointF((w - width) / 2, y), fill)
+
+        centred("SCORE", h * 0.09, h * 0.17, QColor(theme.CYAN), QFont.Weight.Bold)
+        glow = QLinearGradient(w * 0.3, 0, w * 0.7, 0)
+        glow.setColorAt(0.0, QColor(theme.PINK))
+        glow.setColorAt(1.0, QColor(theme.CYAN))
+        centred(str(self._points), h * 0.46, h * 0.62, QBrush(glow), QFont.Weight.Black)
+        centred(self._grade, h * 0.12, h * 0.79, QColor(theme.GOLD), QFont.Weight.Black)
+        if self._caption:
+            centred(self._caption, h * 0.06, h * 0.92, QColor("white"), QFont.Weight.DemiBold)

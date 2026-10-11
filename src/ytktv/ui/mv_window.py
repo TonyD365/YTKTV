@@ -30,7 +30,13 @@ from PySide6.QtWidgets import QLabel, QWidget
 
 from ytktv.player.mpv_player import MpvPlayer
 from ytktv.ui import theme
-from ytktv.ui.mv_overlays import DanmakuOverlay, EdgeLight, LightShow, LyricsOverlay
+from ytktv.ui.mv_overlays import (
+    DanmakuOverlay,
+    EdgeLight,
+    LightShow,
+    LyricsOverlay,
+    ScoreCard,
+)
 from ytktv.ui.support import fade_in, fade_out, qr_pixmap
 
 log = logging.getLogger(__name__)
@@ -244,6 +250,13 @@ class MvWindow(QWidget):
         self.level_source: Callable[[], tuple[float, float]] | None = None
         self.lyrics = LyricsOverlay(self)
         self.danmaku = DanmakuOverlay(self)
+        self.score_card = ScoreCard(self)
+        self._score_timer = QTimer(self)
+        self._score_timer.setSingleShot(True)
+        self._score_timer.timeout.connect(lambda: fade_out(self.score_card, 700))
+        self.live_score = QLabel(self)
+        self.live_score.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.live_score.hide()
         self._position = 0.0
         self._position_at = time.monotonic()
         self._speed = 1.0
@@ -269,6 +282,9 @@ class MvWindow(QWidget):
         self.lights["bottom"].setGeometry(0, h - strip_h, w, strip_h)
         self.lyrics.setGeometry(0, int(h * 0.74), w, int(h * 0.24))
         self.danmaku.setGeometry(0, int(h * 0.12), w, int(h * 0.42))
+        card_w, card_h = int(h * 0.62), int(h * 0.5)
+        self.score_card.setGeometry((w - card_w) // 2, (h - card_h) // 2, card_w, card_h)
+        self._place_live_score()
 
     def _place_banner(self) -> None:
         unit = max(1.0, self.height() / 100.0)
@@ -298,6 +314,39 @@ class MvWindow(QWidget):
             self._badge_timer.start(1200)
 
     # -- animated overlays ------------------------------------------------
+
+    def _place_live_score(self) -> None:
+        unit = max(1.0, self.height() / 100.0)
+        self.live_score.setStyleSheet(
+            f"background: rgba(8, 4, 20, 0.78); color: {theme.CYAN}; font-weight: 900;"
+            f"border: {max(1, int(unit * 0.2))}px solid {theme.CYAN};"
+            f"border-radius: {int(unit * 1.4)}px; padding: {int(unit * 0.7)}px {int(unit * 1.6)}px;"
+            f"font-size: {int(unit * 2.6)}px;"
+        )
+        self.live_score.adjustSize()
+        # Top right, below where the pause symbol appears.
+        self.live_score.move(self.width() - self.live_score.width() - int(unit * 3), int(unit * 17))
+
+    def set_live_score(self, points: int | None) -> None:
+        """Show the running score while a song is being scored; None hides it."""
+        if points is None:
+            if self.live_score.isVisible():
+                fade_out(self.live_score, 300)
+            return
+        self.live_score.setText(f"SCORE  {points}")
+        self._place_live_score()
+        if not self.live_score.isVisible():
+            fade_in(self.live_score, 300)
+        self.live_score.raise_()
+
+    def show_score(self, score: dict[str, Any]) -> None:
+        """The end-of-song result: stays up a few seconds over whatever comes next."""
+        singer = score.get("singer") or ""
+        caption = f"{singer}  ·  {score['title']}" if singer else str(score["title"])
+        self.score_card.set_score(int(score["points"]), str(score["grade"]), caption)
+        fade_in(self.score_card, 400)
+        self.score_card.raise_()
+        self._score_timer.start(7000)
 
     def set_lyrics(self, lines: list[dict[str, Any]]) -> None:
         self.lyrics.set_lines(lines)
@@ -411,6 +460,7 @@ class MvWindow(QWidget):
         self._lights_enabled = bool(state.get("lights", True))
         if status not in ("playing", "paused"):
             self.lyrics.set_lines([])
+            self.set_live_score(None)
         self._sync_animator()
         showing_video = current is not None and status in ("playing", "paused")
         if showing_video:

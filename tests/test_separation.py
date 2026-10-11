@@ -85,7 +85,7 @@ class SlowSeparator:
         self.cancelled = False
         self.calls = []
 
-    def separate(self, source, out_path):
+    def separate(self, source, out_path, pitch_path=None):
         self.calls.append(source.parent.parent.name)
         self.started.set()
         self.release.wait(5)

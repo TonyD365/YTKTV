@@ -18,6 +18,7 @@ from ytktv.core.events import EventBus
 from ytktv.core.library import Library
 from ytktv.core.models import PlayStatus, QueueItem, Song, StemStatus, VocalMode
 from ytktv.core.queue import SongQueue
+from ytktv.core.scoring import Melody, ScoreKeeper, ScoringLoop
 from ytktv.player.base import PlayerBackend
 from ytktv.youtube.parse import MediaSource
 
@@ -92,6 +93,9 @@ class KTVController:
         self._awaiting_start = False  # play() was called and the first frame is pending
         self.lyrics: list[Any] = []  # timed lines for the current song, if its video has subtitles
         self._danmaku_times: list[float] = []
+        self._keeper: ScoreKeeper | None = None  # scores the song that is playing
+        self.last_score: dict[str, Any] | None = None
+        self._scoring_loop: ScoringLoop | None = None
         self._wake = threading.Event()
         self._retries: dict[str, int] = {}
         self._save_timer: threading.Timer | None = None
@@ -104,6 +108,11 @@ class KTVController:
             stems.order = self._stem_order
         if preloader is not None:
             preloader.on_change = lambda _video_id: self._emit_state()
+        if stems is not None:
+            stems.want_pitch = self.settings.scoring
+        if audio is not None:
+            self._scoring_loop = ScoringLoop(audio.mic_pitch, self._scoring_target)
+            self._scoring_loop.start()
         self._apply_volume()
         player.set_guide(self.settings.guide_vocal / 100.0)
         player.set_audio_device(self.settings.output_device)
@@ -219,6 +228,8 @@ class KTVController:
                 if self.current is not None and self._started:
                     self.queue.add_history(self.current.song)
                     self.library.save(self.queue.history())
+                    self._announce_score(self.current)
+                self._keeper = None
                 self._started = False
                 item = self.queue.pop_next()
                 self.current = item
@@ -269,6 +280,7 @@ class KTVController:
                 expected_id = item.id
                 continue
             # Status stays LOADING until the player reports its first position.
+            self._load_melody(item)
             self._load_lyrics(item)
             self._prefetch_next()
             return
@@ -364,7 +376,10 @@ class KTVController:
         now = time.monotonic()
         if now - self._last_position_emit >= _POSITION_INTERVAL:
             self._last_position_emit = now
-            self.bus.emit("position", {"position": position, "duration": self.duration})
+            self.bus.emit(
+                "position",
+                {"position": position, "duration": self.duration, "score": self.live_score()},
+            )
 
     def _sync_preload(self) -> None:
         """Tell the background workers which songs still matter after a queue change."""
@@ -428,6 +443,60 @@ class KTVController:
         self._save_soon()
         self._emit_state()
 
+    # -- scoring ----------------------------------------------------------
+
+    def set_scoring(self, enabled: bool) -> None:
+        self.settings.scoring = bool(enabled)
+        if self.stems is not None:
+            self.stems.want_pitch = self.settings.scoring
+            if self.settings.scoring:
+                # Songs separated before scoring was on have no melody yet: fetch it.
+                for video_id in self._stem_order():
+                    self.stems.request(video_id)
+        with self._lock:
+            item = self.current
+            if not self.settings.scoring:
+                self._keeper = None
+        if self.settings.scoring and item is not None:
+            self._load_melody(item)
+        self._save_soon()
+        self._emit_state()
+
+    def _load_melody(self, item: QueueItem) -> None:
+        """Start scoring *item* if scoring is on and its melody has been extracted."""
+        if not self.settings.scoring or self.stems is None:
+            return
+        path = self.stems.pitch(item.song.video_id)
+        if path is None:
+            return
+        try:
+            melody = Melody.load(path)
+        except Exception:
+            log.warning("unreadable melody for %s", item.song.video_id, exc_info=True)
+            return
+        with self._lock:
+            if self.current is item and self._keeper is None:
+                self._keeper = ScoreKeeper(melody, transpose=float(self.pitch))
+
+    def _scoring_target(self) -> tuple[ScoreKeeper, float] | None:
+        with self._lock:
+            if self._keeper is None or self.status != PlayStatus.PLAYING:
+                return None
+            return self._keeper, self.position
+
+    def live_score(self) -> int | None:
+        keeper = self._keeper
+        result = keeper.result() if keeper is not None else None
+        return result.points if result is not None else None
+
+    def _announce_score(self, item: QueueItem) -> None:
+        keeper = self._keeper
+        result = keeper.result() if keeper is not None else None
+        if result is None:
+            return
+        self.last_score = {**result.to_dict(), "title": item.song.title, "singer": item.singer}
+        self.bus.emit("score", self.last_score)
+
     def set_lights(self, enabled: bool) -> None:
         self.settings.lights = bool(enabled)
         self._save_soon()
@@ -474,6 +543,9 @@ class KTVController:
     def set_pitch(self, semitones: int) -> None:
         self.pitch = max(-PITCH_RANGE, min(PITCH_RANGE, int(semitones)))
         self.player.set_pitch(self.pitch)
+        keeper = self._keeper
+        if keeper is not None:
+            keeper.transpose = float(self.pitch)  # the melody moves with the key
         self._emit_state()
 
     def set_speed(self, speed: float) -> None:
@@ -544,6 +616,10 @@ class KTVController:
             if is_current and path is not None:
                 self.player.attach_instrumental(path)
                 self.player.use_instrumental(self.vocal_mode == VocalMode.INSTRUMENTAL)
+            with self._lock:
+                playing = self.current if is_current else None
+            if playing is not None:
+                self._load_melody(playing)
         self._emit_state()
 
     def stem_status(self, video_id: str) -> StemStatus:
@@ -593,6 +669,9 @@ class KTVController:
             "guide_vocal": settings.guide_vocal,
             "lyrics": bool(self.lyrics),
             "lights": settings.lights,
+            "scoring": settings.scoring,
+            "scoring_active": self._keeper is not None,
+            "last_score": self.last_score,
             "music_volume": settings.music_volume,
             "mic_volume": settings.mic_volume,
             "master_volume": settings.master_volume,
@@ -621,6 +700,8 @@ class KTVController:
         self._executor.shutdown(wait=False, cancel_futures=True)
         self._prefetcher.shutdown(wait=False, cancel_futures=True)
         self._wake.set()
+        if self._scoring_loop is not None:
+            self._scoring_loop.stop()
         if self.stems is not None:
             self.stems.stop()
         if self.preloader is not None:

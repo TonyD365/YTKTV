@@ -295,11 +295,21 @@ class MainWindow(QMainWindow):
 
         # Transport
         self.pause_button = button("⏯", controller.toggle_pause, "Play / Pause", round=True)
+        self.score_button = QPushButton("Score")
+        self.score_button.setFixedSize(58, 44)
+        self.score_button.setCheckable(True)
+        self.score_button.setChecked(controller.settings.scoring)
+        self.score_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.score_button.setToolTip(
+            "Score each song: the microphones are compared with the original singer's melody"
+        )
+        self.score_button.clicked.connect(controller.set_scoring)
         group(
             "PLAYBACK",
             button("⏮", controller.replay, "Replay from the start", round=True),
             self.pause_button,
             button("⏭", controller.skip, "Skip to the next song", round=True),
+            self.score_button,
         )
 
         # Key and tempo
@@ -465,6 +475,7 @@ class MainWindow(QMainWindow):
             self._apply_state()
         elif topic == "position":
             self._apply_position(payload["position"], payload["duration"])
+            self.mv_window.set_live_score(payload.get("score"))
         elif topic == "toast":
             self.show_toast(payload["message"], payload.get("error", False))
         elif topic == "favorites":
@@ -477,6 +488,9 @@ class MainWindow(QMainWindow):
                 self.mv_window.set_lyrics(payload["lines"])
         elif topic == "danmaku":
             self.mv_window.add_danmaku(payload["text"])
+        elif topic == "score":
+            self.mv_window.show_score(payload)
+            self.show_toast(f"Score: {payload['points']}  ·  {payload['grade']}")
         elif topic == "mixer":
             self.mixer_page.apply_state()
 
@@ -518,6 +532,14 @@ class MainWindow(QMainWindow):
         self.key_readout.setEnabled(abs(pitch) < PITCH_RANGE)
         self.tempo_readout.setText(f"{round(state['speed'] * 100)}%")
         self.lights_button.setChecked(state["lights"])
+        self.score_button.setChecked(state["scoring"])
+        if state["scoring"] and not state["separation"]:
+            tip = "Scoring needs vocal separation, which is not installed"
+        elif state["scoring"] and state["current"] and not state["scoring_active"]:
+            tip = "No score for this song yet: its melody is still being prepared"
+        else:
+            tip = "Score each song: the microphones are compared with the original singer's melody"
+        self.score_button.setToolTip(tip)
         for slider, name in (
             (self.music_slider, "music_volume"),
             (self.mic_slider, "mic_volume"),

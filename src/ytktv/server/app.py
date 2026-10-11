@@ -72,6 +72,7 @@ class SoundIn(BaseModel):
     master_volume: int | None = Field(default=None, ge=0, le=100)
     guide_vocal: int | None = Field(default=None, ge=0, le=100)
     lights: bool | None = None
+    scoring: bool | None = None
 
 
 class DanmakuIn(BaseModel):
@@ -87,7 +88,7 @@ class _Broadcaster:
 
     def publish(self, topic: str, payload: Any) -> None:
         loop = self.loop
-        if loop is None or topic not in ("state", "position", "toast", "danmaku"):
+        if loop is None or topic not in ("state", "position", "toast", "danmaku", "score"):
             return
         with contextlib.suppress(RuntimeError):  # loop already closed on shutdown
             loop.call_soon_threadsafe(self._fan_out, topic, payload)
@@ -197,6 +198,8 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
             controller.set_guide_vocal(body.guide_vocal)
         if body.lights is not None:
             controller.set_lights(body.lights)
+        if body.scoring is not None:
+            controller.set_scoring(body.scoring)
         for name in ("music", "mic", "master"):
             value = getattr(body, f"{name}_volume")
             if value is not None:

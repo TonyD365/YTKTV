@@ -114,6 +114,7 @@
       <button data-act="pause" id="btn-pause">Pause</button>
       <button data-act="replay">Replay</button>
       <button data-act="skip">Skip</button>
+      <button id="scoring" class="wide">Scoring</button>
     </div>
     <h3>Vocals</h3>
     <div class="pad" id="modes">
@@ -255,6 +256,8 @@ function render() {
     $("out-" + name).textContent = $("vol-" + name).value;
   }
   $("lights").classList.toggle("on", state.lights);
+  $("scoring").classList.toggle("on", state.scoring);
+  $("scoring").textContent = state.scoring ? "Scoring: On" : "Scoring: Off";
   setProgress(state.position, state.duration);
 
   const q = $("queue");
@@ -308,6 +311,7 @@ for (const [name, key] of SLIDERS) {
   slider.addEventListener("change", () => { dragging[name] = false; sound({[key]: +slider.value}); });
 }
 $("lights").onclick = () => state && sound({lights: !state.lights});
+$("scoring").onclick = () => state && sound({scoring: !state.scoring});
 async function danmaku(text) {
   try { await api("/api/danmaku", "POST", {text}); return true; }
   catch (e) { toast(e.message, true); return false; }
@@ -335,6 +339,7 @@ function connect() {
     const msg = JSON.parse(event.data);
     if (msg.type === "state") { state = msg.data; render(); }
     else if (msg.type === "position") setProgress(msg.data.position, msg.data.duration);
+    else if (msg.type === "score") toast(`Score: ${msg.data.points} · ${msg.data.grade}`);
   };
   ws.onclose = () => setTimeout(connect, 1500);
 }

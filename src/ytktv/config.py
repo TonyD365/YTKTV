@@ -71,6 +71,8 @@ class Settings:
     lyrics_auto_captions: bool = False
     # Music-reactive glow around the MV screen.
     lights: bool = True
+    # Score each song by comparing the microphones with the original singer's melody.
+    scoring: bool = True
     # Runtime variant the user said no to downloading; do not ask about it again.
     separation_declined: str = ""
 

@@ -57,6 +57,7 @@ datas = [
     (str(PACKAGE / "server" / "static"), "ytktv/server/static"),
     # Run as a plain script by the downloaded runtime, so it must exist as a file.
     (str(PACKAGE / "separation" / "sep_worker.py"), "ytktv/separation"),
+    (str(PACKAGE / "separation" / "pitch_core.py"), "ytktv/separation"),
 ]
 datas += collect_data_files("imageio_ffmpeg")
 datas += collect_data_files("certifi")

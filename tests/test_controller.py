@@ -131,6 +131,7 @@ class FakeStems:
         self.ready = set()
         self.on_change = None
         self.order = None
+        self.want_pitch = False
 
     def request(self, video_id):
         self.requested.append(video_id)
@@ -144,6 +145,10 @@ class FakeStems:
 
     def retain(self, wanted):
         self.retained = set(wanted)
+
+    def pitch(self, video_id):
+        path = self.tmp / f"{video_id}.melody.json"
+        return path if path.exists() else None
 
     def stop(self):
         pass

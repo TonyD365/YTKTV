@@ -235,8 +235,13 @@ def test_attach_stems_enables_separation_after_startup(tmp_path):
 
 def test_worker_script_is_standalone():
     """It runs inside the downloaded environment, where the ytktv package does not exist."""
-    source = Path(runtime.__file__).with_name("sep_worker.py").read_text()
-    assert "import ytktv" not in source and "from ytktv" not in source
+    folder = Path(runtime.__file__).parent
+    worker = folder.joinpath("sep_worker.py").read_text()
+    # Its one ytktv import has a plain-script fallback right next to it.
+    assert worker.count("from ytktv") == 1 and "import pitch_core" in worker
+    assert "import ytktv" not in worker
+    core = folder.joinpath("pitch_core.py").read_text()
+    assert "import ytktv" not in core and "from ytktv" not in core
 
 
 def test_builtin_launcher_starts_the_app_in_worker_mode(monkeypatch):
