@@ -57,6 +57,11 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
+          if [ "$RUNNER_OS" = "Linux" ] && [ "$YTKTV_BUNDLE_SEPARATION" = "1" ]; then
+            # The default Linux torch wheel drags in the CUDA libraries and makes the AppImage
+            # larger than the 2 GB limit for release files. Bundle the CPU build instead.
+            python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          fi
           if [ "$YTKTV_BUNDLE_SEPARATION" = "1" ] && ! python -m pip install ".[package,separation]"; then
             # Some platforms (Intel Macs) no longer get wheels for the separation runtime.
             echo "::warning::Vocal separation could not be installed on ${{ matrix.name }}; building without it."
@@ -129,6 +134,19 @@ jobs:
             https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool && sudo mv appimagetool /usr/local/bin/appimagetool
           APPIMAGE_EXTRACT_AND_RUN=1 PYTHON=python packaging/linux/build_appimage.sh
+
+      - name: Check installer size
+        shell: bash
+        run: |
+          for file in dist/*.pkg dist/*-setup.exe dist/*.AppImage; do
+            [ -e "$file" ] || continue
+            size=$(wc -c < "$file")
+            echo "$file: $((size / 1048576)) MiB"
+            if [ "$size" -ge 2147483648 ]; then
+              echo "::error::$file is larger than 2 GiB and cannot be attached to a GitHub release."
+              exit 1
+            fi
+          done
 
       - uses: actions/upload-artifact@v4
         with:
