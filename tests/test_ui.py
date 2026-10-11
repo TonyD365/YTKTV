@@ -110,3 +110,54 @@ def test_fader_click_jumps_and_clamps(qtbot):
     assert fader.value() < 0.1
     fader.set_value(5)
     assert fader.value() == 1.0
+
+
+def test_settings_offers_install_now_when_an_update_is_downloaded(
+    window, qtbot, tmp_path, monkeypatch
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    from ytktv import updater
+    from ytktv.ui.update_manager import UpdateManager
+
+    main, controller = window
+    page = main.settings_page
+    main.show_page("settings")
+    assert not page.install_button.isVisible()
+
+    manager = UpdateManager(controller, main)
+    manager._timer.stop()
+    manager.ready.connect(page.set_update_ready)
+    page.install_update.connect(manager.install_now)
+    installer = tmp_path / "YTKTV-9.9.9-macos-universal.pkg"
+    installer.write_bytes(b"pkg")
+    manager._installer = installer
+    manager._info = updater.UpdateInfo("9.9.9", "v9.9.9", installer.name, "", "", "", "")
+    manager.ready.emit(True)
+    assert page.install_button.isVisible()
+
+    installed = []
+    monkeypatch.setattr(updater, "install_update", installed.append)
+    monkeypatch.setattr(
+        "ytktv.ui.update_manager.QApplication.quit", lambda: installed.append("quit")
+    )
+    shown = []
+
+    def fake_exec(box):
+        shown.append(box.informativeText())
+        # Accept on the second showing only.
+        box.clickedButton = lambda: box.buttons()[0] if len(shown) > 1 else box.buttons()[1]
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+
+    manager._declined = True  # "Later" was chosen earlier this session
+    page.install_button.click()  # the button still works, and this time says Later again
+    assert len(shown) == 1 and installed == []
+    assert "will stop" not in shown[0]  # nothing is playing
+
+    controller.enqueue(make_song(1))
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    page.install_button.click()
+    assert "will stop" in shown[1]  # warns before interrupting a song
+    assert installed == [installer, "quit"]
