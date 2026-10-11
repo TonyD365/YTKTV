@@ -38,12 +38,22 @@ Download the installer for your system from the
 
 | System | File |
 |---|---|
-| macOS (Apple Silicon) | `YTKTV-<version>-macos-arm64.pkg` |
+| macOS (Apple Silicon and Intel) | `YTKTV-<version>-macos-universal.pkg` |
 | Windows 10/11 (64-bit) | `YTKTV-<version>-windows-x64-setup.exe` |
 | Linux (x86-64) | `YTKTV-<version>-linux-x86_64.AppImage` |
 
-The installers are not code-signed yet. On macOS, right-click the `.pkg` and choose **Open**
-(or allow it under *System Settings → Privacy & Security*). On Windows, choose
+Version 1.0.0 only has an Apple Silicon package (`-macos-arm64.pkg`); the universal installer
+starts with the release after it.
+
+The installers are not code-signed yet. On macOS, remove the download quarantine with `xattr`
+before opening the package:
+
+```bash
+xattr -d com.apple.quarantine ~/Downloads/YTKTV-<version>-macos-universal.pkg
+```
+
+If macOS still refuses to open the app after installing, run
+`sudo xattr -dr com.apple.quarantine /Applications/YTKTV.app`. On Windows, choose
 **More info → Run anyway** in the SmartScreen prompt.
 
 ### From source
@@ -163,8 +173,8 @@ Versions come from git tags; there is no version number in the source.
 1. On GitHub, open **Releases → Draft a new release**.
 2. Choose a new tag such as `v1.2.3` on `main`, keep **Set as the latest release** ticked, and
    publish.
-3. The `Release` workflow builds the macOS `.pkg`, the Windows installer and the Linux AppImage
-   from that tag and attaches them, together with `SHA256SUMS`, to the release.
+3. The `Release` workflow builds the universal macOS `.pkg`, the Windows installer and the
+   Linux AppImage from that tag and attaches them, together with `SHA256SUMS`, to the release.
 
 Installed copies check `releases/latest` at startup and every six hours. Once the installers
 are attached they download the one for their platform, verify its checksum, and offer to

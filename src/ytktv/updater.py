@@ -63,25 +63,26 @@ def is_newer(tag: str, current: str) -> bool:
     return latest > mine
 
 
-def platform_suffix(system: str | None = None, machine: str | None = None) -> str | None:
-    """File-name ending of the installer built for this platform."""
+def platform_suffixes(system: str | None = None, machine: str | None = None) -> list[str]:
+    """File-name endings of installers that run on this platform, best first."""
     system = system or platform.system()
     machine = (machine or platform.machine()).lower()
     if system == "Darwin":
-        return "macos-arm64.pkg" if machine in ("arm64", "aarch64") else "macos-x86_64.pkg"
+        arch = "arm64" if machine in ("arm64", "aarch64") else "x86_64"
+        return ["macos-universal.pkg", f"macos-{arch}.pkg"]
     if system == "Windows":
-        return "windows-x64-setup.exe"
-    if system == "Linux":
-        return "linux-x86_64.AppImage" if machine in ("x86_64", "amd64") else None
-    return None
+        return ["windows-x64-setup.exe"]
+    if system == "Linux" and machine in ("x86_64", "amd64"):
+        return ["linux-x86_64.AppImage"]
+    return []
 
 
-def pick_asset(assets: list[dict[str, Any]], suffix: str | None) -> dict[str, Any] | None:
-    if not suffix:
-        return None
-    for asset in assets:
-        if str(asset.get("name", "")).endswith(suffix):
-            return asset
+def pick_asset(assets: list[dict[str, Any]], suffixes: list[str]) -> dict[str, Any] | None:
+    """The first asset matching the earliest suffix in *suffixes*."""
+    for suffix in suffixes:
+        for asset in assets:
+            if str(asset.get("name", "")).endswith(suffix):
+                return asset
     return None
 
 
@@ -97,7 +98,7 @@ def check_for_update(
     current: str = __version__,
     repo: str = GITHUB_REPO,
     fetch: Fetch = _http_get,
-    suffix: str | None = None,
+    suffixes: list[str] | None = None,
 ) -> UpdateInfo | None:
     """Return the Latest release if it is newer than *current* and has an installer for us."""
     try:
@@ -110,10 +111,10 @@ def check_for_update(
     if release.get("draft") or release.get("prerelease") or not is_newer(tag, current):
         return None
     assets = release.get("assets") or []
-    asset = pick_asset(assets, suffix or platform_suffix())
+    asset = pick_asset(assets, platform_suffixes() if suffixes is None else suffixes)
     if asset is None:
         return None
-    checksums = pick_asset(assets, CHECKSUM_ASSET)
+    checksums = pick_asset(assets, [CHECKSUM_ASSET])
     if checksums is None:
         # Installers are attached a while after the release is published; until the
         # checksums are there too, treat the release as not ready.

@@ -46,34 +46,55 @@ def test_is_newer(tag, current, expected):
 
 
 @pytest.mark.parametrize(
-    ("system", "machine", "suffix"),
+    ("system", "machine", "expected"),
     [
-        ("Darwin", "arm64", "macos-arm64.pkg"),
-        ("Darwin", "x86_64", "macos-x86_64.pkg"),
-        ("Windows", "AMD64", "windows-x64-setup.exe"),
-        ("Linux", "x86_64", "linux-x86_64.AppImage"),
-        ("Linux", "riscv64", None),
+        ("Darwin", "arm64", ["macos-universal.pkg", "macos-arm64.pkg"]),
+        ("Darwin", "x86_64", ["macos-universal.pkg", "macos-x86_64.pkg"]),
+        ("Windows", "AMD64", ["windows-x64-setup.exe"]),
+        ("Linux", "x86_64", ["linux-x86_64.AppImage"]),
+        ("Linux", "riscv64", []),
     ],
 )
-def test_platform_suffix(system, machine, suffix):
-    assert updater.platform_suffix(system, machine) == suffix
+def test_platform_suffixes(system, machine, expected):
+    assert updater.platform_suffixes(system, machine) == expected
+
+
+def test_macos_prefers_the_universal_package_and_falls_back():
+    mac = updater.platform_suffixes("Darwin", "arm64")
+    both = release(
+        assets=[
+            {"name": n, "browser_download_url": f"https://dl.invalid/{n}"}
+            for n in (
+                "YTKTV-1.2.0-macos-arm64.pkg",
+                "YTKTV-1.2.0-macos-universal.pkg",
+                "SHA256SUMS",
+            )
+        ]
+    )
+    info = updater.check_for_update("1.1.0", fetch=both, suffixes=mac)
+    assert info is not None and info.asset_name == "YTKTV-1.2.0-macos-universal.pkg"
+    # A release that only has the per-architecture package (such as 1.0.0) still works.
+    info = updater.check_for_update("1.1.0", fetch=release(), suffixes=mac)
+    assert info is not None and info.asset_name == "YTKTV-1.2.0-macos-arm64.pkg"
+    intel = updater.platform_suffixes("Darwin", "x86_64")
+    assert updater.check_for_update("1.1.0", fetch=release(), suffixes=intel) is None
 
 
 def test_check_finds_the_right_installer_for_each_platform():
-    info = updater.check_for_update("1.1.0", fetch=release(), suffix="macos-arm64.pkg")
+    info = updater.check_for_update("1.1.0", fetch=release(), suffixes=["macos-arm64.pkg"])
     assert info is not None
     assert (info.version, info.tag) == ("1.2.0", "v1.2.0")
     assert info.asset_name == "YTKTV-1.2.0-macos-arm64.pkg"
     assert info.checksum_url == "https://dl.invalid/SHA256SUMS"
-    windows = updater.check_for_update("1.1.0", fetch=release(), suffix="windows-x64-setup.exe")
+    windows = updater.check_for_update("1.1.0", fetch=release(), suffixes=["windows-x64-setup.exe"])
     assert windows is not None and windows.asset_name.endswith("setup.exe")
 
 
 def test_check_ignores_same_version_prereleases_and_missing_installers():
-    assert updater.check_for_update("1.2.0", fetch=release(), suffix="macos-arm64.pkg") is None
+    assert updater.check_for_update("1.2.0", fetch=release(), suffixes=["macos-arm64.pkg"]) is None
     pre = release("v1.3.0", prerelease=True)
-    assert updater.check_for_update("1.2.0", fetch=pre, suffix="macos-arm64.pkg") is None
-    assert updater.check_for_update("1.1.0", fetch=release(), suffix="macos-x86_64.pkg") is None
+    assert updater.check_for_update("1.2.0", fetch=pre, suffixes=["macos-arm64.pkg"]) is None
+    assert updater.check_for_update("1.1.0", fetch=release(), suffixes=["macos-x86_64.pkg"]) is None
 
 
 def test_check_waits_until_installers_and_checksums_are_attached():
@@ -82,16 +103,19 @@ def test_check_waits_until_installers_and_checksums_are_attached():
         return release(assets=assets)
 
     just_published = with_assets([])
-    assert updater.check_for_update("1.1.0", fetch=just_published, suffix="macos-arm64.pkg") is None
+    assert (
+        updater.check_for_update("1.1.0", fetch=just_published, suffixes=["macos-arm64.pkg"])
+        is None
+    )
     no_sums = with_assets(["YTKTV-1.2.0-macos-arm64.pkg"])
-    assert updater.check_for_update("1.1.0", fetch=no_sums, suffix="macos-arm64.pkg") is None
+    assert updater.check_for_update("1.1.0", fetch=no_sums, suffixes=["macos-arm64.pkg"]) is None
 
 
 def test_check_treats_no_releases_as_up_to_date():
     def not_found(url):
         raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
 
-    assert updater.check_for_update("1.0.0", fetch=not_found, suffix="macos-arm64.pkg") is None
+    assert updater.check_for_update("1.0.0", fetch=not_found, suffixes=["macos-arm64.pkg"]) is None
 
 
 def test_expected_checksum_parses_sha256sum_output():

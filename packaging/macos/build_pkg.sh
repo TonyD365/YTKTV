@@ -1,5 +1,7 @@
 #!/bin/bash
-# Build dist/YTKTV-<version>-macos-<arch>.pkg from the current checkout.
+# Build dist/YTKTV-<version>-macos-<arch>.pkg from the current checkout, for the
+# architecture of the Python that runs it. build_universal_pkg.sh combines an
+# arm64 and an x86_64 package into one installer.
 #
 # Optional environment:
 #   CODESIGN_IDENTITY   "Developer ID Application: ..." to sign the app
@@ -12,7 +14,7 @@ cd "$(dirname "$0")/../.."
 PYTHON="${PYTHON:-python3}"
 VERSION="$("$PYTHON" -c 'import ytktv; print(ytktv.__version__)')"
 ARCH="$(uname -m)"
-IDENTIFIER="com.tonyd365.ytktv"
+IDENTIFIER="com.tonyd365.ytktv.${ARCH}"
 OUT="dist/YTKTV-${VERSION}-macos-${ARCH}.pkg"
 
 echo "==> Icon"

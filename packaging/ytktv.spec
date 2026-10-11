@@ -112,6 +112,7 @@ if SYSTEM == "Darwin":
             "NSMicrophoneUsageDescription": "YTKTV mixes your microphones into the karaoke sound.",
             "NSLocalNetworkUsageDescription": "YTKTV lets phones on your network pick songs.",
             "LSApplicationCategoryType": "public.app-category.music",
-            "LSMinimumSystemVersion": "14.0",
+            # The bundled Homebrew libraries only run on the macOS they were built on or newer.
+            "LSMinimumSystemVersion": platform.mac_ver()[0].split(".")[0] + ".0",
         },
     )
