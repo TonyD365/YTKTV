@@ -17,11 +17,18 @@ microphones into the music with reverb and echo.
   "Now Playing" / "Up Next" banner and an idle screen showing the phone QR code.
 - **Original / Instrumental switch.** Every selected song is split into vocals and backing track
   in the background with an AI model, on the GPU when one is available (Apple Silicon via Metal,
-  NVIDIA via CUDA). Switching is instant and stays in sync. Until a song is ready, *Vocal Cut*
-  and *L* / *R* (for classic split-track KTV videos) work with no waiting.
+  NVIDIA via CUDA, other Windows GPUs via DirectML). Both tracks play together and switching is
+  a crossfade, so there is no gap. A song waits for its instrumental before it starts (shown as
+  "Preparing instrumental"), and work on songs removed from the queue is cancelled. *Vocal Cut*
+  and *L* / *R* (for classic split-track KTV videos) need no preparation.
+- **Smooth playback.** The next songs in the queue are downloaded ahead of time and played from
+  disk; only the first song of a session streams, with a loading screen until it is ready.
+  Separation runs in its own low-priority process so it cannot disturb the live sound.
 - **Mixing console.** Four microphone channels laid out like a hardware desk: input selection,
   GAIN, 3-band EQ, ECHO, FX (reverb), PAN, fader, MUTE and PEAK LEDs; MUSIC, MICS and MAIN bus
-  faders, an LED meter and output device selection. Microphones are mixed into the output
+  faders, an OUTPUT meter for the total level (music and microphones), and output device
+  selection. Each channel has a low cut and a noise gate, so an open microphone stays silent
+  until someone sings. Microphones are mixed into the output
   automatically.
 - **KTV controls.** Queue, Priority (play next), Skip, Replay, Pause, Key up/down (±6 semitones),
   Tempo, favorites, sung history, plus Applause / Cheer / Air Horn / Drum Roll buttons.
@@ -42,9 +49,6 @@ Download the installer for your system from the
 | Windows 10/11 (64-bit) | `YTKTV-<version>-windows-x64-setup.exe` |
 | Linux (x86-64) | `YTKTV-<version>-linux-x86_64.AppImage` |
 
-Version 1.0.0 only has an Apple Silicon package (`-macos-arm64.pkg`); the universal installer
-starts with the release after it.
-
 The installers are not code-signed yet. On macOS, remove the download quarantine with `xattr`
 before opening the package:
 
@@ -55,6 +59,21 @@ xattr -d com.apple.quarantine ~/Downloads/YTKTV-<version>-macos-universal.pkg
 If macOS still refuses to open the app after installing, run
 `sudo xattr -dr com.apple.quarantine /Applications/YTKTV.app`. On Windows, choose
 **More info → Run anyway** in the SmartScreen prompt.
+
+### Vocal separation and your graphics card
+
+| System | How the installer provides it | Runs on |
+|---|---|---|
+| macOS, Apple Silicon | Built in | GPU (Metal) |
+| Windows | Downloaded on first run | NVIDIA GPU (CUDA), other GPUs (DirectML), or CPU |
+| Linux | Downloaded on first run | NVIDIA GPU (CUDA) or CPU |
+| macOS, Intel | Not available | Vocal Cut and L / R still work |
+
+On Windows and Linux, YTKTV checks the graphics card the first time it starts and offers to
+download the matching runtime: about 2.5 GB for NVIDIA, about 1 GB for DirectML, about 500 MB
+for CPU. It asks before downloading, and the same choice is available later under
+**Settings → Vocal Separation**. NVIDIA cards need their driver installed first. If the GPU
+runtime cannot be installed, YTKTV falls back to the CPU one.
 
 ### From source
 

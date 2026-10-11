@@ -224,7 +224,7 @@ class QueuePage(Page):
 
     def on_state(self, state: dict[str, Any]) -> None:
         queue = state["queue"]
-        signature = [(item["id"], item["stem"]) for item in queue]
+        signature = [(item["id"], item["stem"], item["preload"]) for item in queue]
         if signature == self._signature:
             return
         self._signature = signature
@@ -238,6 +238,10 @@ class QueuePage(Page):
             stem = STEM_TAGS.get(item["stem"])
             if stem:
                 tags.append(tag(stem[1], stem[0]))
+            if item["preload"] == "ready":
+                tags.append(tag("Video ready", "ready"))
+            elif item["preload"] == "loading":
+                tags.append(tag("Loading video", "busy"))
             actions: list[Action] = [
                 ("Top", "", partial(controller.prioritize, item["id"])),
                 ("Remove", "danger", partial(controller.remove, item["id"])),
@@ -269,6 +273,7 @@ class HistoryPage(Page):
 class SettingsPage(Page):
     display_changed = Signal()
     check_updates = Signal()
+    install_separation = Signal()
 
     def __init__(self, ctx: Context, server_url: str) -> None:
         super().__init__("Settings", ctx)
@@ -331,13 +336,32 @@ class SettingsPage(Page):
         self.quality.setCurrentIndex(max(0, self.quality.findData(settings.max_height)))
         self.quality.activated.connect(self._quality_chosen)
         labelled(display, "Maximum video quality", self.quality)
+        check(
+            display,
+            "Download the next songs in the queue ahead of time (smoother playback)",
+            "preload_queue",
+        )
 
         # Vocals
         vocals = card("Vocal Separation")
         self.separation_label = QLabel()
         self.separation_label.setWordWrap(True)
         vocals.addWidget(self.separation_label)
+        self.runtime_button = QPushButton()
+        self.runtime_button.setProperty("accent", True)
+        self.runtime_button.hide()
+        self.runtime_button.clicked.connect(self.install_separation.emit)
+        button_row = QHBoxLayout()
+        button_row.addWidget(self.runtime_button)
+        button_row.addStretch()
+        vocals.addLayout(button_row)
+        self._runtime_text = ""
         check(vocals, "Prepare an instrumental for every selected song", "auto_separate")
+        check(
+            vocals,
+            "Wait for the instrumental before a song starts (no switch in the middle of a song)",
+            "wait_for_instrumental",
+        )
 
         # Phone
         phone = card("Phone Remote")
@@ -388,8 +412,17 @@ class SettingsPage(Page):
         self.ctx.controller.settings.max_height = int(self.quality.currentData())
         self.ctx.controller.mixer_changed()
 
+    def set_runtime_status(self, text: str, button: str) -> None:
+        """Status of the downloadable runtime; empty text means "nothing special to say"."""
+        self._runtime_text = text
+        self.runtime_button.setText(button)
+        self.runtime_button.setVisible(bool(button))
+        self.on_state(self.ctx.controller.state())
+
     def on_state(self, state: dict[str, Any]) -> None:
-        if state["separation"]:
+        if self._runtime_text:
+            self.separation_label.setText(self._runtime_text)
+        elif state["separation"]:
             device = state["accelerator"] or "detecting hardware..."
             self.separation_label.setText(
                 f"Running on: {device}\n"

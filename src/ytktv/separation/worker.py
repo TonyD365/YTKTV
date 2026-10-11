@@ -19,6 +19,10 @@ ChangeCallback = Callable[[str, StemStatus], None]
 OrderProvider = Callable[[], list[str]]  # video ids, most urgent first
 
 
+class _Cancelled(Exception):
+    pass
+
+
 class StemManager:
     """Downloads audio and separates it, one song at a time, most urgent first."""
 
@@ -38,6 +42,8 @@ class StemManager:
         self._cond = threading.Condition()
         self._status: dict[str, StemStatus] = {}
         self._pending: list[str] = []
+        self._active: str | None = None
+        self._cancelled: set[str] = set()
         self._stop = False
         self._thread: threading.Thread | None = None
 
@@ -80,12 +86,40 @@ class StemManager:
         self._notify(video_id, StemStatus.QUEUED)
         return StemStatus.QUEUED
 
+    def retain(self, wanted: set[str]) -> None:
+        """Drop work for songs nobody is waiting for any more (removed or skipped).
+
+        Queued songs are forgotten; the one being separated right now is aborted
+        so the next wanted song starts immediately. Finished stems stay cached.
+        """
+        dropped: list[str] = []
+        abort = False
+        with self._cond:
+            for video_id in list(self._pending):
+                if video_id not in wanted:
+                    self._pending.remove(video_id)
+                    self._status.pop(video_id, None)
+                    dropped.append(video_id)
+            if self._active is not None and self._active not in wanted:
+                self._cancelled.add(self._active)
+                abort = True
+        if abort:
+            cancel = getattr(self._separator, "cancel", None)
+            if cancel is not None:
+                cancel()
+        for video_id in dropped:
+            self._notify(video_id, StemStatus.NONE)
+
     def _notify(self, video_id: str, status: StemStatus) -> None:
         if self.on_change:
             try:
                 self.on_change(video_id, status)
             except Exception:
                 log.exception("stem change callback failed")
+
+    def _is_cancelled(self, video_id: str) -> bool:
+        with self._cond:
+            return video_id in self._cancelled
 
     def _set(self, video_id: str, status: StemStatus) -> None:
         with self._cond:
@@ -120,18 +154,35 @@ class StemManager:
     def process(self, video_id: str) -> None:
         """Download + separate one song synchronously (the worker's unit of work)."""
         work = self.cache.folder(video_id) / "work"
+        with self._cond:
+            self._active = video_id
+            self._cancelled.discard(video_id)
         try:
             self._set(video_id, StemStatus.DOWNLOADING)
             source = self._downloader(video_id, work)
+            if self._is_cancelled(video_id):
+                raise _Cancelled
             self._set(video_id, StemStatus.SEPARATING)
             partial = work / "instrumental.partial.flac"
             self._separator.separate(source, partial)
             partial.replace(self.cache.target(video_id))
-        except Exception:
-            log.exception("separation failed for %s", video_id)
+        except Exception as exc:
+            cancelled = self._is_cancelled(video_id)
+            with self._cond:
+                self._active = None
+                self._cancelled.discard(video_id)
+                if cancelled:
+                    self._status.pop(video_id, None)
             shutil.rmtree(self.cache.folder(video_id), ignore_errors=True)
-            self._set(video_id, StemStatus.FAILED)
+            if cancelled:
+                log.info("separation of %s cancelled: no longer in the queue", video_id)
+                self._notify(video_id, StemStatus.NONE)
+            else:
+                log.error("separation failed for %s: %s", video_id, exc, exc_info=True)
+                self._set(video_id, StemStatus.FAILED)
             return
+        with self._cond:
+            self._active = None
         shutil.rmtree(work, ignore_errors=True)
         keep = set(self.order()) if self.order else set()
         self.cache.prune(keep | {video_id})

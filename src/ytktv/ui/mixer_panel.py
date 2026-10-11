@@ -270,8 +270,13 @@ class MixerPanel(QWidget):
 
         buses = QHBoxLayout()
         buses.setSpacing(0)
+        meter_column = QVBoxLayout()
+        meter_column.setSpacing(2)
         self.meter = LedMeter()
-        buses.addWidget(self.meter)
+        self.meter.setToolTip("Total output level: music and microphones together")
+        meter_column.addWidget(self.meter, stretch=1)
+        meter_column.addWidget(QLabel("OUTPUT"), alignment=Qt.AlignmentFlag.AlignHCenter)
+        buses.addLayout(meter_column)
         self.music = _BusStrip("MUSIC", "#8c8c92")
         self.mic_bus = _BusStrip("MICS", "#ececec")
         self.main = _BusStrip("L   MAIN   R", "#e02a2a", count=2)
@@ -336,18 +341,29 @@ class MixerPanel(QWidget):
             lines.append(f"ERR  {audio.error[:26]}")
         else:
             state = "ON" if audio.running else "STOPPED"
-            lines.append(f"MIX  {state}  {audio.sample_rate / 1000:g} kHz")
+            dropped = f"  XRUN {audio.underruns}" if audio.underruns else ""
+            lines.append(f"MIX  {state}  {audio.sample_rate / 1000:g} kHz{dropped}")
         lines.append(f"SEP  {(controller.accelerator or 'Detecting...')[:26]}")
         self.lcd.setText("\n".join(lines))
+
+    def _show_output(self, mic_left: float, mic_right: float) -> None:
+        """Total output: the music from the player plus the microphone bus."""
+        music_left, music_right = self.controller.player.levels()
+        # The two are separate streams mixed by the sound card; their powers add.
+        self.meter.set_levels(
+            (music_left**2 + mic_left**2) ** 0.5, (music_right**2 + mic_right**2) ** 0.5
+        )
 
     def _tick(self) -> None:
         audio = self.controller.audio
         if audio is None:
+            self._show_output(0.0, 0.0)
             return
         levels = audio.levels()
         for strip, peak in zip(self.strips, levels["mics"], strict=False):
             strip.set_level(peak)
-        self.meter.set_levels(*levels["master"])
+        mics = levels["master"]
+        self._show_output(mics[0], mics[1])
 
     def showEvent(self, event: Any) -> None:
         self._timer.start()

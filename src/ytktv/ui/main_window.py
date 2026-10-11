@@ -446,7 +446,7 @@ class MainWindow(QMainWindow):
             "playing": "NOW PLAYING",
             "paused": "PAUSED",
         }
-        self.now_caption.setText(captions[status])
+        self.now_caption.setText((state["loading"] or captions[status]).upper())
         if current:
             singer = f"   ·   {current['singer']}" if current["singer"] else ""
             self.now_title.setText(current["song"]["title"] + singer)

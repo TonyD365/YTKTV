@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 import subprocess
 import threading
@@ -70,6 +71,14 @@ class _TTLCache:
             self._data.pop(key, None)
 
 
+def _video_format(max_height: int) -> str:
+    # Prefer H.264 + AAC: hardware-decoded everywhere and gapless to start.
+    return (
+        f"bestvideo[height<={max_height}][vcodec^=avc1]+bestaudio[ext=m4a]/"
+        f"bestvideo[height<={max_height}]+bestaudio/best[height<={max_height}]/best"
+    )
+
+
 def _ydl(**options: Any) -> Any:
     import yt_dlp
 
@@ -86,6 +95,7 @@ class YouTube:
         self._stream_cache = _TTLCache(_STREAM_TTL)
         self._audio_cache = _TTLCache(_STREAM_TTL)  # video id -> any resolved source
         self._song_cache = _TTLCache(_STREAM_TTL)
+        self._info_cache = _TTLCache(_STREAM_TTL, size=16)  # full yt-dlp info, for downloads
         self._extract_lock = threading.Lock()
 
     def search(self, query: str, limit: int = 24) -> list[Song]:
@@ -134,17 +144,13 @@ class YouTube:
             cached = self._stream_cache.get(key)
             if cached is not None:
                 return cached
-            # Prefer H.264 + AAC: hardware-decoded everywhere and gapless to start.
-            fmt = (
-                f"bestvideo[height<={max_height}][vcodec^=avc1]+bestaudio[ext=m4a]/"
-                f"bestvideo[height<={max_height}]+bestaudio/best[height<={max_height}]/best"
-            )
-            with _ydl(format=fmt) as ydl:
+            with _ydl(format=_video_format(max_height)) as ydl:
                 info = ydl.extract_info(
                     f"https://www.youtube.com/watch?v={video_id}", download=False
                 )
             source: MediaSource = parse_media_source(info)
             self._stream_cache.put(key, source)
+            self._info_cache.put(key, ydl.sanitize_info(info))
             self._audio_cache.put(video_id, source)
             song = entry_to_song(info)
             if song is not None:
@@ -153,7 +159,41 @@ class YouTube:
 
     def forget_stream(self, video_id: str, max_height: int = 1080) -> None:
         self._stream_cache.drop((video_id, max_height))
+        self._info_cache.drop((video_id, max_height))
         self._audio_cache.drop(video_id)
+
+    def download_media(
+        self,
+        video_id: str,
+        dest_dir: Path,
+        max_height: int = 1080,
+        ffmpeg: str | None = None,
+    ) -> Path:
+        """Download the whole song (video and audio in one file) for stutter-free playback."""
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        key = (video_id, max_height)
+        if self._info_cache.get(key) is None:
+            self.resolve(video_id, max_height)
+        info = self._info_cache.get(key)
+        if info is None:
+            raise RuntimeError("no stream information available")
+        options: dict[str, Any] = {
+            "skip_download": False,
+            "format": _video_format(max_height),
+            "outtmpl": str(dest_dir / "media.%(ext)s"),
+            "merge_output_format": "mkv",
+            "noprogress": True,
+            "noplaylist": True,
+        }
+        if ffmpeg:
+            options["ffmpeg_location"] = ffmpeg
+        with _ydl(**options) as ydl:
+            # Reuses the URLs from the earlier extraction instead of asking YouTube again.
+            ydl.process_ie_result(copy.deepcopy(info), download=True)
+        files = [f for f in dest_dir.glob("media.*") if f.suffix not in (".part", ".ytdl")]
+        if not files:
+            raise RuntimeError("the download produced no file")
+        return max(files, key=lambda f: f.stat().st_size)
 
     def download_audio(
         self,

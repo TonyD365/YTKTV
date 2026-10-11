@@ -37,7 +37,7 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.10",
 ]
-package = ["pyinstaller>=6.6"]
+package = ["pyinstaller>=6.6", "uv>=0.8"]
 
 [project.scripts]
 ytktv = "ytktv.__main__:main"

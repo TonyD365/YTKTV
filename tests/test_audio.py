@@ -154,3 +154,36 @@ def test_sfx_are_stereo_normalised_and_deterministic(name):
     assert samples.dtype == np.float32
     assert 0.3 < float(np.max(np.abs(samples))) <= 0.71
     assert bank.get(name) is samples
+
+
+def test_noise_gate_silences_hiss_but_passes_singing_without_clipping_the_start():
+    from ytktv.audio.dsp import NoiseGate
+
+    gate = NoiseGate(SR)
+    rng = np.random.default_rng(1)
+    hiss = (rng.standard_normal(BLOCK * 40) * 0.0008).astype(np.float32)  # about -62 dBFS
+    assert rms(run_blocks(gate.process, hiss)) == 0.0
+
+    voice = sine(220, blocks=20)
+    out = run_blocks(gate.process, voice)
+    np.testing.assert_array_equal(out[:BLOCK], voice[:BLOCK])  # opens on the very first block
+    assert gate.is_open
+
+    # A short pause between words is held open; a long silence fades shut smoothly.
+    pause = np.zeros(int(SR * 0.2), dtype=np.float32)
+    run_blocks(gate.process, pause[: len(pause) // BLOCK * BLOCK])
+    assert gate.is_open
+    tail = run_blocks(gate.process, np.concatenate([hiss] * 4))  # 1.7 s: hold + release
+    assert not gate.is_open and rms(tail[-BLOCK * 10 :]) == 0.0
+    steps = np.abs(np.diff(tail))
+    assert steps.max() < 0.01  # no click when it closes
+
+
+def test_low_cut_removes_rumble_and_keeps_voice():
+    from ytktv.audio.dsp import LowCut
+
+    rumble, voice = sine(25), sine(300)
+    low = run_blocks(LowCut(SR).process, rumble)
+    mid = run_blocks(LowCut(SR).process, voice)
+    assert rms(low[BLOCK * 20 :]) < rms(rumble) * 0.15
+    assert rms(mid[BLOCK * 20 :]) == pytest.approx(rms(voice), rel=0.05)

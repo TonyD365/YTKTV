@@ -270,7 +270,8 @@ class MvWindow(QWidget):
                 fade_in(self.idle, 600)
             self.banner.raise_()
             if state.get("status") == "loading" and current:
-                self.show_banner(f"Loading:  {current['song']['title']}", 30)
+                reason = state.get("loading") or "Loading"
+                self.show_banner(f"{reason}...   {current['song']['title']}", 600)
             else:
                 fade_out(self.banner, 300)
 

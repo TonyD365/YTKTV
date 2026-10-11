@@ -20,9 +20,11 @@ from ytktv.config import Settings
 
 log = logging.getLogger(__name__)
 
-BLOCK = 256
+# 512 frames (about 10 ms at 48 kHz): small enough to sing through comfortably, large
+# enough that the Python mixer never misses a deadline and crackles.
+BLOCK = 512
 # Keep at most this many blocks of microphone audio buffered; more is latency.
-MAX_BUFFERED_BLOCKS = 3
+MAX_BUFFERED_BLOCKS = 2
 
 
 class RingBuffer:
@@ -133,6 +135,7 @@ class AudioEngine:
         self.sample_rate = 48000
         self.mixer = Mixer(settings, self.sample_rate)
         self.error: str | None = None
+        self.underruns = 0  # output blocks the mixer delivered too late
         self._lock = threading.RLock()
         self._output: Any = None
         self._inputs: list[Any] = [None] * len(settings.mics)
@@ -146,6 +149,7 @@ class AudioEngine:
         with self._lock:
             self._stop_locked()
             self.error = None
+            self.underruns = 0
             try:
                 self._start_locked()
             except Exception as exc:
@@ -199,7 +203,9 @@ class AudioEngine:
         )
         self._output.start()
 
-    def _on_output(self, outdata: Any, frames: int, _time: Any, _status: Any) -> None:
+    def _on_output(self, outdata: Any, frames: int, _time: Any, status: Any) -> None:
+        if status and getattr(status, "output_underflow", False):
+            self.underruns += 1
         max_lag = frames * MAX_BUFFERED_BLOCKS
         try:
             inputs = [
