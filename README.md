@@ -160,19 +160,18 @@ python benchmarks/compare.py --base base.json --head head.json
 
 Versions come from git tags; there is no version number in the source.
 
-```bash
-git tag v1.2.3
-git push origin v1.2.3
-```
+1. On GitHub, open **Releases → Draft a new release**.
+2. Choose a new tag such as `v1.2.3` on `main`, keep **Set as the latest release** ticked, and
+   publish.
+3. The `Release` workflow builds the macOS `.pkg`, the Windows installer and the Linux AppImage
+   from that tag and attaches them, together with `SHA256SUMS`, to the release.
 
-The `Release` workflow builds the macOS `.pkg`, the Windows installer and the Linux AppImage,
-writes `SHA256SUMS`, and publishes a GitHub release marked **Latest**. Installed copies check
-`releases/latest` at startup and every six hours, download the installer for their platform,
-verify its checksum, and offer to install once nothing is playing.
+Installed copies check `releases/latest` at startup and every six hours. Once the installers
+are attached they download the one for their platform, verify its checksum, and offer to
+install when nothing is playing. A release marked as a pre-release is not offered as an update.
 
-Tags with a suffix such as `v1.3.0-rc1` are published as pre-releases and are not offered as
-updates. Run the workflow manually (*Actions → Release → Run workflow*) to test the builds
-without publishing.
+Run the workflow manually (*Actions → Release → Run workflow*) to test the builds without
+touching any release.
 
 The macOS package is signed and notarized when the Developer ID secrets listed at the top of
 the macOS build step in `.github/workflows/release.yml` are configured; otherwise it is ad-hoc

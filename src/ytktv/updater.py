@@ -114,12 +114,16 @@ def check_for_update(
     if asset is None:
         return None
     checksums = pick_asset(assets, CHECKSUM_ASSET)
+    if checksums is None:
+        # Installers are attached a while after the release is published; until the
+        # checksums are there too, treat the release as not ready.
+        return None
     return UpdateInfo(
         version=str(parse_version(tag)),
         tag=tag,
         asset_name=str(asset["name"]),
         asset_url=str(asset["browser_download_url"]),
-        checksum_url=str(checksums["browser_download_url"]) if checksums else None,
+        checksum_url=str(checksums["browser_download_url"]),
         notes=str(release.get("body") or ""),
         page_url=str(release.get("html_url") or f"https://github.com/{repo}/releases"),
     )

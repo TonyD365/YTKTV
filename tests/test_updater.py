@@ -76,6 +76,17 @@ def test_check_ignores_same_version_prereleases_and_missing_installers():
     assert updater.check_for_update("1.1.0", fetch=release(), suffix="macos-x86_64.pkg") is None
 
 
+def test_check_waits_until_installers_and_checksums_are_attached():
+    def with_assets(names):
+        assets = [{"name": n, "browser_download_url": f"https://dl.invalid/{n}"} for n in names]
+        return release(assets=assets)
+
+    just_published = with_assets([])
+    assert updater.check_for_update("1.1.0", fetch=just_published, suffix="macos-arm64.pkg") is None
+    no_sums = with_assets(["YTKTV-1.2.0-macos-arm64.pkg"])
+    assert updater.check_for_update("1.1.0", fetch=no_sums, suffix="macos-arm64.pkg") is None
+
+
 def test_check_treats_no_releases_as_up_to_date():
     def not_found(url):
         raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
