@@ -248,6 +248,25 @@ signed.
 To build the macOS package locally: `brew install mpv`, `pip install -e ".[package]"`, then
 `packaging/macos/build_pkg.sh`.
 
+## Contributing
+
+Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Disclaimer
+
+YTKTV is an independent hobby project. It is not affiliated with, endorsed by or sponsored by
+YouTube or Google; "YouTube" is a trademark of Google LLC.
+
+YTKTV does not host, store or distribute any music or video. It plays videos from YouTube on
+your own computer using [yt-dlp](https://github.com/yt-dlp/yt-dlp) and
+[mpv](https://mpv.io), and the tracks it separates are cached only on that computer. Playing
+videos this way may not be permitted by YouTube's Terms of Service, and how you may use
+copyrighted music depends on where you live and where you sing. You are responsible for how you
+use it. It is meant for private, non-commercial use, such as a party at home; a public or
+commercial venue normally needs a licence from the rights holders.
+
+The software is provided "as is", without warranty of any kind; see the [license](LICENSE).
+
 ## License
 
-MIT
+[MIT](LICENSE)

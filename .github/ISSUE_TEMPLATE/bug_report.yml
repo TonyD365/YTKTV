@@ -1,0 +1,54 @@
+name: Bug report
+description: Something does not work the way it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: YTKTV version
+      description: Shown on the Settings page, for example 1.3.0.
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: System
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Installer from the Releases page
+        - From source
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: Graphics card
+      description: Only needed for problems with vocal separation.
+  - type: input
+    id: video
+    attributes:
+      label: YouTube link
+      description: Only needed when a particular song does not play, has no lyrics, or sounds wrong.
+  - type: textarea
+    id: log
+    attributes:
+      label: Log output
+      description: If you can, start YTKTV from a terminal with `--debug` and paste what it prints.
+      render: text
