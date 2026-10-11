@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import subprocess
 import zipfile
 from pathlib import Path
@@ -91,7 +92,9 @@ def test_install_downloads_verifies_and_sets_up(unlock):
     unlock.install(lines.append, fetch=fetch, run=run)
 
     assert unlock.installed()
-    assert unlock.deno.read_bytes() == b"#!binary" and unlock.deno.stat().st_mode & 0o111
+    assert unlock.deno.read_bytes() == b"#!binary"
+    if os.name != "nt":  # Windows has no executable bit
+        assert unlock.deno.stat().st_mode & 0o111
     assert (unlock.server_home / "src" / "generate_once.ts").exists()
     assert not (unlock.root / "README.md").exists()  # only the server folder is kept
     assert any(url.endswith("/tags/2.0.2.zip") for url in requested)  # generator matches the plugin
