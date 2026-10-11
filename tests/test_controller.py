@@ -302,3 +302,75 @@ def test_favorites_toggle_and_persist(tmp_path):
     finally:
         controller.close()
     assert [s.title for s in Library(path).favorites()] == ["Song 2"]
+
+
+def test_guide_vocal_is_clamped_saved_and_sent_to_the_player(ktv):
+    controller, player, _ = ktv
+    controller.set_guide_vocal(30)
+    assert player.guide == 0.3 and controller.state()["guide_vocal"] == 30
+    controller.set_guide_vocal(250)
+    assert controller.settings.guide_vocal == 100 and player.guide == 1.0
+
+
+def test_danmaku_is_cleaned_and_rate_limited(ktv):
+    controller, _, _ = ktv
+    seen = []
+    controller.bus.subscribe(
+        lambda topic, data: seen.append(data["text"]) if topic == "danmaku" else None
+    )
+    assert controller.send_danmaku("  hello \n  room  ")
+    assert not controller.send_danmaku("   ")
+    assert controller.send_danmaku("x" * 500)
+    assert seen == ["hello room", "x" * 60]
+    results = [controller.send_danmaku(f"spam {i}") for i in range(20)]
+    assert results.count(True) == 6 and not results[-1]  # 8 per window, 2 already used
+
+
+def test_lyrics_load_for_the_current_song_and_clear_on_the_next(tmp_path):
+    from ytktv.youtube.lyrics import LyricLine
+
+    controller, player, resolver = make_controller(tmp_path)
+    calls = []
+
+    def lyrics(video_id, max_height, allow_auto):
+        calls.append((video_id, allow_auto))
+        if video_id == make_song(2).video_id:
+            return []
+        return [LyricLine(1.0, 2.0, "la"), LyricLine(2.0, 3.0, "di")]
+
+    resolver.lyrics = lyrics
+    events = []
+    controller.bus.subscribe(lambda topic, data: events.append(data) if topic == "lyrics" else None)
+    try:
+        controller.enqueue(make_song(1))
+        controller.enqueue(make_song(2))
+        wait_for(lambda: controller.state()["lyrics"])
+        assert events[-1]["lines"] == [
+            {"start": 1.0, "end": 2.0, "text": "la"},
+            {"start": 2.0, "end": 3.0, "text": "di"},
+        ]
+        assert events[-1]["id"] == controller.current.id
+
+        player.finish()
+        wait_for(
+            lambda: (
+                controller.current.song.title == "Song 2"
+                and controller.status == PlayStatus.PLAYING
+            )
+        )
+        wait_for(lambda: len(calls) == 2)
+        assert not controller.state()["lyrics"]  # the video has no subtitles: lyrics stay off
+        assert any(e["lines"] == [] for e in events)
+
+        controller.settings.show_lyrics = False
+        controller.enqueue(make_song(3))
+        player.finish()
+        wait_for(
+            lambda: (
+                controller.current.song.title == "Song 3"
+                and controller.status == PlayStatus.PLAYING
+            )
+        )
+        assert len(calls) == 2  # turned off: not even fetched
+    finally:
+        controller.close()

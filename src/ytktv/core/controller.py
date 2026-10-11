@@ -33,6 +33,9 @@ SPEEDS = (0.8, 0.9, 1.0, 1.1, 1.2)
 _POSITION_INTERVAL = 0.5
 _OPEN_RETRIES = 2
 _PRELOAD_AHEAD = 2  # how many upcoming songs to keep downloaded
+_DANMAKU_LENGTH = 60
+_DANMAKU_BURST = 8  # messages allowed per window, across everyone
+_DANMAKU_WINDOW = 4.0
 _INSTRUMENTAL_WAIT = 180.0  # longest a song is held back for its instrumental
 
 
@@ -87,6 +90,8 @@ class KTVController:
         self.loading = ""  # what the room is waiting for while status is LOADING
         self._skip_wait: str | None = None
         self._awaiting_start = False  # play() was called and the first frame is pending
+        self.lyrics: list[Any] = []  # timed lines for the current song, if its video has subtitles
+        self._danmaku_times: list[float] = []
         self._wake = threading.Event()
         self._retries: dict[str, int] = {}
         self._save_timer: threading.Timer | None = None
@@ -100,6 +105,7 @@ class KTVController:
         if preloader is not None:
             preloader.on_change = lambda _video_id: self._emit_state()
         self._apply_volume()
+        player.set_guide(self.settings.guide_vocal / 100.0)
         player.set_audio_device(self.settings.output_device)
 
     # -- queue ------------------------------------------------------------
@@ -219,11 +225,13 @@ class KTVController:
                 self.status = PlayStatus.LOADING if item else PlayStatus.IDLE
                 self.loading = "Loading video" if item else ""
                 self._awaiting_start = False
+                self.lyrics = []
                 self.position = 0.0
                 self.duration = float(item.song.duration) if item else 0.0
                 self.pitch = 0
                 self.speed = 1.0
             self._sync_preload()
+            self.bus.emit("lyrics", {"id": item.id if item else None, "lines": []})
             self._emit_state()
             # Silence the previous song now: the next one may take a while to be ready.
             self.player.stop()
@@ -258,6 +266,7 @@ class KTVController:
                 expected_id = item.id
                 continue
             # Status stays LOADING until the player reports its first position.
+            self._load_lyrics(item)
             self._prefetch_next()
             return
 
@@ -409,6 +418,56 @@ class KTVController:
             self.player.use_instrumental(False)
             self.player.set_channel_mode(self.vocal_mode)
 
+    def set_guide_vocal(self, percent: int) -> None:
+        """How much of the original singer to keep in Instrumental mode (0..100)."""
+        self.settings.guide_vocal = max(0, min(100, int(percent)))
+        self.player.set_guide(self.settings.guide_vocal / 100.0)
+        self._save_soon()
+        self._emit_state()
+
+    def set_lights(self, enabled: bool) -> None:
+        self.settings.lights = bool(enabled)
+        self._save_soon()
+        self._emit_state()
+
+    def send_danmaku(self, text: str) -> bool:
+        """Fly a short message across the MV screen. False when empty or sent too fast."""
+        text = " ".join(str(text).split())[:_DANMAKU_LENGTH]
+        if not text:
+            return False
+        now = time.monotonic()
+        with self._lock:
+            self._danmaku_times = [t for t in self._danmaku_times if now - t < _DANMAKU_WINDOW]
+            if len(self._danmaku_times) >= _DANMAKU_BURST:
+                return False
+            self._danmaku_times.append(now)
+        self.bus.emit("danmaku", {"text": text})
+        return True
+
+    def _load_lyrics(self, item: QueueItem) -> None:
+        fetch = getattr(self.resolver, "lyrics", None)
+        if fetch is None or not self.settings.show_lyrics:
+            return
+
+        def work() -> None:
+            try:
+                lines = fetch(
+                    item.song.video_id,
+                    self.settings.max_height,
+                    self.settings.lyrics_auto_captions,
+                )
+            except Exception:
+                log.info("no lyrics for %s", item.song.video_id, exc_info=True)
+                return
+            with self._lock:
+                if self.current is not item:
+                    return
+                self.lyrics = lines
+            self.bus.emit("lyrics", {"id": item.id, "lines": [line.to_dict() for line in lines]})
+            self._emit_state()
+
+        self._prefetcher.submit(work)
+
     def set_pitch(self, semitones: int) -> None:
         self.pitch = max(-PITCH_RANGE, min(PITCH_RANGE, int(semitones)))
         self.player.set_pitch(self.pitch)
@@ -528,6 +587,9 @@ class KTVController:
             "vocal_mode": self.vocal_mode.value,
             "pitch": self.pitch,
             "speed": self.speed,
+            "guide_vocal": settings.guide_vocal,
+            "lyrics": bool(self.lyrics),
+            "lights": settings.lights,
             "music_volume": settings.music_volume,
             "mic_volume": settings.mic_volume,
             "master_volume": settings.master_volume,

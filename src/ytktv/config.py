@@ -64,6 +64,13 @@ class Settings:
     wait_for_instrumental: bool = True
     # Download the next songs in the queue ahead of time so they play without buffering.
     preload_queue: bool = True
+    # How much of the original singer stays audible in Instrumental mode (0..100).
+    guide_vocal: int = 0
+    # Show the video's own subtitles as karaoke lyrics on the MV screen.
+    show_lyrics: bool = True
+    lyrics_auto_captions: bool = False
+    # Music-reactive glow around the MV screen.
+    lights: bool = True
     # Runtime variant the user said no to downloading; do not ask about it again.
     separation_declined: str = ""
 

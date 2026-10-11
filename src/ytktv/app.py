@@ -171,8 +171,10 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     from ytktv.ui import theme
+    from ytktv.ui.support import collect_garbage_on_gui_thread
 
     app.setStyleSheet(theme.STYLESHEET)
+    collect_garbage_on_gui_thread(app)
 
     have_mpv = _ensure_libmpv(app)
     ffmpeg = bootstrap.ensure_ffmpeg()

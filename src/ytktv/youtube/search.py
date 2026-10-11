@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import subprocess
 import threading
@@ -12,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 from ytktv.core.models import Song
+from ytktv.net import urlopen
+from ytktv.youtube.lyrics import LyricLine, parse_json3, pick_track
 from ytktv.youtube.parse import (
     MediaSource,
     entry_to_song,
@@ -38,6 +41,8 @@ HOT_CATEGORIES: dict[str, str] = {
 
 _SEARCH_TTL = 600.0
 _DOWNLOAD_ATTEMPTS = 3
+# yt-dlp player clients to try in order; None means yt-dlp's own default choice.
+_CLIENT_ATTEMPTS: tuple[tuple[str, ...] | None, ...] = (None, ("android",))
 _STREAM_TTL = 3600.0  # googlevideo URLs live ~6h; stay well inside that
 
 
@@ -96,6 +101,7 @@ class YouTube:
         self._audio_cache = _TTLCache(_STREAM_TTL)  # video id -> any resolved source
         self._song_cache = _TTLCache(_STREAM_TTL)
         self._info_cache = _TTLCache(_STREAM_TTL, size=16)  # full yt-dlp info, for downloads
+        self._lyrics_cache = _TTLCache(_STREAM_TTL)
         self._extract_lock = threading.Lock()
 
     def search(self, query: str, limit: int = 24) -> list[Song]:
@@ -144,10 +150,7 @@ class YouTube:
             cached = self._stream_cache.get(key)
             if cached is not None:
                 return cached
-            with _ydl(format=_video_format(max_height)) as ydl:
-                info = ydl.extract_info(
-                    f"https://www.youtube.com/watch?v={video_id}", download=False
-                )
+            info, ydl = self._extract(video_id, max_height)
             source: MediaSource = parse_media_source(info)
             self._stream_cache.put(key, source)
             self._info_cache.put(key, ydl.sanitize_info(info))
@@ -157,10 +160,54 @@ class YouTube:
                 self._song_cache.put(video_id, song)
             return source
 
+    def _extract(self, video_id: str, max_height: int) -> tuple[dict[str, Any], Any]:
+        """Extract stream info, trying yt-dlp's default clients first, then the fallbacks.
+
+        Some videos (notably "made for kids" ones) are refused by the default
+        clients with "This video is not available". The Android client still
+        serves them, though only as a single 360p stream, so it is the last resort.
+        """
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        first_error: Exception | None = None
+        for clients in _CLIENT_ATTEMPTS:
+            options: dict[str, Any] = {"format": _video_format(max_height)}
+            if clients:
+                options["extractor_args"] = {"youtube": {"player_client": list(clients)}}
+            try:
+                with _ydl(**options) as ydl:
+                    info = ydl.extract_info(url, download=False)
+            except Exception as exc:
+                first_error = first_error or exc
+                continue
+            if clients:
+                log.info("%s is only available through the %s client", video_id, "/".join(clients))
+            return info, ydl
+        assert first_error is not None
+        raise first_error
+
     def forget_stream(self, video_id: str, max_height: int = 1080) -> None:
         self._stream_cache.drop((video_id, max_height))
         self._info_cache.drop((video_id, max_height))
         self._audio_cache.drop(video_id)
+
+    def lyrics(
+        self, video_id: str, max_height: int = 1080, allow_auto: bool = False
+    ) -> list[LyricLine]:
+        """Timed lyrics from the video's subtitles; an empty list when it has none."""
+        key = (video_id, allow_auto)
+        cached = self._lyrics_cache.get(key)
+        if cached is not None:
+            return list(cached)
+        if self._info_cache.get((video_id, max_height)) is None:
+            self.resolve(video_id, max_height)
+        info = self._info_cache.get((video_id, max_height)) or {}
+        url = pick_track(info, allow_auto)
+        lines: list[LyricLine] = []
+        if url:
+            with urlopen(url, timeout=20) as response:
+                lines = parse_json3(json.loads(response.read()))
+        self._lyrics_cache.put(key, lines)
+        return lines
 
     def download_media(
         self,

@@ -341,6 +341,12 @@ class SettingsPage(Page):
             "Download the next songs in the queue ahead of time (smoother playback)",
             "preload_queue",
         )
+        check(display, "Show the video's subtitles as karaoke lyrics", "show_lyrics")
+        check(
+            display,
+            "Use auto-generated captions when a video has no subtitles (often inaccurate)",
+            "lyrics_auto_captions",
+        )
 
         # Vocals
         vocals = card("Vocal Separation")

@@ -21,6 +21,12 @@ microphones into the music with reverb and echo.
   a crossfade, so there is no gap. A song waits for its instrumental before it starts (shown as
   "Preparing instrumental"), and work on songs removed from the queue is cancelled. *Vocal Cut*
   and *L* / *R* (for classic split-track KTV videos) need no preparation.
+- **Guide vocal.** A slider keeps as much of the original singer as you like audible in
+  Instrumental mode, for songs you only half know.
+- **Karaoke lyrics.** When a video has subtitles, they are shown at the bottom of the MV screen
+  and fill with colour line by line as the song plays. Videos without subtitles show no lyrics.
+- **Danmaku and lights.** Anyone can send a short message from the console or a phone and it
+  flies across the MV screen. A glow around the screen pulses with the music.
 - **Smooth playback.** The next songs in the queue are downloaded ahead of time and played from
   disk; only the first song of a session streams, with a loading screen until it is ready.
   Separation runs in its own low-priority process so it cannot disturb the live sound.
@@ -139,6 +145,8 @@ ytktv [--port PORT] [--no-mic] [--windowed] [--debug]
 - Vocal separation needs a moment per song (well under a minute on a recent GPU, a few minutes
   on CPU), so songs queued in advance are ready by the time they play. Results are cached, so a
   song is only processed once. The model (about 60 MB) is downloaded the first time.
+- A few videos, mostly ones marked "made for kids", are only offered by YouTube as a single
+  360p stream. They play, at that quality.
 - YouTube changes often. If videos stop playing, update yt-dlp (`pip install -U yt-dlp`) or
   install the newest YTKTV release.
 

@@ -121,6 +121,7 @@
       <button data-mode="instrumental">Instrumental</button>
       <button data-mode="center_cut">Vocal Cut</button>
     </div>
+    <div class="row"><label>Guide</label><input type="range" min="0" max="100" id="vol-guide"><output id="out-guide"></output></div>
     <h3>Key &amp; Tempo</h3>
     <div class="row"><label>Key</label>
       <div class="stepper"><button id="key-down">&minus;</button><b id="key">0</b><button id="key-up">+</button></div>
@@ -136,8 +137,15 @@
       <button data-sfx="applause">Applause</button>
       <button data-sfx="cheer">Cheer</button>
       <button data-sfx="airhorn">Air Horn</button>
-      <button data-sfx="drumroll" class="wide">Drum Roll</button>
+      <button data-sfx="drumroll">Drum Roll</button>
+      <button id="lights" style="grid-column: span 2">Lights</button>
     </div>
+    <h3>Danmaku</h3>
+    <form class="search" id="danmaku-form">
+      <input type="text" id="danmaku" maxlength="60" placeholder="Send a message to the big screen" autocomplete="off" enterkeyhint="send">
+      <button class="btn" type="submit">Send</button>
+    </form>
+    <div class="chips" id="quick"></div>
     <h3>Your name</h3>
     <div class="row"><input type="text" id="singer" maxlength="40" placeholder="Shown next to your songs"></div>
   </section>
@@ -155,6 +163,7 @@
 const $ = (id) => document.getElementById(id);
 let state = null;
 let dragging = {};
+const SLIDERS = [["music", "music_volume"], ["mic", "mic_volume"], ["guide", "guide_vocal"]];
 
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
@@ -241,10 +250,11 @@ function render() {
   $("key").textContent = (state.pitch > 0 ? "+" : "") + state.pitch;
   $("tempo").textContent = Math.round(state.speed * 100) + "%";
   for (const b of $("modes").children) b.classList.toggle("on", b.dataset.mode === state.vocal_mode);
-  for (const name of ["music", "mic"]) {
-    if (!dragging[name]) $("vol-" + name).value = state[name + "_volume"];
+  for (const [name, key] of SLIDERS) {
+    if (!dragging[name]) $("vol-" + name).value = state[key];
     $("out-" + name).textContent = $("vol-" + name).value;
   }
+  $("lights").classList.toggle("on", state.lights);
   setProgress(state.position, state.duration);
 
   const q = $("queue");
@@ -292,10 +302,23 @@ $("key-up").onclick = () => state && sound({pitch: Math.min(6, state.pitch + 1)}
 $("key-down").onclick = () => state && sound({pitch: Math.max(-6, state.pitch - 1)});
 $("tempo-up").onclick = () => state && sound({speed: Math.min(1.2, state.speed + 0.1)});
 $("tempo-down").onclick = () => state && sound({speed: Math.max(0.8, state.speed - 0.1)});
-for (const name of ["music", "mic"]) {
+for (const [name, key] of SLIDERS) {
   const slider = $("vol-" + name);
   slider.addEventListener("input", () => { dragging[name] = true; $("out-" + name).textContent = slider.value; });
-  slider.addEventListener("change", () => { dragging[name] = false; sound({[name + "_volume"]: +slider.value}); });
+  slider.addEventListener("change", () => { dragging[name] = false; sound({[key]: +slider.value}); });
+}
+$("lights").onclick = () => state && sound({lights: !state.lights});
+async function danmaku(text) {
+  try { await api("/api/danmaku", "POST", {text}); return true; }
+  catch (e) { toast(e.message, true); return false; }
+}
+$("danmaku-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("danmaku").value.trim();
+  if (text && await danmaku(text)) $("danmaku").value = "";
+});
+for (const text of ["👏👏👏", "🔥🔥🔥", "Encore!", "666", "好听！", "再来一首"]) {
+  $("quick").append(el("button", {class: "chip", onclick: () => danmaku(text)}, text));
 }
 $("singer").value = localStorage.getItem("singer") || "";
 $("singer").addEventListener("change", () => localStorage.setItem("singer", $("singer").value));
