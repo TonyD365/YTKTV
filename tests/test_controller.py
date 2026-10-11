@@ -364,10 +364,12 @@ def test_lyrics_load_for_the_current_song_and_clear_on_the_next(tmp_path):
             )
         )
         wait_for(lambda: len(calls) == 2)
-        assert not controller.state()["lyrics"]  # the video has no subtitles: lyrics stay off
+        assert not controller.state()["lyrics"]  # nothing to show for this video
+        assert calls == [(make_song(1).video_id, True), (make_song(2).video_id, True)]
         assert any(e["lines"] == [] for e in events)
 
-        controller.settings.show_lyrics = False
+        controller.set_show_lyrics(False)
+        assert controller.state()["show_lyrics"] is False
         controller.enqueue(make_song(3))
         player.finish()
         wait_for(
@@ -377,6 +379,13 @@ def test_lyrics_load_for_the_current_song_and_clear_on_the_next(tmp_path):
             )
         )
         assert len(calls) == 2  # turned off: not even fetched
+
+        controller.set_show_lyrics(True)  # switched on in the middle of a song
+        wait_for(lambda: controller.state()["lyrics"])
+        assert calls[-1] == (make_song(3).video_id, True)
+        assert events[-1]["lines"] and events[-1]["id"] == controller.current.id
+        controller.set_show_lyrics(False)
+        assert not controller.state()["lyrics"] and events[-1]["lines"] == []
     finally:
         controller.close()
 

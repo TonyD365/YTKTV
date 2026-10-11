@@ -40,8 +40,8 @@ def _base_language(code: str) -> str:
 def pick_track(info: dict[str, Any], allow_auto: bool = False) -> str | None:
     """URL of the best subtitle track in ``json3`` format, or None when there is none.
 
-    Only subtitles uploaded with the video count by default. Automatic captions
-    of music are mostly wrong, so they are used only when *allow_auto* is set.
+    Subtitles uploaded with the video come first. Automatic captions of music are
+    often wrong, so they are only a fallback, and only when *allow_auto* is set.
     """
     sources = [info.get("subtitles") or {}]
     if allow_auto:

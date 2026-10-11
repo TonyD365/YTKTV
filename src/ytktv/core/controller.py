@@ -527,6 +527,22 @@ class KTVController:
         self._save_soon()
         self._emit_state()
 
+    def set_show_lyrics(self, enabled: bool) -> None:
+        """Turn the lyrics on the MV screen on or off, for this song and the following ones."""
+        self.settings.show_lyrics = bool(enabled)
+        with self._lock:
+            item = self.current
+            had_lines = bool(self.lyrics)
+            if not self.settings.show_lyrics:
+                self.lyrics = []
+        if not self.settings.show_lyrics:
+            if had_lines:
+                self.bus.emit("lyrics", {"id": item.id if item else None, "lines": []})
+        elif item is not None and not had_lines:
+            self._load_lyrics(item)
+        self._save_soon()
+        self._emit_state()
+
     def send_danmaku(self, text: str) -> bool:
         """Fly a short message across the MV screen. False when empty or sent too fast."""
         text = " ".join(str(text).split())[:_DANMAKU_LENGTH]
@@ -548,16 +564,13 @@ class KTVController:
 
         def work() -> None:
             try:
-                lines = fetch(
-                    item.song.video_id,
-                    self.settings.max_height,
-                    self.settings.lyrics_auto_captions,
-                )
+                # The video's own subtitles when it has them, automatic captions otherwise.
+                lines = fetch(item.song.video_id, self.settings.max_height, True)
             except Exception:
                 log.info("no lyrics for %s", item.song.video_id, exc_info=True)
                 return
             with self._lock:
-                if self.current is not item:
+                if self.current is not item or not self.settings.show_lyrics:
                     return
                 self.lyrics = lines
             self.bus.emit("lyrics", {"id": item.id, "lines": [line.to_dict() for line in lines]})
@@ -846,6 +859,7 @@ class KTVController:
             "speed": self.speed,
             "guide_vocal": settings.guide_vocal,
             "lyrics": bool(self.lyrics),
+            "show_lyrics": settings.show_lyrics,
             "lights": settings.lights,
             "scoring": settings.scoring,
             "scoring_active": self._keeper is not None,
