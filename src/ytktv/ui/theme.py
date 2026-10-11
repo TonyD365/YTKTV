@@ -108,6 +108,15 @@ QComboBox:hover {{ border-color: {PURPLE}; }}
 QComboBox::drop-down {{ border: none; width: 24px; }}
 QComboBox QAbstractItemView {{ background: {PANEL}; border: 1px solid {PURPLE}; selection-background-color: {PURPLE};
     outline: none; }}
+QMenu {{ background: {PANEL}; border: 1px solid {PURPLE}; padding: 6px; }}
+QMenu::item {{ padding: 9px 22px; border-radius: 6px; font-size: 14px; font-weight: 600; color: {TEXT}; }}
+QMenu::item:selected {{ background: {PURPLE}; }}
+QMenu::item:checked {{ color: {PINK}; }}
+QMenu::item:checked:selected {{ color: {TEXT}; }}
+QMenu::separator {{ height: 1px; background: {LINE}; margin: 6px 8px; }}
+#suggestions {{ background: {PANEL}; border: 1px solid {PURPLE}; outline: none; padding: 4px;
+    selection-background-color: {PURPLE}; selection-color: {TEXT}; }}
+#suggestions::item {{ padding: 7px 12px; }}
 QCheckBox {{ spacing: 10px; font-size: 15px; }}
 QCheckBox::indicator {{ width: 22px; height: 22px; border-radius: 6px; border: 2px solid {LINE}; background: {PANEL}; }}
 QCheckBox::indicator:checked {{ background: {PINK}; border-color: {PINK}; }}

@@ -438,7 +438,10 @@ class MainWindow(QMainWindow):
     def _show_more_modes(self) -> None:
         # Clicking toggles the check mark; put it back to what the state says.
         self.more_modes.setChecked(self._state["vocal_mode"] in {m.value for m in _INSTANT_MODES})
-        self._more_menu.exec(self.more_modes.mapToGlobal(self.more_modes.rect().topLeft()))
+        # The bar sits at the bottom of the window, so the menu opens upwards.
+        above = self.more_modes.mapToGlobal(self.more_modes.rect().topLeft())
+        above.setY(above.y() - self._more_menu.sizeHint().height() - 6)
+        self._more_menu.exec(above)
 
     def _choose_mode(self, mode: VocalMode) -> None:
         self.controller.set_vocal_mode(mode)

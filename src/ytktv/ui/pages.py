@@ -171,6 +171,9 @@ class SearchPage(Page):
         self.completer = QCompleter(self._suggestions, self)
         self.completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
         self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        popup = self.completer.popup()
+        if popup is not None:
+            popup.setObjectName("suggestions")
         self.completer.activated.connect(lambda _text: QTimer.singleShot(0, self.search))
         self.input.setCompleter(self.completer)
         self._typing = QTimer(self)
