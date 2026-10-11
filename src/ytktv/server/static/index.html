@@ -131,6 +131,7 @@
       <button data-act="replay">Replay</button>
       <button data-act="skip">Skip</button>
       <button id="scoring" class="wide">Scoring</button>
+      <button id="show-lyrics" class="wide">Lyrics</button>
     </div>
     <h3>Vocals</h3>
     <div class="pad" id="modes">
@@ -319,6 +320,8 @@ function render() {
   $("lights").classList.toggle("on", state.lights);
   $("scoring").classList.toggle("on", state.scoring);
   $("scoring").textContent = state.scoring ? "Scoring: On" : "Scoring: Off";
+  $("show-lyrics").classList.toggle("on", state.show_lyrics);
+  $("show-lyrics").textContent = state.show_lyrics ? "Lyrics: On" : "Lyrics: Off";
   setProgress(state.position, state.duration);
 
   const q = $("queue");
@@ -373,6 +376,7 @@ for (const [name, key] of SLIDERS) {
 }
 $("lights").onclick = () => state && sound({lights: !state.lights});
 $("scoring").onclick = () => state && sound({scoring: !state.scoring});
+$("show-lyrics").onclick = () => state && sound({show_lyrics: !state.show_lyrics});
 async function danmaku(text) {
   try { await api("/api/danmaku", "POST", {text}); return true; }
   catch (e) { toast(e.message, true); return false; }

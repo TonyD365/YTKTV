@@ -42,8 +42,10 @@ microphones into the music with reverb and echo.
   and *L* / *R* (for classic split-track KTV videos) need no preparation.
 - **Guide vocal.** A slider keeps as much of the original singer as you like audible in
   Instrumental mode, for songs you only half know.
-- **Karaoke lyrics.** When a video has subtitles, they are shown at the bottom of the MV screen
-  and fill with colour line by line as the song plays. Videos without subtitles show no lyrics.
+- **Karaoke lyrics.** The **Lyrics** button in the control bar puts the words at the bottom of
+  the MV screen, filling with colour line by line as the song plays. They come from the
+  video's subtitles, or from YouTube's automatic captions when it has none (those are often
+  inaccurate for singing).
 - **Finding songs.** Suggestions appear as you type, recent searches stay one tap away, and the
   Artists page lists well-known artists by scene. Song cards show whether a song is already
   selected and whether its instrumental is ready, so you can pick one that starts at once.

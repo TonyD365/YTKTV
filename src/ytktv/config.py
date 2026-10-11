@@ -70,8 +70,7 @@ class Settings:
     # How much of the original singer stays audible in Instrumental mode (0..100).
     guide_vocal: int = 0
     # Show the video's own subtitles as karaoke lyrics on the MV screen.
-    show_lyrics: bool = True
-    lyrics_auto_captions: bool = False
+    show_lyrics: bool = True  # the Lyrics button in the control bar
     # Music-reactive glow around the MV screen.
     lights: bool = True
     # Score each song by comparing the microphones with the original singer's melody.

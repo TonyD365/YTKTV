@@ -331,12 +331,19 @@ class MainWindow(QMainWindow):
             "Score each song: the microphones are compared with the original singer's melody"
         )
         self.score_button.clicked.connect(controller.set_scoring)
+        self.lyrics_button = QPushButton("Lyrics")
+        self.lyrics_button.setFixedSize(58, 44)
+        self.lyrics_button.setCheckable(True)
+        self.lyrics_button.setChecked(controller.settings.show_lyrics)
+        self.lyrics_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.lyrics_button.clicked.connect(controller.set_show_lyrics)
         group(
             "PLAYBACK",
             button("⏮", controller.replay, "Replay from the start", round=True),
             self.pause_button,
             button("⏭", controller.skip, "Skip to the next song", round=True),
             self.score_button,
+            self.lyrics_button,
         )
 
         # Key and tempo
@@ -370,15 +377,15 @@ class MainWindow(QMainWindow):
         self.mic_slider = self._volume_slider("mic")
         self.guide_slider = QSlider(Qt.Orientation.Horizontal)
         self.guide_slider.setRange(0, 100)
-        self.guide_slider.setMinimumWidth(70)
+        self.guide_slider.setMinimumWidth(64)
         self.guide_slider.setValue(controller.settings.guide_vocal)
         self.guide_slider.setToolTip(
             "Guide vocal: how much of the original singer stays audible in Instrumental mode"
         )
         self.guide_slider.valueChanged.connect(controller.set_guide_vocal)
-        group("GUIDE VOCAL", self.guide_slider, stretch=1)
-        group("MUSIC VOLUME", self.music_slider, stretch=1)
-        group("MIC VOLUME", self.mic_slider, stretch=1)
+        group("GUIDE", self.guide_slider, stretch=1)
+        group("MUSIC", self.music_slider, stretch=1)
+        group("MIC", self.mic_slider, stretch=1)
 
         # Crowd
         group(
@@ -415,7 +422,7 @@ class MainWindow(QMainWindow):
     def _volume_slider(self, name: str) -> QSlider:
         slider = QSlider(Qt.Orientation.Horizontal)
         slider.setRange(0, 100)
-        slider.setMinimumWidth(86)
+        slider.setMinimumWidth(64)
         slider.setValue(getattr(self.controller.settings, f"{name}_volume"))
         slider.valueChanged.connect(lambda value: self.controller.set_volume(name, value))
         return slider
@@ -587,6 +594,15 @@ class MainWindow(QMainWindow):
         self.tempo_readout.setText(f"{round(state['speed'] * 100)}%")
         self.lights_button.setChecked(state["lights"])
         self.score_button.setChecked(state["scoring"])
+        self.lyrics_button.setChecked(state["show_lyrics"])
+        if state["show_lyrics"] and state["current"] and not state["lyrics"]:
+            tip = "No lyrics for this song: its video has no subtitles or captions"
+        else:
+            tip = (
+                "Lyrics on the MV screen, from the video's subtitles or, without them, "
+                "YouTube's automatic captions (often inaccurate for singing)"
+            )
+        self.lyrics_button.setToolTip(tip)
         if state["scoring"] and not state["separation"]:
             tip = "Scoring needs vocal separation, which is not installed"
         elif state["scoring"] and state["current"] and not state["scoring_active"]:

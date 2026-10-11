@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import colorsys
 import random
+from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QPointF, QRect, QRectF, QSizeF, Qt
@@ -68,7 +70,9 @@ class _TextSprite:
     """Outlined text drawn once into a pixmap, so later frames only copy it.
 
     Drawing text this large takes milliseconds per call and the outline needs nine
-    calls, which is far too slow to repeat on every animation frame.
+    calls, which is far too slow to repeat on every animation frame. Even once is
+    long enough to make the microphones click, so the drawing is cut into short
+    steps (see steps) that can be spread over several frames.
     """
 
     def __init__(
@@ -81,43 +85,76 @@ class _TextSprite:
     ) -> None:
         metrics = QFontMetricsF(font)
         self.width = metrics.horizontalAdvance(text)
-        edge = max(1.5, font.pixelSize() / 14.0)
-        self._pad = edge + 2.0
+        self._font, self._text, self._fill, self._ratio = font, text, fill, ratio
+        self._edge = max(1.5, font.pixelSize() / 14.0) if outline else 0.0
+        self._pad = max(1.5, font.pixelSize() / 14.0) + 2.0
         self._ascent = metrics.ascent()
-        size = QSizeF(self.width + 2 * self._pad, metrics.height() + 2 * self._pad)
-        origin = QPointF(self._pad, self._pad + self._ascent)
+        self._size = QSizeF(self.width + 2 * self._pad, metrics.height() + 2 * self._pad)
+        self.pixmap = QPixmap()
 
-        def layer() -> tuple[QPixmap, QPainter]:
-            pixmap = QPixmap((size * ratio).toSize())
-            pixmap.setDevicePixelRatio(ratio)
-            pixmap.fill(Qt.GlobalColor.transparent)
-            painter = QPainter(pixmap)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.setFont(font)
-            return pixmap, painter
+    def _blank(self) -> QPixmap:
+        pixmap = QPixmap((self._size * self._ratio).toSize())
+        pixmap.setDevicePixelRatio(self._ratio)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        return pixmap
 
-        self.pixmap, painter = layer()
-        if outline:
-            # One dark copy of the text, stamped around the origin, makes the outline.
-            dark, dark_painter = layer()
-            dark_painter.setPen(QColor(6, 3, 16))
-            dark_painter.drawText(origin, text)
-            dark_painter.end()
-            for dx, dy in _OUTLINE:
-                painter.drawPixmap(QPointF(dx * edge, dy * edge), dark)
-        if isinstance(fill, tuple):
-            blend = QLinearGradient(self._pad, 0, self._pad + self.width, 0)
-            blend.setColorAt(0.0, fill[0])
-            blend.setColorAt(1.0, fill[1])
-            painter.setPen(QPen(QBrush(blend), 1))
-        else:
-            painter.setPen(fill)
-        painter.drawText(origin, text)
+    def _write(self, pixmap: QPixmap, pen: QPen | QColor) -> None:
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setFont(self._font)
+        painter.setPen(pen)
+        painter.drawText(QPointF(self._pad, self._pad + self._ascent), self._text)
         painter.end()
+
+    def steps(self) -> Iterator[None]:
+        """Draw the sprite, yielding between pieces of work of a few milliseconds each.
+
+        No painter stays open across a yield: an unfinished run may simply be dropped,
+        and a pixmap must not be destroyed while it is being painted on.
+        """
+        pixmap = self._blank()
+        yield
+        if self._edge:
+            # One dark copy of the text, stamped around the origin, makes the outline.
+            dark = self._blank()
+            self._write(dark, QColor(6, 3, 16))
+            yield
+            for dx, dy in _OUTLINE:
+                painter = QPainter(pixmap)
+                painter.drawPixmap(QPointF(dx * self._edge, dy * self._edge), dark)
+                painter.end()
+                yield
+        if isinstance(self._fill, tuple):
+            blend = QLinearGradient(self._pad, 0, self._pad + self.width, 0)
+            blend.setColorAt(0.0, self._fill[0])
+            blend.setColorAt(1.0, self._fill[1])
+            self._write(pixmap, QPen(QBrush(blend), 1))
+        else:
+            self._write(pixmap, self._fill)
+        self.pixmap = pixmap
+
+    def finish(self) -> _TextSprite:
+        """Draw everything now."""
+        for _ in self.steps():
+            pass
+        return self
 
     def draw(self, painter: QPainter, x: float, baseline: float) -> None:
         """Paint with the text starting at *x* on *baseline*."""
         painter.drawPixmap(QPointF(x - self._pad, baseline - self._pad - self._ascent), self.pixmap)
+
+
+@dataclass(slots=True)
+class _LineArt:
+    """One lyric line, drawn and ready to be copied to the screen."""
+
+    line: _TextSprite  # in white
+    sung: _TextSprite  # the same text in the "sung" colours
+    upcoming: _TextSprite | None  # the line after it, shown smaller underneath
+    x: float  # where the line starts, so that it is centred
+
+
+_DONE = object()
 
 
 class LyricsOverlay(_Overlay):
@@ -128,18 +165,18 @@ class LyricsOverlay(_Overlay):
         self._lines: list[LyricLine] = []
         self._position = 0.0
         self._shown: tuple[int, int] | None = None  # (line index, progress in 1/200ths)
-        # Each line is drawn once (see _TextSprite); frames in between only copy it.
-        self._cache_key: tuple[int, int, int, float] | None = None
-        self._line: _TextSprite | None = None  # the current line in white
-        self._sung: _TextSprite | None = None  # the same line in the "sung" colours
-        self._next: _TextSprite | None = None  # the line coming up, shown smaller
-        self._text_x = 0.0
-        self._text_width = 0.0
+        # Each line is drawn once (see _TextSprite) and frames in between only copy it.
+        # The drawing is done a step per frame while the line before it is still being
+        # sung, so nothing slow is left to do at the moment the lines change.
+        self._art: dict[int, _LineArt] = {}
+        self._job: tuple[int, Iterator[None]] | None = None
+        self._geometry: tuple[int, int, float] | None = None
 
     def set_lines(self, lines: list[dict[str, Any]]) -> None:
         self._lines = [LyricLine(float(d["start"]), float(d["end"]), str(d["text"])) for d in lines]
         self._shown = None
-        self._cache_key = None
+        self._art.clear()
+        self._job = None
         self.setVisible(bool(self._lines))
         self.update()
 
@@ -159,16 +196,16 @@ class LyricsOverlay(_Overlay):
 
     def set_time(self, position: float) -> None:
         self._position = position
+        self._draw_ahead()
         current = self._current()
         shown = (current[0], int(current[1] * 200)) if current else None
         if shown == self._shown:  # repaint only when something visibly changed
             return
         previous, self._shown = self._shown, shown
-        if previous and shown and previous[0] == shown[0] and self._cache_key is not None:
+        art = self._art.get(shown[0]) if shown else None
+        if previous and shown and previous[0] == shown[0] and art is not None:
             # Same line, more of it sung: only the strip between the two positions changed.
-            edges = [
-                self._text_x + self._text_width * step / 200 for step in (previous[1], shown[1])
-            ]
+            edges = [art.x + art.line.width * step / 200 for step in (previous[1], shown[1])]
             left, right = int(min(edges)) - 2, int(max(edges)) + 3
             self.update(QRect(left, 0, right - left, self.height()))
         else:
@@ -184,47 +221,80 @@ class LyricsOverlay(_Overlay):
             width = QFontMetricsF(font).horizontalAdvance(text)
         return font, width
 
-    def _prepare(self, index: int) -> None:
-        """Draw line *index* and the one after it into sprites, unless already done."""
+    def _check_geometry(self) -> None:
+        geometry = (self.width(), self.height(), self.devicePixelRatioF())
+        if geometry != self._geometry:  # another screen or size: everything is drawn again
+            self._geometry = geometry
+            self._art.clear()
+            self._job = None
+
+    def _build(self, index: int) -> Iterator[None]:
+        """Draw line *index*, and the smaller preview of the line after it, in steps."""
         ratio = self.devicePixelRatioF()
-        key = (index, self.width(), self.height(), ratio)
-        if key == self._cache_key:
-            return
-        self._cache_key = key
         w, h = float(self.width()), float(self.height())
         line = self._lines[index]
         font, width = self._fitted_font(line.text, h * 0.36, w * 0.92)
-        self._text_x, self._text_width = (w - width) / 2, width
-        self._line = _TextSprite(font, line.text, QColor("white"), ratio)
-        self._sung = _TextSprite(
+        white = _TextSprite(font, line.text, QColor("white"), ratio)
+        sung = _TextSprite(
             font, line.text, (QColor(theme.PINK), QColor(theme.CYAN)), ratio, outline=False
         )
-        self._next = None
+        upcoming = None
         if index + 1 < len(self._lines):
-            upcoming = self._lines[index + 1]
-            if upcoming.start - line.end < 8.0:  # not across an instrumental break
-                next_font, _width = self._fitted_font(upcoming.text, h * 0.24, w * 0.88)
-                self._next = _TextSprite(next_font, upcoming.text, QColor("white"), ratio)
+            following = self._lines[index + 1]
+            if following.start - line.end < 8.0:  # not across an instrumental break
+                next_font, _width = self._fitted_font(following.text, h * 0.24, w * 0.88)
+                upcoming = _TextSprite(next_font, following.text, QColor("white"), ratio)
+        for sprite in (white, sung, upcoming):
+            if sprite is not None:
+                yield from sprite.steps()
+                yield
+        self._art[index] = _LineArt(white, sung, upcoming, (w - width) / 2)
+
+    def _draw_ahead(self) -> None:
+        """Do one step of drawing for the line on screen or the one that follows it."""
+        self._check_geometry()
+        first = line_at(self._lines, self._position)
+        wanted = [i for i in (first, first + 1) if first >= 0 and i < len(self._lines)]
+        for index in [i for i in self._art if i not in wanted]:
+            del self._art[index]
+        if self._job is not None and self._job[0] not in wanted:
+            self._job = None
+        if self._job is None:
+            todo = next((i for i in wanted if i not in self._art), None)
+            if todo is None:
+                return
+            self._job = (todo, self._build(todo))
+        if next(self._job[1], _DONE) is _DONE:
+            self._job = None
+
+    def _ready(self, index: int) -> _LineArt:
+        """The drawn line, finishing it now if playback got here before it was done."""
+        self._check_geometry()
+        if index not in self._art:
+            job = self._job[1] if self._job and self._job[0] == index else self._build(index)
+            for _ in job:
+                pass
+            if self._job and self._job[0] == index:
+                self._job = None
+        return self._art[index]
 
     def paintEvent(self, _event: QPaintEvent) -> None:
         current = self._current()
         if current is None:
             return
         index, progress = current
-        self._prepare(index)
-        if self._line is None or self._sung is None:
-            return
+        art = self._ready(index)
         painter = QPainter(self)
         w, h = float(self.width()), float(self.height())
         baseline = h * 0.46
-        self._line.draw(painter, self._text_x, baseline)
-        if self._next is not None:
+        art.line.draw(painter, art.x, baseline)
+        if art.upcoming is not None:
             painter.setOpacity(0.6)
-            self._next.draw(painter, (w - self._next.width) / 2, h * 0.84)
+            art.upcoming.draw(painter, (w - art.upcoming.width) / 2, h * 0.84)
             painter.setOpacity(1.0)
         if progress > 0:
-            painter.setClipRect(QRectF(self._text_x, 0, self._text_width * progress, h))
-            self._sung.draw(painter, self._text_x, baseline)
+            painter.setClipRect(QRectF(art.x, 0, art.line.width * progress, h))
+            art.sung.draw(painter, art.x, baseline)
 
 
 class DanmakuOverlay(_Overlay):
@@ -286,7 +356,8 @@ class DanmakuOverlay(_Overlay):
         lane_height = self.height() / DANMAKU_LANES
         for item in self._items:
             if item["sprite"] is None or item["sprite"][0] != key:
-                item["sprite"] = (key, _TextSprite(font, item["text"], item["color"], key[1]))
+                sprite = _TextSprite(font, item["text"], item["color"], key[1]).finish()
+                item["sprite"] = (key, sprite)
             item["sprite"][1].draw(painter, item["x"], lane_height * (item["lane"] + 0.74))
 
 
