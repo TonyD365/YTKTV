@@ -1,0 +1,84 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ytktv"
+dynamic = ["version"]
+description = "Turn any computer into a karaoke (KTV) machine powered by YouTube."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "TonyD365" }]
+dependencies = [
+    "PySide6-Essentials>=6.6",
+    "mpv>=1.0.7",
+    "yt-dlp>=2025.1.1",
+    "sounddevice>=0.4.6",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "qrcode>=7.4",
+    "platformdirs>=4.0",
+    "imageio-ffmpeg>=0.5",
+    "packaging>=23.0",
+    "certifi",
+    "py7zr>=0.21; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+separation = ["audio-separator[cpu]>=0.30", "audioread"]
+separation-cuda = ["audio-separator[gpu]>=0.30", "audioread"]
+dev = [
+    "pytest>=8.0",
+    "pytest-qt>=4.4",
+    "pytest-benchmark>=4.0",
+    "httpx>=0.27",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+package = ["pyinstaller>=6.6"]
+
+[project.scripts]
+ytktv = "ytktv.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/TonyD365/YTKTV"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+fallback_version = "0.0.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/ytktv/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ytktv"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["src/ytktv/_version.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Qt style sheets read best one rule per line.
+"src/ytktv/ui/theme.py" = ["E501"]
+"src/ytktv/ui/mixer_panel.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+ignore_missing_imports = true
+check_untyped_defs = true
+exclude = ["_version\\.py$"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+qt_api = "pyside6"
