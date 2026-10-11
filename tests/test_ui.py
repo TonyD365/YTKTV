@@ -209,8 +209,8 @@ def test_lyrics_overlay_follows_playback_time(qtbot):
     assert not overlay.isVisible() and not overlay.has_lines()
 
 
-def test_lyrics_overlay_draws_each_line_once(qtbot, monkeypatch):
-    """Drawing a line is slow, so frames within a line must reuse what was drawn."""
+def test_lyrics_overlay_draws_lines_once_and_ahead_of_time(qtbot, monkeypatch):
+    """Drawing a line is slow: it happens once, in steps, before the line is needed."""
     from ytktv.ui import mv_overlays
 
     built = []
@@ -228,25 +228,49 @@ def test_lyrics_overlay_draws_each_line_once(qtbot, monkeypatch):
         [
             {"start": 0.0, "end": 4.0, "text": "first"},
             {"start": 4.0, "end": 8.0, "text": "second"},
+            {"start": 8.0, "end": 12.0, "text": "third"},
         ]
     )
     overlay.show()
-    for step in range(30):
-        overlay.set_time(0.5 + step * 0.1)
+    for step in range(100):  # frames while the first line is sung
+        overlay.set_time(0.5 + step * 0.03)
         overlay.grab()
-    assert sorted(built) == ["first", "first", "second"]  # white, sung, and the next line
+    # The first line (white, sung, preview of the second) and already the second one.
+    assert sorted(built) == ["first", "first", "second", "second", "second", "third"]
+    assert overlay._job is None and sorted(overlay._art) == [0, 1]
 
     filled = overlay.grab().toImage()
     overlay.set_time(0.0)
     assert overlay.grab().toImage() != filled  # the sung part still follows the time
 
     built.clear()
-    overlay.set_time(5.0)
+    overlay._art.pop(0)  # as when playback moves on
+    overlay._position = 5.0
     overlay.grab()
-    assert sorted(built) == ["second", "second"]
+    assert built == []  # changing to the second line needs no drawing at all
+
     overlay.resize(1000, 250)  # a different screen size needs the lines drawn again
     overlay.grab()
-    assert sorted(built) == ["second"] * 4
+    assert sorted(built) == ["second", "second", "third"]
+
+
+def test_lyrics_overlay_finishes_a_line_when_playback_jumps_to_it(qtbot):
+    from ytktv.ui.mv_overlays import LyricsOverlay
+
+    overlay = LyricsOverlay()
+    qtbot.addWidget(overlay)
+    overlay.resize(800, 200)
+    overlay.set_lines(
+        [{"start": i * 4.0, "end": i * 4.0 + 4.0, "text": f"line {i}"} for i in range(6)]
+    )
+    overlay.show()
+    overlay.set_time(1.0)  # one step of line 0 done, far from finished
+    assert 0 not in overlay._art
+    overlay.set_time(17.0)  # a seek to line 4
+    empty = overlay.grab().toImage()
+    empty.fill(0)
+    assert overlay.grab().toImage() != empty and 4 in overlay._art
+    assert all(index in (4, 5) for index in overlay._art)  # older lines are dropped
 
 
 def test_danmaku_flies_across_and_is_removed(qtbot):
