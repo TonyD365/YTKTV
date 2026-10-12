@@ -558,3 +558,57 @@ def test_score_card_grows_for_the_leaderboard(window, qtbot):
     )
     assert mv.score_card.board_rows() == 2 and mv.score_card.height() > alone
     mv.score_card.grab()
+
+
+def test_setup_wizard_applies_each_choice_and_does_not_come_back(window, qtbot, monkeypatch):
+    from ytktv.ui.setup_wizard import OFF, SetupWizard
+
+    main, controller = window
+    monkeypatch.setattr("ytktv.audio.devices.list_inputs", lambda: ["Test Mic", "USB Mic"])
+    monkeypatch.setattr("ytktv.audio.devices.list_outputs", lambda: ["Test Speakers", "HDMI"])
+    placed = []
+    wizard = SetupWizard(controller, lambda: placed.append(1), main)
+    qtbot.addWidget(wizard)
+    assert controller.settings.setup_done is False
+    assert wizard.step_label.text().startswith("STEP 1 OF 3") and not wizard.back.isEnabled()
+
+    wizard.output.setCurrentText("HDMI")
+    wizard._output_chosen(0)
+    assert controller.settings.output_device == "HDMI"
+
+    wizard.next.click()
+    assert wizard.step_label.text().startswith("STEP 2 OF 3") and wizard.back.isEnabled()
+    assert wizard.screen_combo.itemData(0) == -1 and wizard.screen_combo.count() >= 2
+    wizard.screen_combo.setCurrentIndex(1)
+    wizard._screen_chosen(1)
+    assert controller.settings.mv_screen == 0 and placed == [1]
+
+    wizard.next.click()
+    assert wizard.next.text() == "Finish" and wizard._meter.isActive()
+    wizard.mic.setCurrentText("USB Mic")
+    wizard._mic_chosen(0)
+    strip = controller.settings.mics[0]
+    assert strip.enabled and strip.device == "USB Mic"
+    wizard._show_level()
+    assert "not running" in wizard.heard.text()  # no sound card in the tests
+    wizard.mic.setCurrentText(OFF)
+    wizard._mic_chosen(0)
+    assert not strip.enabled and strip.device == "USB Mic"  # switched off, device remembered
+    wizard._show_level()
+    assert wizard.heard.text() == "Channel 1 is off."
+
+    wizard.back.click()
+    assert wizard.step_label.text().startswith("STEP 2 OF 3") and not wizard._meter.isActive()
+    wizard.go(2)
+    wizard.next.click()
+    assert controller.settings.setup_done is True and not wizard.isVisible()
+
+
+def test_setup_wizard_counts_as_done_when_closed_or_skipped(window, qtbot):
+    from ytktv.ui.setup_wizard import SetupWizard
+
+    main, controller = window
+    wizard = SetupWizard(controller, lambda: None, main)
+    qtbot.addWidget(wizard)
+    wizard.reject()
+    assert controller.settings.setup_done is True

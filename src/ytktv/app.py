@@ -314,8 +314,11 @@ def main(argv: list[str] | None = None) -> int:
         hd_setup.status.connect(window.settings_page.set_hd_unlock_status)
         window.settings_page.install_hd_unlock.connect(hd_setup.install)
         hd_setup.publish()
+    window.settings_page.run_setup.connect(window.run_setup)
     window.show()
     window.place_mv()
+    if not settings.setup_done:
+        window.run_setup()
     if not have_mpv:
         window.show_toast("Video playback is unavailable: mpv is not installed.", error=True)
 

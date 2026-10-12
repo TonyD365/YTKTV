@@ -80,6 +80,8 @@ class Settings:
     separation_declined: str = ""
 
     auto_update: bool = True
+    # The first-run setup has been finished or skipped.
+    setup_done: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Settings:
@@ -112,7 +114,11 @@ class SettingsStore:
 
     def _load(self) -> Settings:
         try:
-            return Settings.from_dict(json.loads(self.path.read_text(encoding="utf-8")))
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            # Settings from before the setup wizard existed belong to someone who has
+            # already set everything up by hand.
+            data.setdefault("setup_done", True)
+            return Settings.from_dict(data)
         except FileNotFoundError:
             return Settings()
         except Exception:

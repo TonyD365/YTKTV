@@ -475,6 +475,14 @@ class MainWindow(QMainWindow):
         else:
             self.mv_window.toggle_fullscreen()
 
+    def run_setup(self) -> None:
+        """Open the step-by-step setup (first start, or from Settings)."""
+        from ytktv.ui.setup_wizard import SetupWizard
+
+        self._setup = SetupWizard(self.controller, self.place_mv, self)
+        self._setup.finished.connect(lambda _result: self.mixer_page.refresh_devices())
+        self._setup.open()
+
     def place_mv(self) -> None:
         settings = self.controller.settings
         self.mv_window.place_on_screen(
