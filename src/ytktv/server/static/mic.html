@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0720">
+<title>YTKTV Microphone</title>
+<style>
+  :root {
+    --bg: #0d0720; --panel: #1a1035; --panel-2: #241650; --line: #3a2a70;
+    --text: #f3eeff; --muted: #a99bd6; --pink: #ff3d9a; --cyan: #2ee6ff;
+    --purple: #8b5cff; --gold: #ffc94d; --danger: #ff5470;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: radial-gradient(1200px 500px at 50% -10%, #3a1a7a 0%, var(--bg) 60%) fixed;
+    color: var(--text); font: 16px/1.45 -apple-system, "Segoe UI", Roboto, "PingFang SC", sans-serif;
+    padding: calc(16px + env(safe-area-inset-top)) 18px calc(24px + env(safe-area-inset-bottom));
+  }
+  .brand { font-weight: 900; letter-spacing: 2px; font-size: 20px;
+    background: linear-gradient(90deg, var(--pink), var(--cyan)); -webkit-background-clip: text;
+    background-clip: text; color: transparent; }
+  h1 { font-size: 22px; margin: 14px 0 6px; }
+  p { color: var(--muted); margin: 6px 0; font-size: 14px; }
+  label { display: block; font-size: 11px; letter-spacing: 1.5px; color: var(--cyan);
+    text-transform: uppercase; margin: 18px 0 6px; }
+  input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font-size: 16px; }
+  #toggle { width: 100%; margin-top: 18px; padding: 22px; border: none; border-radius: 18px;
+    font-size: 20px; font-weight: 800; color: white;
+    background: linear-gradient(135deg, var(--pink), var(--purple)); }
+  #toggle.on { background: var(--panel-2); border: 2px solid var(--danger); color: var(--danger); }
+  #toggle:disabled { opacity: 0.5; }
+  .meter { height: 14px; background: var(--panel-2); border-radius: 7px; margin-top: 18px; overflow: hidden; }
+  .meter > i { display: block; height: 100%; width: 0;
+    background: linear-gradient(90deg, #35e05a 0%, #35e05a 70%, var(--gold) 85%, var(--danger) 100%); }
+  .card { margin-top: 14px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 12px 14px; }
+  .card b { display: block; font-size: 16px; }
+  .card span { color: var(--muted); font-size: 13px; }
+  .error { border-color: var(--danger); }
+  .error b { color: var(--danger); }
+  ul { color: var(--muted); font-size: 13px; padding-left: 18px; margin: 14px 0 0; }
+</style>
+</head>
+<body>
+  <div class="brand">YTKTV</div>
+  <h1>Use this phone as a microphone</h1>
+  <p>Your voice is sent to the karaoke computer and mixed in like any other microphone.</p>
+
+  <label for="name">Name shown on the mixer</label>
+  <input type="text" id="name" maxlength="24" placeholder="For example: Tony">
+
+  <button id="toggle">Start microphone</button>
+  <div class="meter"><i id="level"></i></div>
+
+  <div class="card" id="status"><b>Not started</b><span>Press the button and allow the microphone.</span></div>
+
+  <ul>
+    <li>On the computer, open <b>Mixer</b> and choose this phone on a channel.</li>
+    <li>Keep the phone away from the speakers, or it will feed back.</li>
+    <li>A phone on Wi-Fi is always a little behind a wired microphone.</li>
+    <li>Keep this page open and the screen on while you sing.</li>
+  </ul>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const PACKET = 240;  // samples per packet: 5 ms at 48 kHz
+
+// Runs on the audio thread: collects the microphone into 16-bit packets.
+const WORKLET = `
+class Tap extends AudioWorkletProcessor {
+  constructor() { super(); this.packet = new Int16Array(${PACKET}); this.filled = 0; }
+  process(inputs) {
+    const samples = inputs[0] && inputs[0][0];
+    if (samples) {
+      for (let i = 0; i < samples.length; i++) {
+        const v = Math.max(-1, Math.min(1, samples[i]));
+        this.packet[this.filled++] = v < 0 ? v * 32768 : v * 32767;
+        if (this.filled === this.packet.length) {
+          this.port.postMessage(this.packet.buffer.slice(0));
+          this.filled = 0;
+        }
+      }
+    }
+    return true;
+  }
+}
+registerProcessor("tap", Tap);`;
+
+let context = null, stream = null, socket = null, wakeLock = null, pinger = null;
+let roundTrip = null, peak = 0;
+
+function show(title, detail, error) {
+  const box = $("status");
+  box.className = "card" + (error ? " error" : "");
+  box.replaceChildren();
+  const b = document.createElement("b"); b.textContent = title;
+  const s = document.createElement("span"); s.textContent = detail || "";
+  box.append(b, s);
+}
+
+function send(buffer) {
+  // If the network stalls, drop sound instead of queueing it: late sound is worse than none.
+  if (socket && socket.readyState === 1 && socket.bufferedAmount < 8192) socket.send(buffer);
+  const samples = new Int16Array(buffer);
+  let loudest = 0;
+  for (let i = 0; i < samples.length; i += 4) loudest = Math.max(loudest, Math.abs(samples[i]));
+  peak = Math.max(peak * 0.9, loudest / 32768);
+  $("level").style.width = Math.min(100, Math.sqrt(peak) * 100) + "%";
+}
+
+async function start() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error("This browser does not allow the microphone on this page.");
+  }
+  // Everything a phone does to "improve" calls is switched off: it costs time and
+  // changes the voice.
+  stream = await navigator.mediaDevices.getUserMedia({audio: {
+    echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+    channelCount: 1, sampleRate: 48000, latency: 0,
+  }});
+  const Context = window.AudioContext || window.webkitAudioContext;
+  try { context = new Context({latencyHint: "interactive", sampleRate: 48000}); }
+  catch (e) { context = new Context({latencyHint: "interactive"}); }
+  await context.resume();
+  const input = context.createMediaStreamSource(stream);
+  const silent = context.createGain();
+  silent.gain.value = 0;  // keeps the graph running without playing the voice on the phone
+  silent.connect(context.destination);
+
+  if (context.audioWorklet) {
+    const url = URL.createObjectURL(new Blob([WORKLET], {type: "application/javascript"}));
+    await context.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    const tap = new AudioWorkletNode(context, "tap", {numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1});
+    tap.port.onmessage = (event) => send(event.data);
+    input.connect(tap);
+    tap.connect(silent);
+  } else {
+    // Older browsers: larger blocks, so a little more delay.
+    const tap = context.createScriptProcessor(256, 1, 1);
+    tap.onaudioprocess = (event) => {
+      const samples = event.inputBuffer.getChannelData(0);
+      const packet = new Int16Array(samples.length);
+      for (let i = 0; i < samples.length; i++) {
+        const v = Math.max(-1, Math.min(1, samples[i]));
+        packet[i] = v < 0 ? v * 32768 : v * 32767;
+      }
+      send(packet.buffer);
+    };
+    input.connect(tap);
+    tap.connect(silent);
+  }
+
+  socket = new WebSocket("wss://" + location.host + "/ws");
+  socket.binaryType = "arraybuffer";
+  socket.onopen = () => {
+    socket.send(JSON.stringify({name: $("name").value, rate: Math.round(context.sampleRate)}));
+    show("Connected", "Now choose this phone on a channel of the mixer.");
+    pinger = setInterval(() => {
+      if (socket && socket.readyState === 1) socket.send(JSON.stringify({ping: performance.now()}));
+    }, 1000);
+  };
+  socket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if ("pong" in message) { roundTrip = performance.now() - message.pong; return; }
+    const where = message.channel
+      ? `On mixer channel ${message.channel}`
+      : `Waiting: choose "${message.name}" on a channel of the mixer`;
+    const network = roundTrip === null ? "" : `  ·  network ${Math.round(roundTrip / 2)} ms`;
+    show(where, `Buffer ${message.buffer_ms} ms${network}  ·  ${message.gaps} gaps`);
+  };
+  socket.onclose = () => { if (context) { stop(); show("Disconnected", "The connection to the computer was lost. Start again.", true); } };
+
+  if (navigator.wakeLock) { try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) { /* optional */ } }
+  localStorage.setItem("mic-name", $("name").value);
+}
+
+function stop() {
+  clearInterval(pinger);
+  if (socket) { socket.onclose = null; socket.close(); }
+  if (stream) stream.getTracks().forEach((track) => track.stop());
+  if (context) context.close();
+  if (wakeLock) wakeLock.release().catch(() => {});
+  context = stream = socket = wakeLock = null;
+  roundTrip = null;
+  $("level").style.width = "0";
+  $("toggle").textContent = "Start microphone";
+  $("toggle").classList.remove("on");
+  $("name").disabled = false;
+}
+
+$("name").value = localStorage.getItem("mic-name") || "";
+$("toggle").onclick = async () => {
+  if (context) { stop(); show("Stopped", "Press the button to start again."); return; }
+  $("toggle").disabled = true;
+  try {
+    await start();
+    $("toggle").textContent = "Stop microphone";
+    $("toggle").classList.add("on");
+    $("name").disabled = true;
+  } catch (error) {
+    stop();
+    const denied = error && (error.name === "NotAllowedError" || error.name === "SecurityError");
+    show("Could not start the microphone",
+         denied ? "Allow the microphone for this page in the browser, then try again." : String(error.message || error), true);
+  }
+  $("toggle").disabled = false;
+};
+</script>
+</body>
+</html>

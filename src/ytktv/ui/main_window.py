@@ -569,6 +569,8 @@ class MainWindow(QMainWindow):
             self.show_toast(f"Score: {payload['points']}  ·  {payload['grade']}")
         elif topic == "mixer":
             self.mixer_page.apply_state()
+        elif topic == "phones":
+            self.mixer_page.refresh_devices()  # a phone microphone connected or left
 
     def _apply_position(self, position: float, duration: float) -> None:
         self.progress.setValue(int(position / duration * 1000) if duration > 0 else 0)

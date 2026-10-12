@@ -15,6 +15,7 @@ import numpy as np
 
 from ytktv.audio import devices
 from ytktv.audio.dsp import Limiter, MicChain
+from ytktv.audio.phone_mic import PhoneMics, is_phone
 from ytktv.audio.sfx import SfxBank
 from ytktv.config import Settings
 from ytktv.separation import pitch_core
@@ -172,8 +173,9 @@ class Mixer:
 
 
 class AudioEngine:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, phones: PhoneMics | None = None) -> None:
         self.settings = settings
+        self.phones = phones  # phones connected as microphones, when the app has them
         self.sample_rate = 48000
         self.mixer = Mixer(settings, self.sample_rate)
         self.error: str | None = None
@@ -182,6 +184,7 @@ class AudioEngine:
         self._output: Any = None
         self._inputs: list[Any] = [None] * len(settings.mics)
         self._rings: list[RingBuffer | None] = [None] * len(settings.mics)
+        self._phone_names: list[str | None] = [None] * len(settings.mics)
 
     @property
     def running(self) -> bool:
@@ -206,10 +209,17 @@ class AudioEngine:
         out_index = devices.find_device(settings.output_device, output=True)
         self.sample_rate = devices.default_sample_rate(out_index, output=True)
         self.mixer = Mixer(settings, self.sample_rate)
+        if self.phones is not None:
+            self.phones.set_rate(self.sample_rate)
 
         for i, mic in enumerate(settings.mics):
             self._rings[i] = None
+            self._phone_names[i] = None
             if not (settings.mic_monitor and mic.enabled):
+                continue
+            if is_phone(mic.device) and self.phones is not None:
+                # No sound card behind this channel: its sound arrives over the network.
+                self._phone_names[i] = mic.device
                 continue
             ring = RingBuffer(self.sample_rate)
 
@@ -250,9 +260,14 @@ class AudioEngine:
             self.underruns += 1
         max_lag = frames * MAX_BUFFERED_BLOCKS
         try:
-            inputs = [
-                ring.read(frames, max_lag) if ring is not None else None for ring in self._rings
-            ]
+            inputs: list[np.ndarray | None] = []
+            for ring, phone in zip(self._rings, self._phone_names, strict=True):
+                if ring is not None:
+                    inputs.append(ring.read(frames, max_lag))
+                elif phone is not None and self.phones is not None:
+                    inputs.append(self.phones.read(phone, frames))
+                else:
+                    inputs.append(None)
             outdata[:] = self.mixer.mix(inputs, frames)
         except Exception:
             # Never let an exception kill the stream; a silent block is the safe failure.
@@ -270,6 +285,7 @@ class AudioEngine:
         self._output = None
         self._inputs = [None] * len(self.settings.mics)
         self._rings = [None] * len(self.settings.mics)
+        self._phone_names = [None] * len(self.settings.mics)
 
     def stop(self) -> None:
         with self._lock:

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv.audio import devices
+from ytktv.audio.phone_mic import is_phone
 from ytktv.config import MicSettings
 from ytktv.core.controller import KTVController
 from ytktv.ui.console_widgets import Fader, Knob, Led, LedMeter, XlrJack
@@ -159,6 +160,9 @@ class ChannelStrip(_StripFrame):
     def set_devices(self, names: list[str]) -> None:
         self.device.blockSignals(True)
         self.device.clear()
+        if is_phone(self.mic.device) and self.mic.device not in names:
+            # A phone that has left stays chosen, so it is back as soon as it reconnects.
+            names = [*names, str(self.mic.device)]
         self.device.addItems([OFF, DEFAULT, *names])
         if not self.mic.enabled:
             self.device.setCurrentText(OFF)
@@ -345,7 +349,7 @@ class MixerPanel(QWidget):
     # -- data flow --------------------------------------------------------
 
     def refresh_devices(self) -> None:
-        inputs = devices.list_inputs()
+        inputs = [*devices.list_inputs(), *self.controller.phone_mic_names()]
         for strip in self.strips:
             strip.set_devices(inputs)
         self.output.blockSignals(True)

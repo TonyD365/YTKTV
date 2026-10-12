@@ -239,8 +239,12 @@ def main(argv: list[str] | None = None) -> int:
     audio = None
     if not args.no_mic:
         from ytktv.audio.engine import AudioEngine
+        from ytktv.audio.phone_mic import PhoneMics
 
-        audio = AudioEngine(settings)
+        phones = PhoneMics()
+        # Called from the server's thread when a phone connects or leaves.
+        phones.on_change = lambda: bus.emit("phones", None)
+        audio = AudioEngine(settings, phones)
         audio.start()
 
     from ytktv.separation import runtime as separation_runtime
@@ -304,6 +308,27 @@ def main(argv: list[str] | None = None) -> int:
     server.start()
     log.info("phone remote: %s", server.url)
 
+    mic_server = None
+    if audio is not None and audio.phones is not None:
+        # Phones as microphones need HTTPS, so they get a small server of their own.
+        try:
+            from ytktv.server import tls
+            from ytktv.server.app import lan_ip
+            from ytktv.server.mic_app import create_mic_app
+
+            certificate = tls.ensure_certificate(data_dir() / "tls", lan_ip())
+            mic_server = ServerThread(
+                create_mic_app(audio.phones, controller.phone_channel),
+                free_port(server.port + 1),
+                certificate=certificate,
+            )
+            mic_server.start()
+            controller.phone_mic_url = mic_server.url
+            log.info("phone microphone: %s", mic_server.url)
+        except Exception:
+            log.exception("the phone microphone page could not be started")
+            mic_server = None
+
     from ytktv.ui.main_window import MainWindow
     from ytktv.ui.mv_window import MvWindow
     from ytktv.ui.update_manager import UpdateManager
@@ -349,6 +374,8 @@ def main(argv: list[str] | None = None) -> int:
 
     def shutdown() -> None:
         server.stop()
+        if mic_server is not None:
+            mic_server.stop()
         mv_window.release()
         controller.close()
         children.stop()  # downloads, HD unlock and separation must not carry on alone

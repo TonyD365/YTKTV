@@ -72,6 +72,8 @@ class KTVController:
         self.bus = bus or EventBus()
         self.stems = stems
         self.audio = audio
+        self.phones = audio.phones if audio is not None else None
+        self.phone_mic_url = ""  # the HTTPS page where a phone becomes a microphone
         self.accelerator = accelerator
         self.preloader = preloader
 
@@ -717,6 +719,17 @@ class KTVController:
         self._save_soon()
         self.bus.emit("mixer", None)
 
+    def phone_mic_names(self) -> list[str]:
+        """The phones connected as microphones, as they are named in device lists."""
+        return self.phones.names() if self.phones is not None else []
+
+    def phone_channel(self, name: str) -> int | None:
+        """The mixer channel (1-based) that takes its sound from the phone *name*."""
+        for index, mic in enumerate(self.settings.mics):
+            if mic.enabled and mic.device == name:
+                return index + 1
+        return None
+
     def set_feedback_guard(self, enabled: bool, sensitivity: str | None = None) -> None:
         """Switch the feedback guard on or off and, optionally, set how eager it is."""
         self.settings.feedback_guard = bool(enabled)
@@ -785,6 +798,7 @@ class KTVController:
             "monitor": self.settings.mic_monitor,
             "feedback_guard": self.settings.feedback_guard,
             "feedback_sensitivity": self.settings.feedback_sensitivity,
+            "phones": self.phone_mic_names(),
             "running": bool(self.audio and self.audio.running),
         }
 
@@ -983,6 +997,7 @@ class KTVController:
             "guide_vocal": settings.guide_vocal,
             "lyrics": bool(self.lyrics),
             "show_lyrics": settings.show_lyrics,
+            "phone_mic_url": self.phone_mic_url,
             "lyrics_offset": self.lyrics_offset,
             "lights": settings.lights,
             "scoring": settings.scoring,

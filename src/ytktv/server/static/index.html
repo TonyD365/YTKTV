@@ -65,6 +65,8 @@
     padding: 9px 12px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 12px; }
   .turn b { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .turn span { font-size: 12px; color: var(--pink); white-space: nowrap; }
+  .miclink { display: block; text-align: center; margin: 4px 0 14px; padding: 12px; border-radius: 12px;
+    border: 1px solid var(--pink); color: var(--pink); font-weight: 700; text-decoration: none; }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
   h3 { font-size: 12px; letter-spacing: 2px; color: var(--cyan); text-transform: uppercase; margin: 16px 0 8px; }
   .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -138,6 +140,7 @@
   </section>
 
   <section id="tab-remote">
+    <a id="mic-link" class="miclink" hidden>Use this phone as a microphone</a>
     <h3>Playback</h3>
     <div class="pad">
       <button data-act="pause" id="btn-pause">Pause</button>
@@ -336,6 +339,8 @@ function render() {
   $("lights").classList.toggle("on", state.lights);
   $("scoring").classList.toggle("on", state.scoring);
   $("scoring").textContent = state.scoring ? "Scoring: On" : "Scoring: Off";
+  $("mic-link").hidden = !state.phone_mic_url;
+  if (state.phone_mic_url) $("mic-link").href = state.phone_mic_url;
   $("show-lyrics").classList.toggle("on", state.show_lyrics);
   $("show-lyrics").textContent = state.show_lyrics ? "Lyrics: On" : "Lyrics: Off";
   const shift = state.lyrics_offset || 0;
