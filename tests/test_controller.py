@@ -423,3 +423,36 @@ def test_queue_reports_how_long_until_each_song(ktv):
 
     controller.speed = 1.2  # faster playback, shorter waits
     assert controller.state()["queue"][0]["wait"] == 125
+
+
+def test_lyrics_timing_is_nudged_per_song_and_remembered(ktv):
+    controller, player, _ = ktv
+    assert controller.nudge_lyrics(1) == 0.0  # nothing is playing: nothing to move
+    controller.enqueue(make_song(1))
+    controller.enqueue(make_song(2))
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    toasts = []
+    controller.bus.subscribe(
+        lambda topic, data: toasts.append(data["message"]) if topic == "toast" else None
+    )
+    assert controller.state()["lyrics_offset"] == 0.0
+    assert controller.nudge_lyrics(1) == 0.1
+    assert controller.nudge_lyrics(1) == 0.2
+    assert controller.nudge_lyrics(-5) == -0.3
+    assert toasts[-1] == "Lyrics 0.3 s later"
+    assert controller.state()["lyrics_offset"] == -0.3
+    assert controller.set_lyrics_offset(99) == 10.0  # kept within reach
+    controller.set_lyrics_offset(0.4)
+
+    player.finish()
+    wait_for(lambda: controller.current is not None and controller.current.song.title == "Song 2")
+    assert controller.lyrics_offset == 0.0  # the next song starts in time
+    assert controller.settings.lyrics_offsets == {make_song(1).video_id: 0.4}
+
+    controller.enqueue(make_song(1))  # sung again later: its timing comes back
+    player.finish()
+    wait_for(lambda: controller.current is not None and controller.current.song.title == "Song 1")
+    assert controller.lyrics_offset == 0.4
+    controller.nudge_lyrics(-4)
+    assert controller.settings.lyrics_offsets == {}  # back in time: nothing to remember
+    assert toasts[-1] == "Lyrics back in time with the subtitles"

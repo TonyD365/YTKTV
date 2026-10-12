@@ -59,6 +59,8 @@ class Settings:
     feedback_sensitivity: str = "low"  # "low", "medium" or "high" (see FeedbackGuard)
     # Effect presets saved by the user: name -> the EQ / reverb / echo values.
     mic_presets: dict[str, dict[str, float]] = field(default_factory=dict)
+    # Lyrics shown earlier (+) or later (-) than their subtitles say, in seconds, per video.
+    lyrics_offsets: dict[str, float] = field(default_factory=dict)
     mic_preset: str = ""  # the preset the channels currently match, if any
 
     default_vocal_mode: str = "instrumental"

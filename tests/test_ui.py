@@ -612,3 +612,18 @@ def test_setup_wizard_counts_as_done_when_closed_or_skipped(window, qtbot):
     qtbot.addWidget(wizard)
     wizard.reject()
     assert controller.settings.setup_done is True
+
+
+def test_lyrics_nudge_buttons_shift_the_lyrics_on_the_mv_screen(window, qtbot):
+    main, controller = window
+    controller.enqueue(make_song(1))
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    qtbot.waitUntil(lambda: main._state["current"] is not None, timeout=3000)
+    main.lyrics_earlier.click()
+    main.lyrics_earlier.click()
+    qtbot.waitUntil(lambda: main.lyrics_button.text() == "+0.2", timeout=3000)
+    assert abs(main.mv_window._lyrics_offset - 0.2) < 1e-6
+    main.lyrics_later.click()
+    main.lyrics_later.click()
+    qtbot.waitUntil(lambda: main.lyrics_button.text() == "Lyrics", timeout=3000)
+    assert main.mv_window._lyrics_offset == 0.0

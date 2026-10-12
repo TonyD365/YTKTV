@@ -145,6 +145,9 @@
       <button data-act="skip">Skip</button>
       <button id="scoring" class="wide">Scoring</button>
       <button id="show-lyrics" class="wide">Lyrics</button>
+      <button id="lyrics-later">Lyrics later</button>
+      <button id="lyrics-offset" class="ghost">In time</button>
+      <button id="lyrics-earlier">Lyrics earlier</button>
     </div>
     <h3>Vocals</h3>
     <div class="pad" id="modes">
@@ -335,6 +338,8 @@ function render() {
   $("scoring").textContent = state.scoring ? "Scoring: On" : "Scoring: Off";
   $("show-lyrics").classList.toggle("on", state.show_lyrics);
   $("show-lyrics").textContent = state.show_lyrics ? "Lyrics: On" : "Lyrics: Off";
+  const shift = state.lyrics_offset || 0;
+  $("lyrics-offset").textContent = shift ? `${shift > 0 ? "+" : "−"}${Math.abs(shift).toFixed(1)} s` : "In time";
   setProgress(state.position, state.duration);
   stateAt = Date.now();
   renderQueue();
@@ -431,6 +436,11 @@ for (const [name, key] of SLIDERS) {
 $("lights").onclick = () => state && sound({lights: !state.lights});
 $("scoring").onclick = () => state && sound({scoring: !state.scoring});
 $("show-lyrics").onclick = () => state && sound({show_lyrics: !state.show_lyrics});
+// Lyrics that run ahead of or behind the singing are moved a tenth of a second at a time.
+const nudgeLyrics = (by) => state && sound({lyrics_offset: Math.round((state.lyrics_offset + by) * 10) / 10});
+$("lyrics-earlier").onclick = () => nudgeLyrics(0.1);
+$("lyrics-later").onclick = () => nudgeLyrics(-0.1);
+$("lyrics-offset").onclick = () => state && sound({lyrics_offset: 0});
 async function danmaku(text) {
   try { await api("/api/danmaku", "POST", {text}); return true; }
   catch (e) { toast(e.message, true); return false; }

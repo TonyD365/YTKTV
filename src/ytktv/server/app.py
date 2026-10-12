@@ -75,6 +75,7 @@ class SoundIn(BaseModel):
     lights: bool | None = None
     scoring: bool | None = None
     show_lyrics: bool | None = None
+    lyrics_offset: float | None = Field(default=None, ge=-10, le=10)
 
 
 class PlaylistIn(BaseModel):
@@ -265,6 +266,8 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
             controller.set_scoring(body.scoring)
         if body.show_lyrics is not None:
             controller.set_show_lyrics(body.show_lyrics)
+        if body.lyrics_offset is not None:
+            controller.set_lyrics_offset(body.lyrics_offset)
         for name in ("music", "mic", "master"):
             value = getattr(body, f"{name}_volume")
             if value is not None:

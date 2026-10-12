@@ -33,6 +33,8 @@ log = logging.getLogger(__name__)
 
 PITCH_RANGE = 6  # semitones either way
 SPEEDS = (0.8, 0.9, 1.0, 1.1, 1.2)
+LYRICS_OFFSET_RANGE = 10.0  # seconds either way
+LYRICS_OFFSETS_KEPT = 500  # songs whose lyric timing is remembered
 UNKNOWN_SONG_SECONDS = 240  # assumed for wait estimates when YouTube gave no length
 _POSITION_INTERVAL = 0.5
 _OPEN_RETRIES = 2
@@ -561,6 +563,39 @@ class KTVController:
         self._save_soon()
         self._emit_state()
 
+    @property
+    def lyrics_offset(self) -> float:
+        """How much earlier (+) or later (-) the current song's lyrics are shown, in seconds."""
+        item = self.current
+        return self.settings.lyrics_offsets.get(item.song.video_id, 0.0) if item else 0.0
+
+    def set_lyrics_offset(self, seconds: float) -> float:
+        """Shift the current song's lyrics; remembered for the next time it is sung."""
+        item = self.current
+        if item is None:
+            return 0.0
+        seconds = round(max(-LYRICS_OFFSET_RANGE, min(LYRICS_OFFSET_RANGE, float(seconds))), 1)
+        offsets = self.settings.lyrics_offsets
+        offsets.pop(item.song.video_id, None)
+        if seconds:
+            offsets[item.song.video_id] = seconds  # most recent last
+            for video_id in list(offsets)[:-LYRICS_OFFSETS_KEPT]:
+                del offsets[video_id]
+        self._save_soon()
+        self._emit_state()
+        return seconds
+
+    def nudge_lyrics(self, steps: int) -> float:
+        """Move the lyrics *steps* tenths of a second earlier (+) or later (-)."""
+        seconds = self.set_lyrics_offset(self.lyrics_offset + 0.1 * steps)
+        if self.current is not None:
+            if seconds:
+                way = "earlier" if seconds > 0 else "later"
+                self.toast(f"Lyrics {abs(seconds):.1f} s {way}")
+            else:
+                self.toast("Lyrics back in time with the subtitles")
+        return seconds
+
     def set_show_lyrics(self, enabled: bool) -> None:
         """Turn the lyrics on the MV screen on or off, for this song and the following ones."""
         self.settings.show_lyrics = bool(enabled)
@@ -935,6 +970,7 @@ class KTVController:
             "guide_vocal": settings.guide_vocal,
             "lyrics": bool(self.lyrics),
             "show_lyrics": settings.show_lyrics,
+            "lyrics_offset": self.lyrics_offset,
             "lights": settings.lights,
             "scoring": settings.scoring,
             "scoring_active": self._keeper is not None,

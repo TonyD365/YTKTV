@@ -59,10 +59,10 @@ class Knob(QWidget):
         self.setToolTip(label)
 
     def sizeHint(self) -> QSize:
-        return QSize(64, 52)
+        return QSize(64, 46)
 
     def minimumSizeHint(self) -> QSize:
-        return QSize(56, 50)
+        return QSize(56, 44)
 
     def value(self) -> float:
         return self._value
@@ -187,7 +187,7 @@ class Fader(QWidget):
         self.default = default
         self._value = default
         self._grab_offset: float | None = None
-        self.setMinimumSize(46, 96)
+        self.setMinimumSize(46, 118)
         self.setCursor(Qt.CursorShape.SizeVerCursor)
 
     def sizeHint(self) -> QSize:

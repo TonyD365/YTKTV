@@ -264,6 +264,7 @@ class MvWindow(QWidget):
         self._position = 0.0
         self._position_at = time.monotonic()
         self._speed = 1.0
+        self._lyrics_offset = 0.0  # seconds the lyrics run ahead of their subtitles
         self._playing = False
         self._frame = time.monotonic()
         self._animator = QTimer(self)
@@ -401,7 +402,7 @@ class MvWindow(QWidget):
             # Position reports arrive twice a second; glide between them.
             position = self._position + (now - self._position_at) * self._speed
             if self.lyrics.has_lines():
-                self.lyrics.set_time(position)
+                self.lyrics.set_time(position + self._lyrics_offset)
             if self.pitch_lane.has_melody():
                 self.pitch_lane.set_time(position)
             if self._lights_enabled and self.level_source is not None:
@@ -485,6 +486,7 @@ class MvWindow(QWidget):
         self._last_status = str(status)
         self._playing = status == "playing"
         self._speed = float(state.get("speed") or 1.0)
+        self._lyrics_offset = float(state.get("lyrics_offset") or 0.0)
         self._lights_enabled = bool(state.get("lights", True))
         if status not in ("playing", "paused"):
             self.lyrics.set_lines([])
