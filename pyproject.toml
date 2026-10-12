@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Turn any computer into a karaoke (KTV) machine powered by YouTube."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { text = "LicenseRef-YTKTV-1.0" }
 authors = [{ name = "TonyD365" }]
 dependencies = [
     "PySide6-Essentials>=6.6",

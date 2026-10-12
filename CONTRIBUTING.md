@@ -51,4 +51,5 @@ The layout of the code is described in the [README](README.md#development).
 
 ## License
 
-By contributing you agree that your work is released under the [MIT License](LICENSE).
+By contributing you agree that your work is released under the [YTKTV License](LICENSE):
+free to use, also in a business, but the software and anything based on it may not be sold.
