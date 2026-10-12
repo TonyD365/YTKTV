@@ -31,6 +31,11 @@ try:
 except OSError as exc:
     sys.exit(f"libmpv at {libmpv} cannot be loaded: {exc}")
 
-analysis = Analysis([str(HERE / "stub.py")], binaries=[(libmpv, ".")], excludes=["tkinter"])
+# The stub's own Python must bring no libraries of its own. Python's OpenSSL in
+# particular has the same file names as the one mpv was built against: with both
+# collected, the pack would end up with libssl from one and libcrypto from the other.
+excludes = ["tkinter", "ssl", "_ssl", "_hashlib", "sqlite3", "_sqlite3", "curses", "_curses",
+            "readline", "lzma", "_lzma", "bz2", "_bz2"]
+analysis = Analysis([str(HERE / "stub.py")], binaries=[(libmpv, ".")], excludes=excludes)
 exe = EXE(PYZ(analysis.pure), analysis.scripts, [], exclude_binaries=True, name="stub", console=True)
 COLLECT(exe, analysis.binaries, analysis.datas, name="mpvpack")
