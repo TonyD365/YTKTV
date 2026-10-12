@@ -340,26 +340,43 @@ class FeedbackGuard:
     SIZE = 2048
     HOP = 1024
     MAX_NOTCHES = 6
-    _STAND_OUT_DB = 22.0  # the peak over the average of the whole spectrum
-    _OVERTONE_DB = 20.0  # the peak over its own second harmonic
     _FLOOR_DB = -45.0  # quieter tones than this are left alone
-    _FRAMES = 5  # how many looks in a row before acting
     _KEEP_SECONDS = 20.0
+    # How sure the guard must be before it cuts:
+    #   (dB the peak stands above the average of the spectrum,
+    #    dB it stands above its own second harmonic,
+    #    looks in a row it must stay put,
+    #    dB it must have grown louder meanwhile,
+    #    looks after which a tone that is not growing is cut anyway)
+    # Feedback keeps getting louder; a whistle or a held note does not. "low" only cuts
+    # a tone that grows, or one that has stayed put for a full second; "medium" cuts any
+    # steady pure tone after a tenth of a second; "high" is quicker and less picky still.
+    SENSITIVITY = {
+        "low": (22.0, 22.0, 5, 6.0, 48),
+        "medium": (22.0, 20.0, 5, 0.0, 5),
+        "high": (18.0, 16.0, 3, 0.0, 3),
+    }
 
-    def __init__(self, sample_rate: float) -> None:
+    def __init__(self, sample_rate: float, sensitivity: str = "low") -> None:
         self.sample_rate = sample_rate
+        self._rules = self.SENSITIVITY["low"]
+        self.set_sensitivity(sensitivity)
         self._buffer = np.zeros(self.SIZE, dtype=np.float32)
         self._window = np.hanning(self.SIZE).astype(np.float32)
         self._scale = 2.0 / float(np.sum(self._window))
         self._pending = 0
         self._clock = 0  # samples seen
-        self._suspect = (-1, 0)  # (spectrum bin, looks in a row)
+        self._suspect = (-1, 0, 0.0)  # (spectrum bin, looks in a row, level at the first)
         self._notches: list[list[float]] = []  # [frequency, depth in dB, last needed at]
         self._sos = np.zeros((0, 6))
         self._zi = np.zeros((0, 2))
         low, high = 150.0, min(10000.0, sample_rate * 0.45)
         self._first = int(low * self.SIZE / sample_rate)
         self._last = int(high * self.SIZE / sample_rate)
+
+    def set_sensitivity(self, name: str) -> None:
+        """Choose "low", "medium" or "high"; anything else counts as "low"."""
+        self._rules = self.SENSITIVITY.get(name, self.SENSITIVITY["low"])
 
     @property
     def notches(self) -> list[tuple[float, float]]:
@@ -369,7 +386,7 @@ class FeedbackGuard:
     def reset(self) -> None:
         self._notches.clear()
         self._rebuild()
-        self._suspect = (-1, 0)
+        self._suspect = (-1, 0, 0.0)
 
     def _rebuild(self) -> None:
         sections = [_peak(self.sample_rate, f, depth, q=25.0) for f, depth, _at in self._notches]
@@ -391,19 +408,17 @@ class FeedbackGuard:
             float(np.max(spectrum[2 * k - 2 : 2 * k + 3])) if 2 * k + 3 < len(spectrum) else 0.0
         )
         pure = 20.0 * math.log10(max(peak, 1e-9) / max(overtone, 1e-9))
-        howling = (
-            level_db > self._FLOOR_DB
-            and stands_out > self._STAND_OUT_DB
-            and pure > self._OVERTONE_DB
-        )
+        stand_out_db, overtone_db, frames, rise_db, steady_frames = self._rules
+        howling = level_db > self._FLOOR_DB and stands_out > stand_out_db and pure > overtone_db
         if not howling:
-            self._suspect = (-1, 0)
+            self._suspect = (-1, 0, 0.0)
         elif abs(k - self._suspect[0]) <= 1:
-            self._suspect = (k, self._suspect[1] + 1)
+            self._suspect = (k, self._suspect[1] + 1, self._suspect[2])
         else:
-            self._suspect = (k, 1)
+            self._suspect = (k, 1, level_db)
+        looks, grown = self._suspect[1], level_db - self._suspect[2]
         changed = False
-        if self._suspect[1] >= self._FRAMES:
+        if looks >= frames and (grown >= rise_db or looks >= steady_frames):
             # Parabolic interpolation between bins gives the frequency more exactly.
             a, b, c = (float(v) for v in spectrum[k - 1 : k + 2])
             shift = 0.5 * (a - c) / (a - 2 * b + c) if (a - 2 * b + c) else 0.0
@@ -417,7 +432,7 @@ class FeedbackGuard:
                 if len(self._notches) >= self.MAX_NOTCHES:
                     self._notches.remove(min(self._notches, key=lambda notch: notch[2]))
                 self._notches.append([freq, -12.0, self._clock])
-            self._suspect = (-1, 0)
+            self._suspect = (-1, 0, 0.0)
             changed = True
         keep = self._KEEP_SECONDS * self.sample_rate
         fresh = [notch for notch in self._notches if self._clock - notch[2] < keep]
@@ -466,10 +481,13 @@ class MicChain:
         self._level = 0.0
         self.peak = 0.0  # post-fader peak of the last block, for meters
 
-    def process(self, x: FloatArray, params: MicParams, guard: bool = True) -> FloatArray:
+    def process(
+        self, x: FloatArray, params: MicParams, guard: bool = True, sensitivity: str = "low"
+    ) -> FloatArray:
         """Process a mono block and return a stereo (n, 2) block."""
         n = len(x)
         if guard:
+            self.guard.set_sensitivity(sensitivity)
             x = self.guard.process(x)
         elif self.guard.notches:
             self.guard.reset()

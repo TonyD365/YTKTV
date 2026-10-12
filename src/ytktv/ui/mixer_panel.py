@@ -281,13 +281,22 @@ class MixerPanel(QWidget):
         buttons.addWidget(self.monitor)
         buttons.addWidget(rescan)
         master.addLayout(buttons)
-        self.guard = QPushButton("FEEDBACK GUARD")
-        self.guard.setCheckable(True)
-        self.guard.setChecked(settings.feedback_guard)
+        self.guard = QComboBox()
+        for text, level in (
+            ("Feedback guard: off", ""),
+            ("Feedback guard: low", "low"),
+            ("Feedback guard: medium", "medium"),
+            ("Feedback guard: high", "high"),
+        ):
+            self.guard.addItem(text, level)
         self.guard.setToolTip(
-            "Find the squeal of a microphone feeding back and cut just that frequency"
+            "Finds the squeal of a microphone feeding back and cuts just that frequency.\n"
+            "Low: only a tone that keeps getting louder, or lasts a full second.\n"
+            "Medium: any steady pure tone after a tenth of a second (also a whistle).\n"
+            "High: quicker and less picky still."
         )
-        self.guard.toggled.connect(self.controller.set_feedback_guard)
+        self.guard.activated.connect(self._guard_chosen)
+        self._show_guard()
         master.addWidget(self.guard)
 
         master.addWidget(QLabel("EFFECT PRESET"))
@@ -398,13 +407,20 @@ class MixerPanel(QWidget):
             strip.refresh()
         self._refresh_presets()
         settings = self.controller.settings
-        self.guard.blockSignals(True)
-        self.guard.setChecked(settings.feedback_guard)
-        self.guard.blockSignals(False)
+        self._show_guard()
         self.music.set_value(settings.music_volume / 100.0)
         self.mic_bus.set_value(settings.mic_volume / 100.0)
         self.main.set_value(settings.master_volume / 100.0)
         self._update_lcd()
+
+    def _show_guard(self) -> None:
+        settings = self.controller.settings
+        level = settings.feedback_sensitivity if settings.feedback_guard else ""
+        self.guard.setCurrentIndex(max(0, self.guard.findData(level)))
+
+    def _guard_chosen(self, _index: int) -> None:
+        level = str(self.guard.currentData())
+        self.controller.set_feedback_guard(bool(level), level or None)
 
     def _update_lcd(self) -> None:
         controller = self.controller
@@ -424,7 +440,7 @@ class MixerPanel(QWidget):
         elif self._notches:
             lines.append(f"FBK  CUTTING {self._notches} FREQ")
         else:
-            lines.append("FBK  ON")
+            lines.append(f"FBK  {controller.settings.feedback_sensitivity.upper()}")
         self.lcd.setText("\n".join(lines))
 
     def _show_output(self, mic_left: float, mic_right: float) -> None:

@@ -56,6 +56,7 @@ class Settings:
     mics: list[MicSettings] = field(default_factory=_default_mics)
     mic_monitor: bool = True  # mix microphones into the output automatically
     feedback_guard: bool = True  # notch out microphone feedback when it starts to squeal
+    feedback_sensitivity: str = "low"  # "low", "medium" or "high" (see FeedbackGuard)
     # Effect presets saved by the user: name -> the EQ / reverb / echo values.
     mic_presets: dict[str, dict[str, float]] = field(default_factory=dict)
     mic_preset: str = ""  # the preset the channels currently match, if any

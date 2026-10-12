@@ -669,8 +669,13 @@ class KTVController:
         self._save_soon()
         self.bus.emit("mixer", None)
 
-    def set_feedback_guard(self, enabled: bool) -> None:
+    def set_feedback_guard(self, enabled: bool, sensitivity: str | None = None) -> None:
+        """Switch the feedback guard on or off and, optionally, set how eager it is."""
         self.settings.feedback_guard = bool(enabled)
+        if sensitivity is not None:
+            if sensitivity not in ("low", "medium", "high"):
+                raise ValueError(f"unknown sensitivity {sensitivity!r}")
+            self.settings.feedback_sensitivity = sensitivity
         self._save_soon()
         self.bus.emit("mixer", None)
 
@@ -731,6 +736,7 @@ class KTVController:
             "preset": self.settings.mic_preset,
             "monitor": self.settings.mic_monitor,
             "feedback_guard": self.settings.feedback_guard,
+            "feedback_sensitivity": self.settings.feedback_sensitivity,
             "running": bool(self.audio and self.audio.running),
         }
 

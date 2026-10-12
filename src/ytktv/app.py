@@ -203,6 +203,14 @@ def main(argv: list[str] | None = None) -> int:
     collect_garbage_on_gui_thread(app)
 
     children.start([data_dir()])
+    if bootstrap.is_frozen():
+        from ytktv import mpv_pack
+
+        # After an update the mpv libraries are still the previous version's. A newer
+        # set fetched during the last run is switched to now, before anything loads it;
+        # otherwise it is fetched in the background for next time.
+        mpv_pack.apply_pending()
+        threading.Thread(target=mpv_pack.fetch_next, name="ytktv-mpv-pack", daemon=True).start()
     have_mpv = _ensure_libmpv(app)
     ffmpeg = bootstrap.ensure_ffmpeg()
 

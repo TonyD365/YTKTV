@@ -144,7 +144,9 @@ class Mixer:
                 self.mic_peaks[i] = 0.0
                 continue
             chain = self.chains[i]
-            bus += chain.process(block, settings.mics[i], settings.feedback_guard)
+            bus += chain.process(
+                block, settings.mics[i], settings.feedback_guard, settings.feedback_sensitivity
+            )
             self.mic_peaks[i] = chain.peak
         bus *= np.float32(settings.mic_volume / 100.0)
         if self._voices:
