@@ -437,6 +437,8 @@ class MixerPanel(QWidget):
         else:
             state = "ON" if audio.running else "STOPPED"
             dropped = f"  XRUN {audio.underruns}" if audio.underruns else ""
+            if audio.mixer.bad_inputs:  # a microphone sent something that was not sound
+                dropped += f"  BAD {audio.mixer.bad_inputs}"
             lines.append(f"MIX  {state}  {audio.sample_rate / 1000:g} kHz{dropped}")
         lines.append(f"SEP  {(controller.accelerator or 'Detecting...')[:26]}")
         if not controller.settings.feedback_guard:
