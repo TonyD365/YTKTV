@@ -144,7 +144,7 @@ class Mixer:
                 self.mic_peaks[i] = 0.0
                 continue
             chain = self.chains[i]
-            bus += chain.process(block, settings.mics[i])
+            bus += chain.process(block, settings.mics[i], settings.feedback_guard)
             self.mic_peaks[i] = chain.peak
         bus *= np.float32(settings.mic_volume / 100.0)
         if self._voices:
@@ -280,4 +280,8 @@ class AudioEngine:
         return pitch_core.detect(samples[-pitch_core.FRAME :], rate)
 
     def levels(self) -> dict[str, Any]:
-        return {"mics": list(self.mixer.mic_peaks), "master": list(self.mixer.master_peak)}
+        return {
+            "mics": list(self.mixer.mic_peaks),
+            "master": list(self.mixer.master_peak),
+            "notches": sum(len(chain.guard.notches) for chain in self.mixer.chains),
+        }

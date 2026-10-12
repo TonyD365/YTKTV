@@ -96,6 +96,7 @@ class MicParams:
     low_db: float = 0.0
     reverb: float = 0.25  # FX send, 0..1
     echo: float = 0.15  # ECHO send, 0..1
+    comp: float = 0.25  # COMP, 0 (off) .. 1 (heavy compression)
     pan: float = 0.0  # -1 left .. +1 right
     fader: float = 0.8  # channel fader 0..1 (0.8 = unity)
     mute: bool = False

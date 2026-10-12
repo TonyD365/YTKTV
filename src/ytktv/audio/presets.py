@@ -24,6 +24,7 @@ LIMITS: dict[str, tuple[float, float]] = {
     "high_db": (-12.0, 12.0),
     "reverb": (0.0, 1.0),
     "echo": (0.0, 1.0),
+    "comp": (0.0, 1.0),
     "pan": (-1.0, 1.0),
     "fader": (0.0, 1.0),
 }

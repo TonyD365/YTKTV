@@ -639,6 +639,11 @@ class KTVController:
         self._save_soon()
         self.bus.emit("mixer", None)
 
+    def set_feedback_guard(self, enabled: bool) -> None:
+        self.settings.feedback_guard = bool(enabled)
+        self._save_soon()
+        self.bus.emit("mixer", None)
+
     def all_presets(self) -> dict[str, dict[str, float]]:
         """Built-in presets first, then the user's own."""
         return {**presets.BUILT_IN, **self.settings.mic_presets}
@@ -695,6 +700,7 @@ class KTVController:
             ],
             "preset": self.settings.mic_preset,
             "monitor": self.settings.mic_monitor,
+            "feedback_guard": self.settings.feedback_guard,
             "running": bool(self.audio and self.audio.running),
         }
 

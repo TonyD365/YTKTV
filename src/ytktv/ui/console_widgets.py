@@ -187,7 +187,7 @@ class Fader(QWidget):
         self.default = default
         self._value = default
         self._grab_offset: float | None = None
-        self.setMinimumSize(46, 150)
+        self.setMinimumSize(46, 96)
         self.setCursor(Qt.CursorShape.SizeVerCursor)
 
     def sizeHint(self) -> QSize:
@@ -309,7 +309,7 @@ class LedMeter(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._levels = [0.0, 0.0]
-        self.setMinimumSize(70, 150)
+        self.setMinimumSize(70, 96)
 
     def sizeHint(self) -> QSize:
         return QSize(76, 180)

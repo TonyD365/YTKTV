@@ -100,6 +100,7 @@ class MicIn(BaseModel):
     high_db: float | None = Field(default=None, ge=-12, le=12)
     reverb: float | None = Field(default=None, ge=0, le=1)
     echo: float | None = Field(default=None, ge=0, le=1)
+    comp: float | None = Field(default=None, ge=0, le=1)
     pan: float | None = Field(default=None, ge=-1, le=1)
     fader: float | None = Field(default=None, ge=0, le=1)
     mute: bool | None = None
