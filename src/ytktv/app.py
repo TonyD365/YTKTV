@@ -86,22 +86,25 @@ def _ensure_libmpv(app: Any) -> bool:
             "(macOS: install Homebrew, then 'brew install mpv') and start YTKTV again.",
         )
         return False
-    if bootstrap.is_frozen():
-        question = (
-            "YTKTV plays video with mpv, a separate free program that is not part of this "
-            "installer. It is downloaded once and kept for later starts.\n\n"
-            f"Download it now?\n\n{plan}"
-        )
-    else:
-        question = (
+    if not bootstrap.is_frozen():
+        # From source this runs a package manager, which is worth asking about first.
+        answer = QMessageBox.question(
+            None,
+            "Install mpv?",
             "YTKTV plays video with mpv (libmpv), which is not installed yet.\n\n"
-            f"Install it now?\n\n{plan}"
+            f"Install it now?\n\n{plan}",
         )
-    answer = QMessageBox.question(None, "Install mpv?", question)
-    if answer != QMessageBox.StandardButton.Yes:
-        return False
+        if answer != QMessageBox.StandardButton.Yes:
+            return False
 
-    dialog = QProgressDialog("Installing mpv...", "", 0, 0)
+    # A packaged build fetches the mpv published with its own release without asking:
+    # there is nothing to decide, it cannot play anything without it.
+    label = (
+        "Downloading mpv, which YTKTV uses to play video.\nThis happens once."
+        if bootstrap.is_frozen()
+        else "Installing mpv..."
+    )
+    dialog = QProgressDialog(label, "", 0, 0)
     dialog.setCancelButton(None)
     dialog.setWindowTitle("YTKTV")
     dialog.setMinimumDuration(0)
@@ -117,9 +120,17 @@ def _ensure_libmpv(app: Any) -> bool:
         worker.join(0.05)
     dialog.close()
     if not result.get("ok"):
-        QMessageBox.warning(
-            None, "Installation failed", f"Could not install mpv. Try manually:\n\n{plan}"
-        )
+        if bootstrap.is_frozen():
+            QMessageBox.warning(
+                None,
+                "mpv could not be downloaded",
+                "YTKTV could not download mpv, so it cannot play video yet.\n\n"
+                "Check the internet connection and start YTKTV again; it will try once more.",
+            )
+        else:
+            QMessageBox.warning(
+                None, "Installation failed", f"Could not install mpv. Try manually:\n\n{plan}"
+            )
     return bool(result.get("ok"))
 
 
@@ -215,6 +226,11 @@ def main(argv: list[str] | None = None) -> int:
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv[:1])
     app.setApplicationName("YTKTV")
+    from PySide6.QtGui import QIcon
+
+    from ytktv.ui.icon import ICON_FILE
+
+    app.setWindowIcon(QIcon(str(ICON_FILE)))  # title bars and the taskbar; macOS uses the bundle's
     app.setApplicationVersion(__version__)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 

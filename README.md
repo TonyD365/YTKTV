@@ -116,8 +116,8 @@ If macOS still refuses to open the app after installing, run
 
 **mpv is downloaded on first start.** YTKTV plays video with [mpv](https://mpv.io), a separate
 free program under the GPL. It is not inside the installers; the first time YTKTV starts it
-asks once and downloads the `YTKTV-mpv-<platform>.zip` published with the same release (you
-need to be online for that first start). The zip holds mpv, the libraries it needs, their
+downloads the `YTKTV-mpv-<platform>.zip` published with the same release, showing a progress
+window (you need to be online for that first start). The zip holds mpv, the libraries it needs, their
 license texts and a list of where each came from.
 
 ### Vocal separation and your graphics card
