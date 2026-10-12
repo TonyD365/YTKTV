@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from ytktv import __version__, bootstrap
+from ytktv import __version__, bootstrap, children
 from ytktv.config import SettingsStore, cache_dir, data_dir
 from ytktv.core.controller import KTVController
 from ytktv.core.events import EventBus
@@ -39,6 +39,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--hd-unlock-self-test",
         action="store_true",
         help="check that this build can use the HD unlock component, and exit (used by CI)",
+    )
+    parser.add_argument(
+        "--phone-mic-self-test",
+        action="store_true",
+        help="check that this build can serve the phone microphone page, and exit (used by CI)",
     )
     parser.add_argument(
         "--mpv-self-test",
@@ -81,22 +86,25 @@ def _ensure_libmpv(app: Any) -> bool:
             "(macOS: install Homebrew, then 'brew install mpv') and start YTKTV again.",
         )
         return False
-    if bootstrap.is_frozen():
-        question = (
-            "YTKTV plays video with mpv, a separate free program that is not part of this "
-            "installer. It is downloaded once and kept for later starts.\n\n"
-            f"Download it now?\n\n{plan}"
-        )
-    else:
-        question = (
+    if not bootstrap.is_frozen():
+        # From source this runs a package manager, which is worth asking about first.
+        answer = QMessageBox.question(
+            None,
+            "Install mpv?",
             "YTKTV plays video with mpv (libmpv), which is not installed yet.\n\n"
-            f"Install it now?\n\n{plan}"
+            f"Install it now?\n\n{plan}",
         )
-    answer = QMessageBox.question(None, "Install mpv?", question)
-    if answer != QMessageBox.StandardButton.Yes:
-        return False
+        if answer != QMessageBox.StandardButton.Yes:
+            return False
 
-    dialog = QProgressDialog("Installing mpv...", "", 0, 0)
+    # A packaged build fetches the mpv published with its own release without asking:
+    # there is nothing to decide, it cannot play anything without it.
+    label = (
+        "Downloading mpv, which YTKTV uses to play video.\nThis happens once."
+        if bootstrap.is_frozen()
+        else "Installing mpv..."
+    )
+    dialog = QProgressDialog(label, "", 0, 0)
     dialog.setCancelButton(None)
     dialog.setWindowTitle("YTKTV")
     dialog.setMinimumDuration(0)
@@ -112,9 +120,17 @@ def _ensure_libmpv(app: Any) -> bool:
         worker.join(0.05)
     dialog.close()
     if not result.get("ok"):
-        QMessageBox.warning(
-            None, "Installation failed", f"Could not install mpv. Try manually:\n\n{plan}"
-        )
+        if bootstrap.is_frozen():
+            QMessageBox.warning(
+                None,
+                "mpv could not be downloaded",
+                "YTKTV could not download mpv, so it cannot play video yet.\n\n"
+                "Check the internet connection and start YTKTV again; it will try once more.",
+            )
+        else:
+            QMessageBox.warning(
+                None, "Installation failed", f"Could not install mpv. Try manually:\n\n{plan}"
+            )
     return bool(result.get("ok"))
 
 
@@ -156,7 +172,19 @@ def make_separator(settings: Any, runtime: Any = None) -> Any:
     )
 
 
+def _give_missing_console_streams_somewhere_to_go() -> None:
+    """A windowed Windows build has no console: sys.stdout and sys.stderr are None.
+
+    Libraries that print, or merely ask the stream a question, fail on that, so the
+    missing streams are pointed at nothing.
+    """
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))  # noqa: SIM115
+
+
 def main(argv: list[str] | None = None) -> int:
+    _give_missing_console_streams_somewhere_to_go()
     args = parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
@@ -169,6 +197,11 @@ def main(argv: list[str] | None = None) -> int:
         from ytktv.youtube import hd_unlock
 
         return hd_unlock.self_check(lambda line: log.info("%s", line))
+
+    if args.phone_mic_self_test:
+        from ytktv.server import mic_app
+
+        return mic_app.self_test(lambda line: log.info("%s", line))
 
     if args.mpv_self_test:
         from ytktv import mpv_pack
@@ -193,6 +226,11 @@ def main(argv: list[str] | None = None) -> int:
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv[:1])
     app.setApplicationName("YTKTV")
+    from PySide6.QtGui import QIcon
+
+    from ytktv.ui.icon import ICON_FILE
+
+    app.setWindowIcon(QIcon(str(ICON_FILE)))  # title bars and the taskbar; macOS uses the bundle's
     app.setApplicationVersion(__version__)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -202,6 +240,15 @@ def main(argv: list[str] | None = None) -> int:
     app.setStyleSheet(theme.STYLESHEET)
     collect_garbage_on_gui_thread(app)
 
+    children.start([data_dir()])
+    if bootstrap.is_frozen():
+        from ytktv import mpv_pack
+
+        # After an update the mpv libraries are still the previous version's. A newer
+        # set fetched during the last run is switched to now, before anything loads it;
+        # otherwise it is fetched in the background for next time.
+        mpv_pack.apply_pending()
+        threading.Thread(target=mpv_pack.fetch_next, name="ytktv-mpv-pack", daemon=True).start()
     have_mpv = _ensure_libmpv(app)
     ffmpeg = bootstrap.ensure_ffmpeg()
 
@@ -230,8 +277,12 @@ def main(argv: list[str] | None = None) -> int:
     audio = None
     if not args.no_mic:
         from ytktv.audio.engine import AudioEngine
+        from ytktv.audio.phone_mic import PhoneMics
 
-        audio = AudioEngine(settings)
+        phones = PhoneMics()
+        # Called from the server's thread when a phone connects or leaves.
+        phones.on_change = lambda: bus.emit("phones", None)
+        audio = AudioEngine(settings, phones)
         audio.start()
 
     from ytktv.separation import runtime as separation_runtime
@@ -295,6 +346,27 @@ def main(argv: list[str] | None = None) -> int:
     server.start()
     log.info("phone remote: %s", server.url)
 
+    mic_server = None
+    if audio is not None and audio.phones is not None:
+        # Phones as microphones need HTTPS, so they get a small server of their own.
+        try:
+            from ytktv.server import tls
+            from ytktv.server.app import lan_ip
+            from ytktv.server.mic_app import create_mic_app
+
+            certificate = tls.ensure_certificate(data_dir() / "tls", lan_ip())
+            mic_server = ServerThread(
+                create_mic_app(audio.phones, controller.phone_channel),
+                free_port(server.port + 1),
+                certificate=certificate,
+            )
+            mic_server.start()
+            controller.phone_mic_url = mic_server.url
+            log.info("phone microphone: %s", mic_server.url)
+        except Exception:
+            log.exception("the phone microphone page could not be started")
+            mic_server = None
+
     from ytktv.ui.main_window import MainWindow
     from ytktv.ui.mv_window import MvWindow
     from ytktv.ui.update_manager import UpdateManager
@@ -340,8 +412,11 @@ def main(argv: list[str] | None = None) -> int:
 
     def shutdown() -> None:
         server.stop()
+        if mic_server is not None:
+            mic_server.stop()
         mv_window.release()
         controller.close()
+        children.stop()  # downloads, HD unlock and separation must not carry on alone
 
     app.aboutToQuit.connect(shutdown)
     return int(app.exec())

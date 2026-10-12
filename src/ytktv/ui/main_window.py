@@ -266,8 +266,8 @@ class MainWindow(QMainWindow):
         bar.setObjectName("controlBar")
         bar.setFixedHeight(104)
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(14, 8, 14, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(10, 8, 10, 10)
+        layout.setSpacing(8)
         controller = self.controller
 
         def group(title: str, *widgets: QWidget, stretch: int = 0) -> None:
@@ -337,13 +337,21 @@ class MainWindow(QMainWindow):
         self.lyrics_button.setChecked(controller.settings.show_lyrics)
         self.lyrics_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.lyrics_button.clicked.connect(controller.set_show_lyrics)
+        self.lyrics_later = button(
+            "◂", lambda: controller.nudge_lyrics(-1), "Show the lyrics 0.1 s later", 24
+        )
+        self.lyrics_earlier = button(
+            "▸", lambda: controller.nudge_lyrics(1), "Show the lyrics 0.1 s earlier", 24
+        )
         group(
             "PLAYBACK",
             button("⏮", controller.replay, "Replay from the start", round=True),
             self.pause_button,
             button("⏭", controller.skip, "Skip to the next song", round=True),
             self.score_button,
+            self.lyrics_later,
             self.lyrics_button,
+            self.lyrics_earlier,
         )
 
         # Key and tempo
@@ -377,7 +385,7 @@ class MainWindow(QMainWindow):
         self.mic_slider = self._volume_slider("mic")
         self.guide_slider = QSlider(Qt.Orientation.Horizontal)
         self.guide_slider.setRange(0, 100)
-        self.guide_slider.setMinimumWidth(64)
+        self.guide_slider.setMinimumWidth(52)
         self.guide_slider.setValue(controller.settings.guide_vocal)
         self.guide_slider.setToolTip(
             "Guide vocal: how much of the original singer stays audible in Instrumental mode"
@@ -422,7 +430,7 @@ class MainWindow(QMainWindow):
     def _volume_slider(self, name: str) -> QSlider:
         slider = QSlider(Qt.Orientation.Horizontal)
         slider.setRange(0, 100)
-        slider.setMinimumWidth(64)
+        slider.setMinimumWidth(52)
         slider.setValue(getattr(self.controller.settings, f"{name}_volume"))
         slider.valueChanged.connect(lambda value: self.controller.set_volume(name, value))
         return slider
@@ -561,6 +569,8 @@ class MainWindow(QMainWindow):
             self.show_toast(f"Score: {payload['points']}  ·  {payload['grade']}")
         elif topic == "mixer":
             self.mixer_page.apply_state()
+        elif topic == "phones":
+            self.mixer_page.refresh_devices()  # a phone microphone connected or left
 
     def _apply_position(self, position: float, duration: float) -> None:
         self.progress.setValue(int(position / duration * 1000) if duration > 0 else 0)
@@ -614,7 +624,13 @@ class MainWindow(QMainWindow):
                 "Lyrics on the MV screen, from the video's subtitles or, without them, "
                 "YouTube's automatic captions (often inaccurate for singing)"
             )
+        shift = state["lyrics_offset"]
+        if shift:
+            tip += (
+                f"\nShown {abs(shift):.1f} s {'earlier' if shift > 0 else 'later'} for this song."
+            )
         self.lyrics_button.setToolTip(tip)
+        self.lyrics_button.setText(f"{shift:+.1f}" if shift else "Lyrics")
         if state["scoring"] and not state["separation"]:
             tip = "Scoring needs vocal separation, which is not installed"
         elif state["scoring"] and state["current"] and not state["scoring_active"]:

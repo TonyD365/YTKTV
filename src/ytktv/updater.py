@@ -13,8 +13,8 @@ import json
 import logging
 import os
 import platform
+import re
 import shutil
-import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -25,7 +25,7 @@ from typing import Any
 
 from packaging.version import InvalidVersion, Version
 
-from ytktv import GITHUB_REPO, __version__
+from ytktv import GITHUB_REPO, __version__, children
 from ytktv.bootstrap import is_frozen
 from ytktv.net import urlopen
 
@@ -189,17 +189,50 @@ def can_self_install() -> bool:
     return is_frozen()
 
 
+_DOWNLOAD_NAME = re.compile(r"^YTKTV-(\d[^-]*)-")
+
+
+def clean_old_downloads(dest_dir: Path, current: str = __version__) -> int:
+    """Delete downloaded installers that are of no more use. Returns the bytes freed.
+
+    An installer is kept only while it is newer than the running version, that is,
+    downloaded and waiting to be installed. Every update used to leave its installer
+    behind, half a gigabyte at a time.
+    """
+    freed = 0
+    try:
+        running = Version(current)
+        files = [path for path in dest_dir.iterdir() if path.is_file()]
+    except (InvalidVersion, OSError):
+        return 0
+    for path in files:
+        match = _DOWNLOAD_NAME.match(path.name)
+        try:
+            waiting = match is not None and Version(match.group(1)) > running
+        except InvalidVersion:
+            waiting = False
+        if waiting:
+            continue
+        try:
+            size = path.stat().st_size
+            path.unlink()
+            freed += size
+        except OSError:
+            log.debug("could not delete %s", path, exc_info=True)
+    if freed:
+        log.info("deleted old update downloads: %d MB", freed // 1048576)
+    return freed
+
+
 def install_update(installer: Path) -> None:
     """Hand over to the platform installer. The caller must quit the app right after."""
     system = platform.system()
     if system == "Darwin":
         # Opens the standard macOS Installer, which asks for the admin password itself.
-        subprocess.Popen(["open", str(installer)])
+        children.launch_to_outlive(["open", str(installer)])
     elif system == "Windows":
-        flags = getattr(subprocess, "DETACHED_PROCESS", 0)
-        subprocess.Popen(
-            [str(installer), "/SILENT", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"],
-            creationflags=flags,
+        children.launch_to_outlive(
+            [str(installer), "/SILENT", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"]
         )
     elif system == "Linux":
         current = os.environ.get("APPIMAGE")
@@ -207,7 +240,7 @@ def install_update(installer: Path) -> None:
             raise RuntimeError("not running from an AppImage")
         installer.chmod(0o755)
         shutil.move(str(installer), current)
-        subprocess.Popen([current], start_new_session=True)
+        children.launch_to_outlive([current])
     else:
         raise RuntimeError(f"unsupported platform {system}")
     log.info("update handed to installer; exiting %s", sys.argv[0])

@@ -164,3 +164,28 @@ def test_download_refuses_releases_without_checksums(tmp_path):
         updater.download_update(_info(checksum_url=None), tmp_path)
     with pytest.raises(RuntimeError, match="no checksum"):
         updater.download_update(_info(), tmp_path, fetch=lambda url: b"abc  something-else\n")
+
+
+def test_old_update_downloads_are_deleted_but_a_waiting_one_is_kept(tmp_path):
+    names = {
+        "YTKTV-1.3.3-macos-universal.pkg": 300,  # older than what is running
+        "YTKTV-1.4.1-macos-universal.pkg": 400,  # the running version itself
+        "YTKTV-1.5.0-macos-universal.pkg": 500,  # downloaded, waiting to be installed
+        "YTKTV-1.5.0-macos-universal.pkg.part": 50,  # still newer by name: left alone
+        "something-else.tmp": 7,  # not an installer of ours: no reason to keep it
+    }
+    for name, size in names.items():
+        (tmp_path / name).write_bytes(b"x" * size)
+    (tmp_path / "folder").mkdir()
+
+    assert updater.clean_old_downloads(tmp_path, "1.4.1") == 707
+    left = sorted(path.name for path in tmp_path.iterdir())
+    assert left == [
+        "YTKTV-1.5.0-macos-universal.pkg",
+        "YTKTV-1.5.0-macos-universal.pkg.part",
+        "folder",
+    ]
+    assert updater.clean_old_downloads(tmp_path, "1.4.1") == 0
+    assert updater.clean_old_downloads(tmp_path / "missing", "1.4.1") == 0
+    assert updater.clean_old_downloads(tmp_path, "not a version") == 0
+    assert len(list(tmp_path.iterdir())) == 3

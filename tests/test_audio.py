@@ -233,7 +233,7 @@ def test_feedback_guard_cuts_a_squeal_and_leaves_voices_alone():
     t = np.arange(SR * 2) / SR
     squeal = 0.3 * np.minimum(1, t * 4) * np.sin(2 * np.pi * 2300 * t)
     squeal = (squeal + 0.003 * rng.standard_normal(len(t))).astype(np.float32)
-    guard = FeedbackGuard(SR)
+    guard = FeedbackGuard(SR, "medium")
     out = _blocks(guard.process, squeal)
     assert len(guard.notches) == 1
     freq, depth = guard.notches[0]
@@ -255,7 +255,7 @@ def test_feedback_guard_cuts_a_squeal_and_leaves_voices_alone():
     assert guard.notches == []  # nor is noise
 
     # Notches that are no longer needed are dropped.
-    guard = FeedbackGuard(SR)
+    guard = FeedbackGuard(SR, "medium")
     _blocks(guard.process, squeal[:SR])
     assert guard.notches
     _blocks(guard.process, np.zeros(int(SR * (FeedbackGuard._KEEP_SECONDS + 1)), dtype=np.float32))
@@ -284,7 +284,42 @@ def test_mic_chain_compresses_before_the_fader_and_can_switch_the_guard_off():
 
     squeal = (0.3 * np.sin(2 * np.pi * 2300 * t)).astype(np.float32)
     chain = MicChain(SR)
-    _blocks(lambda x: chain.process(x, base, True), squeal)
+    _blocks(lambda x: chain.process(x, base, True, "medium"), squeal)
     assert chain.guard.notches
     _blocks(lambda x: chain.process(x, base, False), squeal[: SR // 4])
     assert chain.guard.notches == []  # switched off: the notches are removed
+
+
+def test_feedback_guard_sensitivity_decides_what_counts_as_feedback():
+    from ytktv.audio.dsp import FeedbackGuard
+
+    rng = np.random.default_rng(5)
+    t = np.arange(SR * 3) / SR
+
+    def reaction(signal, level):
+        """Seconds until the first notch, or None when the signal is left alone."""
+        guard = FeedbackGuard(SR, level)
+        signal = signal.astype(np.float32)
+        for start in range(0, len(signal) - 511, 512):
+            guard.process(signal[start : start + 512])
+            if guard.notches:
+                return (start + 512) / SR
+        return None
+
+    squeal = 0.3 * np.minimum(1, t * 4) * np.sin(2 * np.pi * 2300 * t)
+    squeal = squeal + 0.003 * rng.standard_normal(len(t))
+    whistle = np.where(t < 0.6, 0.2 * np.sin(2 * np.pi * 1200 * t), 0.0)  # a short, even note
+    stuck = 0.2 * np.sin(2 * np.pi * 1200 * t)  # the same tone, never ending
+
+    # Real feedback grows, and every setting catches it within a fraction of a second.
+    times = {level: reaction(squeal, level) for level in ("low", "medium", "high")}
+    assert all(time is not None and time < 0.4 for time in times.values())
+    assert times["high"] <= times["medium"] <= times["low"]
+    # "low" leaves a whistled note alone; the others take it for feedback.
+    assert reaction(whistle, "low") is None
+    assert reaction(whistle, "medium") is not None and reaction(whistle, "high") is not None
+    # A tone that never stops is cut on "low" too, after about a second.
+    assert 0.9 < reaction(stuck, "low") < 1.3
+
+    guard = FeedbackGuard(SR, "nonsense")  # an unknown name is the careful setting
+    assert guard._rules == FeedbackGuard.SENSITIVITY["low"]

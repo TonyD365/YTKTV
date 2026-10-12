@@ -33,6 +33,8 @@ log = logging.getLogger(__name__)
 
 PITCH_RANGE = 6  # semitones either way
 SPEEDS = (0.8, 0.9, 1.0, 1.1, 1.2)
+LYRICS_OFFSET_RANGE = 10.0  # seconds either way
+LYRICS_OFFSETS_KEPT = 500  # songs whose lyric timing is remembered
 UNKNOWN_SONG_SECONDS = 240  # assumed for wait estimates when YouTube gave no length
 _POSITION_INTERVAL = 0.5
 _OPEN_RETRIES = 2
@@ -70,6 +72,8 @@ class KTVController:
         self.bus = bus or EventBus()
         self.stems = stems
         self.audio = audio
+        self.phones = audio.phones if audio is not None else None
+        self.phone_mic_url = ""  # the HTTPS page where a phone becomes a microphone
         self.accelerator = accelerator
         self.preloader = preloader
 
@@ -116,7 +120,7 @@ class KTVController:
             stems.want_pitch = self.settings.scoring
         if audio is not None:
             self._scoring_loop = ScoringLoop(
-                audio.mic_pitch, self._scoring_target, self._on_sung_pitch
+                audio.mic_pitch, self._scoring_target, self._on_sung_pitch, audio.mic_pitches
             )
             self._scoring_loop.start()
         self._apply_volume()
@@ -546,13 +550,26 @@ class KTVController:
         result = keeper.result() if keeper is not None else None
         if result is None:
             return
-        rank = self.scoreboard.add(result.points, item.song.title, item.singer)
+        voices = keeper.voice_results() if keeper is not None else {}
+        entries: list[dict[str, Any]] = []
+        if len(voices) >= 2:
+            # A duet: each microphone has its own score, and its own line tonight.
+            # The big number on the card is the better of them.
+            for mic, score in voices.items():
+                who = f"{item.singer} (Mic {mic + 1})" if item.singer else f"Mic {mic + 1}"
+                place = self.scoreboard.add(score.points, item.song.title, who)
+                entries.append({"mic": mic + 1, **score.to_dict(), "rank": place})
+            best = max(entries, key=lambda entry: entry["points"])
+            result, rank = voices[best["mic"] - 1], best["rank"]
+        else:
+            rank = self.scoreboard.add(result.points, item.song.title, item.singer)
         self.last_score = {
             **result.to_dict(),
             "title": item.song.title,
             "singer": item.singer,
             "rank": rank,
             "board": self.scoreboard.top(5),
+            "voices": entries,
         }
         self.bus.emit("score", self.last_score)
 
@@ -560,6 +577,39 @@ class KTVController:
         self.settings.lights = bool(enabled)
         self._save_soon()
         self._emit_state()
+
+    @property
+    def lyrics_offset(self) -> float:
+        """How much earlier (+) or later (-) the current song's lyrics are shown, in seconds."""
+        item = self.current
+        return self.settings.lyrics_offsets.get(item.song.video_id, 0.0) if item else 0.0
+
+    def set_lyrics_offset(self, seconds: float) -> float:
+        """Shift the current song's lyrics; remembered for the next time it is sung."""
+        item = self.current
+        if item is None:
+            return 0.0
+        seconds = round(max(-LYRICS_OFFSET_RANGE, min(LYRICS_OFFSET_RANGE, float(seconds))), 1)
+        offsets = self.settings.lyrics_offsets
+        offsets.pop(item.song.video_id, None)
+        if seconds:
+            offsets[item.song.video_id] = seconds  # most recent last
+            for video_id in list(offsets)[:-LYRICS_OFFSETS_KEPT]:
+                del offsets[video_id]
+        self._save_soon()
+        self._emit_state()
+        return seconds
+
+    def nudge_lyrics(self, steps: int) -> float:
+        """Move the lyrics *steps* tenths of a second earlier (+) or later (-)."""
+        seconds = self.set_lyrics_offset(self.lyrics_offset + 0.1 * steps)
+        if self.current is not None:
+            if seconds:
+                way = "earlier" if seconds > 0 else "later"
+                self.toast(f"Lyrics {abs(seconds):.1f} s {way}")
+            else:
+                self.toast("Lyrics back in time with the subtitles")
+        return seconds
 
     def set_show_lyrics(self, enabled: bool) -> None:
         """Turn the lyrics on the MV screen on or off, for this song and the following ones."""
@@ -669,8 +719,24 @@ class KTVController:
         self._save_soon()
         self.bus.emit("mixer", None)
 
-    def set_feedback_guard(self, enabled: bool) -> None:
+    def phone_mic_names(self) -> list[str]:
+        """The phones connected as microphones, as they are named in device lists."""
+        return self.phones.names() if self.phones is not None else []
+
+    def phone_channel(self, name: str) -> int | None:
+        """The mixer channel (1-based) that takes its sound from the phone *name*."""
+        for index, mic in enumerate(self.settings.mics):
+            if mic.enabled and mic.device == name:
+                return index + 1
+        return None
+
+    def set_feedback_guard(self, enabled: bool, sensitivity: str | None = None) -> None:
+        """Switch the feedback guard on or off and, optionally, set how eager it is."""
         self.settings.feedback_guard = bool(enabled)
+        if sensitivity is not None:
+            if sensitivity not in ("low", "medium", "high"):
+                raise ValueError(f"unknown sensitivity {sensitivity!r}")
+            self.settings.feedback_sensitivity = sensitivity
         self._save_soon()
         self.bus.emit("mixer", None)
 
@@ -731,6 +797,8 @@ class KTVController:
             "preset": self.settings.mic_preset,
             "monitor": self.settings.mic_monitor,
             "feedback_guard": self.settings.feedback_guard,
+            "feedback_sensitivity": self.settings.feedback_sensitivity,
+            "phones": self.phone_mic_names(),
             "running": bool(self.audio and self.audio.running),
         }
 
@@ -929,6 +997,8 @@ class KTVController:
             "guide_vocal": settings.guide_vocal,
             "lyrics": bool(self.lyrics),
             "show_lyrics": settings.show_lyrics,
+            "phone_mic_url": self.phone_mic_url,
+            "lyrics_offset": self.lyrics_offset,
             "lights": settings.lights,
             "scoring": settings.scoring,
             "scoring_active": self._keeper is not None,

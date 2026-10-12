@@ -132,3 +132,55 @@ def test_a_packaged_build_finds_and_installs_the_downloaded_library(root, monkey
     assert bootstrap.find_libmpv() is None
     assert bootstrap.install_libmpv() is True and calls == ["install"]
     assert bootstrap.find_libmpv() == str(root / "libmpv.so.2")
+
+
+def served(files: dict[str, bytes]):
+    asset = "YTKTV-mpv-linux-x86_64.zip"
+    data = pack(files)
+    sums = f"{hashlib.sha256(data).hexdigest()}  {asset}\n".encode()
+    return lambda url: sums if url.endswith("SHA256SUMS") else data
+
+
+def test_after_an_update_the_newer_pack_is_fetched_and_used_from_the_next_start(root, monkeypatch):
+    monkeypatch.setattr(mpv_pack, "__version__", "1.0.0")
+    mpv_pack.install(fetch=served({"libmpv.so.2": b"old"}))
+    assert mpv_pack.installed_version() == "1.0.0" and not mpv_pack.outdated()
+    assert mpv_pack.fetch_next(fetch=served({"libmpv.so.2": b"never"})) is False  # up to date
+
+    monkeypatch.setattr(mpv_pack, "__version__", "1.1.0")  # YTKTV was updated
+    assert mpv_pack.outdated()
+    assert mpv_pack.apply_pending() is False  # nothing fetched yet
+    assert mpv_pack.fetch_next(fetch=served({"libmpv.so.2": b"new"})) is True
+    # The pack in use is untouched while YTKTV runs...
+    assert (root / "libmpv.so.2").read_bytes() == b"old"
+    assert mpv_pack.fetch_next(fetch=served({"libmpv.so.2": b"again"})) is False  # once is enough
+    # ...and replaced at the next start.
+    assert mpv_pack.apply_pending() is True
+    assert (root / "libmpv.so.2").read_bytes() == b"new"
+    assert mpv_pack.installed_version() == "1.1.0" and not mpv_pack.outdated()
+    assert not mpv_pack.next_dir().exists()
+
+
+def test_a_failed_refresh_keeps_the_pack_that_works(root, monkeypatch):
+    monkeypatch.setattr(mpv_pack, "__version__", "1.0.0")
+    mpv_pack.install(fetch=served({"libmpv.so.2": b"old"}))
+    monkeypatch.setattr(mpv_pack, "__version__", "1.1.0")
+
+    def offline(url: str) -> bytes:
+        raise OSError("no network")
+
+    assert mpv_pack.fetch_next(fetch=offline) is False
+    assert mpv_pack.apply_pending() is False
+    assert (root / "libmpv.so.2").read_bytes() == b"old" and mpv_pack.installed()
+
+    # A download cut short leaves a folder without the marker: it is thrown away.
+    mpv_pack.next_dir().mkdir()
+    (mpv_pack.next_dir() / "libmpv.so.2").write_bytes(b"half")
+    assert mpv_pack.apply_pending() is False
+    assert not mpv_pack.next_dir().exists() and (root / "libmpv.so.2").read_bytes() == b"old"
+
+    # Without any pack there is nothing to refresh; the first-start download handles that.
+    import shutil
+
+    shutil.rmtree(root)
+    assert not mpv_pack.outdated() and mpv_pack.fetch_next(fetch=offline) is False

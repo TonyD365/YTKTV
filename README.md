@@ -46,7 +46,9 @@ microphones into the music with reverb and echo.
   the MV screen, filling with colour line by line as the song plays. They come from the
   video's subtitles, or from YouTube's automatic captions when it has none (those are often
   inaccurate for singing). The colour follows the singer word by word wherever YouTube's
-  captions say when each word was heard, and fills evenly otherwise.
+  captions say when each word was heard, and fills evenly otherwise. If the lyrics run ahead
+  of or behind the singing, the two small arrows beside the button move them 0.1 s at a time;
+  the shift is remembered for that song.
 - **Finding songs.** Suggestions appear as you type, recent searches stay one tap away, and the
   Artists page lists well-known artists by scene. Song cards show whether a song is already
   selected and whether its instrumental is ready, so you can pick one that starts at once.
@@ -57,7 +59,8 @@ microphones into the music with reverb and echo.
   microphones with the original singer's melody, which is extracted while the instrumental is
   prepared. While you sing, a lane on the MV screen shows the tune as bars and your voice as
   dots over it (gold when you are on the note), with a running score in the corner. When the
-  song ends a score card shows your place among tonight's scores. Octaves do not matter, so
+  song ends a score card shows your place among tonight's scores. In a duet each microphone
+  gets its own score. Octaves do not matter, so
   anyone can sing in their own range.
 - **Danmaku and lights.** Anyone can send a short message from the console or a phone and it
   flies across the MV screen. A glow around the screen pulses with the music.
@@ -69,13 +72,19 @@ microphones into the music with reverb and echo.
   faders, an OUTPUT meter for the total level (music and microphones), and output device
   selection. Effect presets (Pop, Ballad, Rock, KTV Hall, Dry, plus your own) set the EQ, reverb
   and echo of every channel at once, and each microphone can be adjusted from the phone page. Each channel has a low cut and a noise gate, so an open microphone stays silent
-  until someone sings. A **Feedback Guard** listens for the squeal of a microphone feeding
-  back and cuts just that frequency. Microphones are mixed into the output automatically.
+  until someone sings. A **Feedback Guard** (off, low, medium or high) listens for the squeal
+  of a microphone feeding back and cuts just that frequency; on low it leaves whistling and
+  held notes alone. Microphones are mixed into the output automatically.
 - **KTV controls.** Queue, Priority (play next), Skip, Replay, Pause, Key up/down (±6 semitones),
   Tempo, favorites, sung history, plus Applause / Cheer / Air Horn / Drum Roll buttons.
 - **Phone remote.** A local web page for searching, queueing and remote control. No app to
   install: scan the QR code. Each phone sees its own songs with how many are ahead and roughly
   how long until its turn (phones are told apart by their address on the network).
+- **Phone as a microphone.** A phone can stand in for a microphone: open *Use this phone as a
+  microphone* on the phone page, start it, then choose the phone on a channel of the mixing
+  console like any other input. The voice is sent uncompressed. A phone on Wi-Fi is always a
+  little behind a wired microphone (expect roughly 40 to 120 ms), and because browsers only
+  allow the microphone over HTTPS, the phone shows a certificate warning once.
 - **Reordering.** On the console's Selected Songs page, drag a song by its grip to move it.
 - **Setup wizard.** The first start walks through the sound output, the MV screen and a
   microphone check. Run it again from Settings.
@@ -107,8 +116,8 @@ If macOS still refuses to open the app after installing, run
 
 **mpv is downloaded on first start.** YTKTV plays video with [mpv](https://mpv.io), a separate
 free program under the GPL. It is not inside the installers; the first time YTKTV starts it
-asks once and downloads the `YTKTV-mpv-<platform>.zip` published with the same release (you
-need to be online for that first start). The zip holds mpv, the libraries it needs, their
+downloads the `YTKTV-mpv-<platform>.zip` published with the same release, showing a progress
+window (you need to be online for that first start). The zip holds mpv, the libraries it needs, their
 license texts and a list of where each came from.
 
 ### Vocal separation and your graphics card

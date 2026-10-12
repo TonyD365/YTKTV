@@ -185,5 +185,11 @@ def test_compressor_and_feedback_guard_are_remote_controls_too(ktv):
     assert controller.settings.mics[0].comp == 1.0  # clamped
     state = controller.mixer_state()
     assert state["mics"][0]["comp"] == 1.0 and state["feedback_guard"] is True
+    assert state["feedback_sensitivity"] == "low"
     controller.set_feedback_guard(False)
     assert controller.mixer_state()["feedback_guard"] is False
+    controller.set_feedback_guard(True, "high")
+    state = controller.mixer_state()
+    assert state["feedback_guard"] is True and state["feedback_sensitivity"] == "high"
+    with pytest.raises(ValueError):
+        controller.set_feedback_guard(True, "extreme")

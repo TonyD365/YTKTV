@@ -180,6 +180,25 @@ jobs:
           Get-Content $env:YTKTV_LOG_FILE -ErrorAction SilentlyContinue
           exit $process.ExitCode
 
+      # Phones as microphones need the TLS and web stack intact inside the packaged app.
+      - name: Check the packaged app can serve the phone microphone page (macOS)
+        if: runner.os == 'macOS'
+        run: dist/YTKTV.app/Contents/MacOS/YTKTV --phone-mic-self-test
+
+      - name: Check the packaged app can serve the phone microphone page (Linux)
+        if: runner.os == 'Linux'
+        run: dist/YTKTV/YTKTV --phone-mic-self-test
+
+      - name: Check the packaged app can serve the phone microphone page (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          YTKTV_LOG_FILE: ${{ runner.temp }}\phone-mic.log
+        run: |
+          $process = Start-Process -FilePath dist\YTKTV\YTKTV.exe -ArgumentList '--phone-mic-self-test' -Wait -PassThru
+          Get-Content $env:YTKTV_LOG_FILE -ErrorAction SilentlyContinue
+          exit $process.ExitCode
+
       # The HD unlock needs yt-dlp to find a bundled plugin and the solver's JavaScript;
       # both are easy to lose when freezing, so ask the packaged app to check itself.
       - name: Check the packaged app can use HD unlock (macOS)

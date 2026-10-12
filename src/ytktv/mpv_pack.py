@@ -63,6 +63,59 @@ def installed() -> bool:
     return (pack_dir() / MARKER).exists()
 
 
+def next_dir() -> Path:
+    """Where a newer pack waits until the next start (the one in use cannot be replaced)."""
+    return pack_dir().with_name(pack_dir().name + "-next")
+
+
+def installed_version() -> str | None:
+    """The version of YTKTV that downloaded the installed pack; None when there is none."""
+    try:
+        return (pack_dir() / MARKER).read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def outdated() -> bool:
+    """A pack is installed, but it was made for another version of YTKTV."""
+    version = installed_version()
+    return version is not None and version != __version__
+
+
+def apply_pending() -> bool:
+    """Switch to a pack fetched by :func:`fetch_next`. Call before libmpv is loaded."""
+    waiting = next_dir()
+    if not (waiting / MARKER).exists():
+        if waiting.exists():
+            shutil.rmtree(waiting, ignore_errors=True)  # an interrupted download
+        return False
+    current = pack_dir()
+    try:
+        if current.exists():
+            shutil.rmtree(current)
+        waiting.rename(current)
+    except OSError:
+        log.warning("could not switch to the newer mpv pack", exc_info=True)
+        return False
+    return True
+
+
+def fetch_next(report: Report = lambda _message: None, fetch: Fetch | None = None) -> bool:
+    """Download the pack of this version next to the one in use, for the next start.
+
+    The installed pack keeps working if this fails (no network, say), so it is safe
+    to run in the background after every update.
+    """
+    if not outdated() or (next_dir() / MARKER).exists():
+        return False
+    try:
+        install(report, fetch, destination=next_dir())
+    except Exception as exc:
+        log.info("newer mpv pack not fetched: %s", exc)
+        return False
+    return True
+
+
 def download_urls(asset: str, version: str = __version__) -> list[tuple[str, str]]:
     """(pack URL, checksum URL) pairs to try: this version's release, then the latest."""
     base = f"https://github.com/{REPO}/releases"
@@ -103,7 +156,11 @@ def unpack(archive: Path, destination: Path | None = None) -> Path:
     return destination
 
 
-def install(report: Report = lambda _message: None, fetch: Fetch | None = None) -> Path:
+def install(
+    report: Report = lambda _message: None,
+    fetch: Fetch | None = None,
+    destination: Path | None = None,
+) -> Path:
     """Download this platform's pack, check it against the release's checksums, unpack it."""
     asset = asset_name()
     if asset is None:
@@ -129,7 +186,7 @@ def install(report: Report = lambda _message: None, fetch: Fetch | None = None) 
         with tempfile.TemporaryDirectory() as folder:
             archive = Path(folder) / asset
             archive.write_bytes(data)
-            return unpack(archive)
+            return unpack(archive, destination)
     raise RuntimeError("could not download mpv: " + "; ".join(errors))
 
 

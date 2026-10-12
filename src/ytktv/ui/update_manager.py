@@ -39,6 +39,11 @@ class UpdateManager(QObject):
         self._idle_timer.setInterval(15_000)
         self._idle_timer.timeout.connect(self._prompt_when_idle)
         QTimer.singleShot(8_000, self.check)
+        if updater.can_self_install():
+            # Installers of versions already installed are just taking up space.
+            run_async(
+                lambda: updater.clean_old_downloads(cache_dir() / "updates"), lambda _freed: None
+            )
 
     def check(self, manual: bool = False) -> None:
         if self._busy or not (manual or self.controller.settings.auto_update):

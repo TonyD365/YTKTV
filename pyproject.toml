@@ -27,6 +27,8 @@ dependencies = [
     "imageio-ffmpeg>=0.5",
     "packaging>=23.0",
     "certifi",
+    "asn1crypto>=1.5",
+    "ecdsa>=0.19",
 ]
 
 [project.optional-dependencies]

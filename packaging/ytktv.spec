@@ -65,6 +65,7 @@ if libmpv is not None:
 PACKAGE = Path(ytktv.__file__).parent
 datas = [
     (str(PACKAGE / "server" / "static"), "ytktv/server/static"),
+    (str(PACKAGE / "ui" / "assets"), "ytktv/ui/assets"),  # the window icon
     # Run as a plain script by the downloaded runtime, so it must exist as a file.
     (str(PACKAGE / "separation" / "sep_worker.py"), "ytktv/separation"),
     (str(PACKAGE / "separation" / "pitch_core.py"), "ytktv/separation"),

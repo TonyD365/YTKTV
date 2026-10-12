@@ -15,6 +15,7 @@ import numpy as np
 
 from ytktv.audio import devices
 from ytktv.audio.dsp import Limiter, MicChain
+from ytktv.audio.phone_mic import PhoneMics, is_phone
 from ytktv.audio.sfx import SfxBank
 from ytktv.config import Settings
 from ytktv.separation import pitch_core
@@ -121,6 +122,9 @@ class Mixer:
         self.mic_peaks = [0.0] * len(settings.mics)
         self.master_peak = (0.0, 0.0)
         self.tap = PitchTap(int(sample_rate * 0.25))
+        # The same for each microphone on its own, so that a duet gets two scores.
+        self.mic_taps = [PitchTap(int(sample_rate * 0.25)) for _ in settings.mics]
+        self.live_mics: tuple[int, ...] = ()
 
     def trigger(self, name: str) -> bool:
         samples = self.sfx.get(name)
@@ -139,12 +143,17 @@ class Mixer:
         if live:
             # All microphones together, before any effects: this is what gets scored.
             self.tap.write(live[0] if len(live) == 1 else np.sum(live, axis=0))
+        self.live_mics = tuple(i for i, block in enumerate(inputs) if block is not None)
+        for i in self.live_mics:
+            self.mic_taps[i].write(inputs[i])  # type: ignore[arg-type]
         for i, block in enumerate(inputs):
             if block is None:
                 self.mic_peaks[i] = 0.0
                 continue
             chain = self.chains[i]
-            bus += chain.process(block, settings.mics[i], settings.feedback_guard)
+            bus += chain.process(
+                block, settings.mics[i], settings.feedback_guard, settings.feedback_sensitivity
+            )
             self.mic_peaks[i] = chain.peak
         bus *= np.float32(settings.mic_volume / 100.0)
         if self._voices:
@@ -164,8 +173,9 @@ class Mixer:
 
 
 class AudioEngine:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, phones: PhoneMics | None = None) -> None:
         self.settings = settings
+        self.phones = phones  # phones connected as microphones, when the app has them
         self.sample_rate = 48000
         self.mixer = Mixer(settings, self.sample_rate)
         self.error: str | None = None
@@ -174,6 +184,7 @@ class AudioEngine:
         self._output: Any = None
         self._inputs: list[Any] = [None] * len(settings.mics)
         self._rings: list[RingBuffer | None] = [None] * len(settings.mics)
+        self._phone_names: list[str | None] = [None] * len(settings.mics)
 
     @property
     def running(self) -> bool:
@@ -198,10 +209,17 @@ class AudioEngine:
         out_index = devices.find_device(settings.output_device, output=True)
         self.sample_rate = devices.default_sample_rate(out_index, output=True)
         self.mixer = Mixer(settings, self.sample_rate)
+        if self.phones is not None:
+            self.phones.set_rate(self.sample_rate)
 
         for i, mic in enumerate(settings.mics):
             self._rings[i] = None
+            self._phone_names[i] = None
             if not (settings.mic_monitor and mic.enabled):
+                continue
+            if is_phone(mic.device) and self.phones is not None:
+                # No sound card behind this channel: its sound arrives over the network.
+                self._phone_names[i] = mic.device
                 continue
             ring = RingBuffer(self.sample_rate)
 
@@ -242,9 +260,14 @@ class AudioEngine:
             self.underruns += 1
         max_lag = frames * MAX_BUFFERED_BLOCKS
         try:
-            inputs = [
-                ring.read(frames, max_lag) if ring is not None else None for ring in self._rings
-            ]
+            inputs: list[np.ndarray | None] = []
+            for ring, phone in zip(self._rings, self._phone_names, strict=True):
+                if ring is not None:
+                    inputs.append(ring.read(frames, max_lag))
+                elif phone is not None and self.phones is not None:
+                    inputs.append(self.phones.read(phone, frames))
+                else:
+                    inputs.append(None)
             outdata[:] = self.mixer.mix(inputs, frames)
         except Exception:
             # Never let an exception kill the stream; a silent block is the safe failure.
@@ -262,6 +285,7 @@ class AudioEngine:
         self._output = None
         self._inputs = [None] * len(self.settings.mics)
         self._rings = [None] * len(self.settings.mics)
+        self._phone_names = [None] * len(self.settings.mics)
 
     def stop(self) -> None:
         with self._lock:
@@ -278,6 +302,21 @@ class AudioEngine:
             self.mixer.tap.latest(int(self.sample_rate * 0.1)).astype(np.float64), self.sample_rate
         )
         return pitch_core.detect(samples[-pitch_core.FRAME :], rate)
+
+    def mic_pitches(self) -> dict[int, float | None]:
+        """The note sung into each connected microphone (MIDI or None), by channel."""
+        if not self.running:
+            return {}
+        window = int(self.sample_rate * 0.1)
+        notes: dict[int, float | None] = {}
+        for index in self.mixer.live_mics:
+            recent = self.mixer.mic_taps[index].latest(window)
+            if float(np.max(np.abs(recent))) < 0.003:
+                notes[index] = None  # silence: not worth running the detector
+                continue
+            samples, rate = pitch_core.decimate(recent.astype(np.float64), self.sample_rate)
+            notes[index] = pitch_core.detect(samples[-pitch_core.FRAME :], rate)
+        return notes
 
     def levels(self) -> dict[str, Any]:
         return {

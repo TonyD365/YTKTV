@@ -117,6 +117,8 @@ def test_danmaku_guide_and_lights_over_http(client):
     assert http.post("/api/sound", json={"scoring": False}).json()["scoring"] is False
     assert state["show_lyrics"] is True
     assert http.post("/api/sound", json={"show_lyrics": False}).json()["show_lyrics"] is False
+    assert http.post("/api/sound", json={"lyrics_offset": 11}).status_code == 422
+    assert http.post("/api/sound", json={"lyrics_offset": 0.3}).json()["lyrics_offset"] == 0.0
     assert http.post("/api/sound", json={"guide_vocal": 101}).status_code == 422
     assert http.get("/api/lyrics").json() == []
 

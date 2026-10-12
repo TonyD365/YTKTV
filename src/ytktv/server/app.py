@@ -75,6 +75,7 @@ class SoundIn(BaseModel):
     lights: bool | None = None
     scoring: bool | None = None
     show_lyrics: bool | None = None
+    lyrics_offset: float | None = Field(default=None, ge=-10, le=10)
 
 
 class PlaylistIn(BaseModel):
@@ -265,6 +266,8 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
             controller.set_scoring(body.scoring)
         if body.show_lyrics is not None:
             controller.set_show_lyrics(body.show_lyrics)
+        if body.lyrics_offset is not None:
+            controller.set_lyrics_offset(body.lyrics_offset)
         for name in ("music", "mic", "master"):
             value = getattr(body, f"{name}_volume")
             if value is not None:
@@ -422,17 +425,39 @@ def lan_ip() -> str:
 class ServerThread:
     """Runs uvicorn in a background thread so the Qt loop keeps the main one."""
 
-    def __init__(self, app: FastAPI, port: int, host: str = "0.0.0.0") -> None:
+    def __init__(
+        self,
+        app: FastAPI,
+        port: int,
+        host: str = "0.0.0.0",
+        certificate: tuple[Path, Path] | None = None,
+    ) -> None:
+        """With *certificate* (certificate file, key file) the server speaks HTTPS."""
         import uvicorn
 
         self.port = port
-        config = uvicorn.Config(app, host=host, port=port, log_level="warning", access_log=False)
+        self._secure = certificate is not None
+        tls: dict[str, Any] = {}
+        if certificate is not None:
+            tls = {"ssl_certfile": str(certificate[0]), "ssl_keyfile": str(certificate[1])}
+        # log_config=None: uvicorn's own logging set-up asks the console whether it has
+        # colours, and a windowed Windows build has no console at all (sys.stderr is
+        # None), which made the server fail to start there. YTKTV's logging is enough.
+        config = uvicorn.Config(
+            app,
+            host=host,
+            port=port,
+            log_level="warning",
+            access_log=False,
+            log_config=None,
+            **tls,
+        )
         self._server = uvicorn.Server(config)
         self._thread = threading.Thread(target=self._server.run, name="ytktv-server", daemon=True)
 
     @property
     def url(self) -> str:
-        return f"http://{lan_ip()}:{self.port}"
+        return f"{'https' if self._secure else 'http'}://{lan_ip()}:{self.port}"
 
     def start(self) -> None:
         self._thread.start()
