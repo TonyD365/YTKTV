@@ -172,19 +172,20 @@ def self_test(report: Report = print) -> int:
             raise RuntimeError("libmpv was not taken from the pack that was just unpacked")
         mpv = bootstrap.import_mpv()
         with tempfile.TemporaryDirectory() as folder:
-            original, backing, result = (Path(folder) / n for n in ("a.wav", "b.wav", "out.wav"))
-            _tone(original, 440.0)
-            _tone(backing, 677.0)
+            original, backing = Path(folder) / "a.wav", Path(folder) / "b.wav"
+            _tone(original, 440.0, seconds=3.0)
+            _tone(backing, 677.0, seconds=3.0)
             problems: list[str] = []
 
             def note(level: str, component: str, message: str) -> None:
                 if level in ("error", "fatal"):
                     problems.append(f"{component}: {message.strip()[:200]}")
 
+            # The "null" outputs discard picture and sound but keep real time, so the
+            # three-second test tracks take that long and can be watched while they play.
             player = mpv.MPV(
                 vo="null",
-                ao="pcm",
-                ao_pcm_file=str(result),
+                ao="null",
                 audio_display="no",
                 idle="yes",
                 ytdl=False,
@@ -207,12 +208,14 @@ def self_test(report: Report = print) -> int:
                 )
                 player.loadfile(str(original))
                 deadline = time.monotonic() + 30
-                levels, started = None, False
+                levels, reached, started, finished = None, 0.0, False, False
                 while time.monotonic() < deadline:
                     if not player.idle_active:
                         started = True
                     elif started:
-                        break  # played to the end
+                        finished = True  # played to the end
+                        break
+                    reached = max(reached, float(player.time_pos or 0.0))
                     if levels is None:
                         # The meter has nothing to report until sound has gone through it.
                         with contextlib.suppress(Exception):
@@ -220,14 +223,13 @@ def self_test(report: Report = print) -> int:
                     time.sleep(0.01)
             finally:
                 player.terminate()
-            size = result.stat().st_size if result.exists() else 0
             if problems:
                 raise RuntimeError("mpv reported: " + " | ".join(problems[:4]))
-            if size < 48000:  # a second of stereo sound is about 190 kB
-                raise RuntimeError(f"no sound came out ({size} bytes written)")
+            if not finished or reached < 1.0:
+                raise RuntimeError(f"playback did not run to the end (reached {reached:.2f} s)")
             if not levels:
                 raise RuntimeError("the level meter filter gave no readings")
-            report(f"Played two tracks through the full filter chain ({size // 1024} kB written).")
+            report(f"Played two tracks through the full filter chain ({reached:.2f} s).")
     except Exception as exc:
         log.exception("mpv self-test failed")
         report(f"FAILED: {exc}")
