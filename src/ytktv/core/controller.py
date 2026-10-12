@@ -885,14 +885,28 @@ class KTVController:
 
     def _queue_dicts(self, current: QueueItem | None) -> list[dict[str, Any]]:
         """The queue, each song with a rough number of seconds until its turn."""
-        speed = self.speed or 1.0
-        wait = max(0.0, self.duration - self.position) / speed if current else 0.0
+        # This runs for every UI refresh and every push to the phones, so the lookups
+        # that are the same for every song are done once, outside the loop.
+        stem_status = self.stems.status if self.stems else None
+        preload_status = self.preloader.status if self.preloader else None
+        pace = 1.0 / (self.speed or 1.0)
+        wait = max(0.0, self.duration - self.position) * pace if current else 0.0
         items = []
         for item in self.queue.snapshot():
-            data = self._item_dict(item)
-            data["wait"] = round(wait)
-            wait += (item.song.duration or UNKNOWN_SONG_SECONDS) / speed
-            items.append(data)
+            song = item.song
+            video_id = song.video_id
+            items.append(
+                {
+                    "id": item.id,
+                    "singer": item.singer,
+                    "owner": item.owner,
+                    "song": song.to_dict(),
+                    "stem": stem_status(video_id).value if stem_status else "none",
+                    "preload": preload_status(video_id) if preload_status else "none",
+                    "wait": int(wait + 0.5),
+                }
+            )
+            wait += (song.duration or UNKNOWN_SONG_SECONDS) * pace
         return items
 
     def state(self) -> dict[str, Any]:
