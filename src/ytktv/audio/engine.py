@@ -121,6 +121,9 @@ class Mixer:
         self.mic_peaks = [0.0] * len(settings.mics)
         self.master_peak = (0.0, 0.0)
         self.tap = PitchTap(int(sample_rate * 0.25))
+        # The same for each microphone on its own, so that a duet gets two scores.
+        self.mic_taps = [PitchTap(int(sample_rate * 0.25)) for _ in settings.mics]
+        self.live_mics: tuple[int, ...] = ()
 
     def trigger(self, name: str) -> bool:
         samples = self.sfx.get(name)
@@ -139,6 +142,9 @@ class Mixer:
         if live:
             # All microphones together, before any effects: this is what gets scored.
             self.tap.write(live[0] if len(live) == 1 else np.sum(live, axis=0))
+        self.live_mics = tuple(i for i, block in enumerate(inputs) if block is not None)
+        for i in self.live_mics:
+            self.mic_taps[i].write(inputs[i])  # type: ignore[arg-type]
         for i, block in enumerate(inputs):
             if block is None:
                 self.mic_peaks[i] = 0.0
@@ -280,6 +286,21 @@ class AudioEngine:
             self.mixer.tap.latest(int(self.sample_rate * 0.1)).astype(np.float64), self.sample_rate
         )
         return pitch_core.detect(samples[-pitch_core.FRAME :], rate)
+
+    def mic_pitches(self) -> dict[int, float | None]:
+        """The note sung into each connected microphone (MIDI or None), by channel."""
+        if not self.running:
+            return {}
+        window = int(self.sample_rate * 0.1)
+        notes: dict[int, float | None] = {}
+        for index in self.mixer.live_mics:
+            recent = self.mixer.mic_taps[index].latest(window)
+            if float(np.max(np.abs(recent))) < 0.003:
+                notes[index] = None  # silence: not worth running the detector
+                continue
+            samples, rate = pitch_core.decimate(recent.astype(np.float64), self.sample_rate)
+            notes[index] = pitch_core.detect(samples[-pitch_core.FRAME :], rate)
+        return notes
 
     def levels(self) -> dict[str, Any]:
         return {

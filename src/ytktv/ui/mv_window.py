@@ -355,6 +355,9 @@ class MvWindow(QWidget):
         """The end-of-song result: stays up a few seconds over whatever comes next."""
         singer = score.get("singer") or ""
         caption = f"{singer}  ·  {score['title']}" if singer else str(score["title"])
+        voices = score.get("voices") or []
+        if len(voices) >= 2:  # a duet: one score for each microphone
+            caption = "   ·   ".join(f"Mic {voice['mic']}  {voice['points']}" for voice in voices)
         board = score.get("board") or []
         self.score_card.set_score(
             int(score["points"]), str(score["grade"]), caption, int(score.get("rank") or 0), board

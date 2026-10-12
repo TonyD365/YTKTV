@@ -73,6 +73,24 @@ class ScoreKeeper:
         self._frames = 0  # melody frames that went by
         self._sung = 0  # of those, frames where the microphone had a pitch
         self._credit = 0.0
+        # One more keeper per microphone, fed separately, so a duet gets two scores.
+        self._voices: dict[int, ScoreKeeper] = {}
+
+    def feed_voice(self, mic: int, position: float, sung: float | None) -> None:
+        """Like :meth:`feed`, for microphone number *mic* alone."""
+        with self._lock:
+            voice = self._voices.get(mic)
+            if voice is None:
+                voice = self._voices[mic] = ScoreKeeper(self.melody)
+        voice.transpose = self.transpose
+        voice.feed(position, sung)
+
+    def voice_results(self) -> dict[int, Score]:
+        """The score of every microphone that was sung into enough to be judged."""
+        with self._lock:
+            voices = dict(self._voices)
+        results = {mic: voice.result() for mic, voice in sorted(voices.items())}
+        return {mic: score for mic, score in results.items() if score is not None}
 
     def feed(self, position: float, sung: float | None) -> None:
         """Record the microphone pitch (MIDI or None) at playback *position* seconds."""
@@ -153,14 +171,17 @@ class ScoringLoop:
         mic_pitch: Callable[[], float | None],
         current: Callable[[], tuple[ScoreKeeper, float] | None],
         on_sample: Callable[[float, float | None], None] | None = None,
+        voice_pitches: Callable[[], dict[int, float | None]] | None = None,
     ) -> None:
         """*current* returns (keeper, playback position) while a song is being scored.
 
         *on_sample* is told every (position, sung note or None), for drawing the voice.
+        *voice_pitches* gives the note of each microphone on its own, by channel.
         """
         self._mic_pitch = mic_pitch
         self._current = current
         self._on_sample = on_sample
+        self._voice_pitches = voice_pitches
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -184,6 +205,9 @@ class ScoringLoop:
             try:
                 sung = self._mic_pitch()
                 keeper.feed(position, sung)
+                if self._voice_pitches is not None:
+                    for mic, note in self._voice_pitches().items():
+                        keeper.feed_voice(mic, position, note)
                 if self._on_sample is not None:
                     self._on_sample(position, sung)
             except Exception:

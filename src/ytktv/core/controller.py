@@ -118,7 +118,7 @@ class KTVController:
             stems.want_pitch = self.settings.scoring
         if audio is not None:
             self._scoring_loop = ScoringLoop(
-                audio.mic_pitch, self._scoring_target, self._on_sung_pitch
+                audio.mic_pitch, self._scoring_target, self._on_sung_pitch, audio.mic_pitches
             )
             self._scoring_loop.start()
         self._apply_volume()
@@ -548,13 +548,26 @@ class KTVController:
         result = keeper.result() if keeper is not None else None
         if result is None:
             return
-        rank = self.scoreboard.add(result.points, item.song.title, item.singer)
+        voices = keeper.voice_results() if keeper is not None else {}
+        entries: list[dict[str, Any]] = []
+        if len(voices) >= 2:
+            # A duet: each microphone has its own score, and its own line tonight.
+            # The big number on the card is the better of them.
+            for mic, score in voices.items():
+                who = f"{item.singer} (Mic {mic + 1})" if item.singer else f"Mic {mic + 1}"
+                place = self.scoreboard.add(score.points, item.song.title, who)
+                entries.append({"mic": mic + 1, **score.to_dict(), "rank": place})
+            best = max(entries, key=lambda entry: entry["points"])
+            result, rank = voices[best["mic"] - 1], best["rank"]
+        else:
+            rank = self.scoreboard.add(result.points, item.song.title, item.singer)
         self.last_score = {
             **result.to_dict(),
             "title": item.song.title,
             "singer": item.singer,
             "rank": rank,
             "board": self.scoreboard.top(5),
+            "voices": entries,
         }
         self.bus.emit("score", self.last_score)
 

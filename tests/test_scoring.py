@@ -315,6 +315,7 @@ def test_controller_scores_a_song_and_announces_it(tmp_path):
                 "singer": "Ann",
                 "rank": 1,
                 "board": [{"rank": 1, "points": 100, "title": "Song 1", "singer": "Ann"}],
+                "voices": [],
             }
         ]
         assert controller.state()["last_score"]["points"] == 100
@@ -407,3 +408,85 @@ def test_scoring_loop_reports_what_was_sung():
     finally:
         loop.stop()
     assert heard[:3] == [(1.0, 60.0), (1.0, None), (1.0, 61.5)]
+
+
+def test_a_duet_gets_a_score_for_each_microphone(tmp_path):
+    stems = FakeStems(tmp_path)
+    controller, player, _ = make_controller(tmp_path, stems=stems)
+    controller.settings.wait_for_instrumental = False
+    scores = []
+    controller.bus.subscribe(lambda topic, data: scores.append(data) if topic == "score" else None)
+    try:
+        song = make_song(1)
+        stems.ready.add(song.video_id)
+        melody_file(stems, song.video_id)
+        controller.enqueue(song, singer="Ann")
+        wait_for(lambda: controller.state()["scoring_active"])
+        keeper, _position = controller._scoring_target()
+        hop = keeper.melody.hop
+        for i, target in enumerate(keeper.melody.notes):
+            position = i * hop + 0.09
+            keeper.feed(position, target)
+            keeper.feed_voice(0, position, target)  # microphone 1 is on every note
+            keeper.feed_voice(1, position, None if target is None else target + 4)  # 2 is off
+            keeper.feed_voice(2, position, None)  # microphone 3 is on but nobody sings into it
+        voices = keeper.voice_results()
+        assert sorted(voices) == [0, 1] and voices[0].points == 100 and voices[1].points < 60
+
+        player.finish()
+        wait_for(lambda: controller.status == PlayStatus.IDLE)
+        (score,) = scores
+        assert score["points"] == 100 and score["rank"] == 1  # the better voice is the headline
+        assert [(v["mic"], v["points"] == 100) for v in score["voices"]] == [(1, True), (2, False)]
+        board = controller.state()["scoreboard"]
+        assert [entry["singer"] for entry in board] == ["Ann (Mic 1)", "Ann (Mic 2)"]
+    finally:
+        controller.close()
+
+
+def test_one_singer_with_two_microphones_switched_on_is_scored_as_before(tmp_path):
+    stems = FakeStems(tmp_path)
+    controller, player, _ = make_controller(tmp_path, stems=stems)
+    controller.settings.wait_for_instrumental = False
+    scores = []
+    controller.bus.subscribe(lambda topic, data: scores.append(data) if topic == "score" else None)
+    try:
+        song = make_song(1)
+        stems.ready.add(song.video_id)
+        melody_file(stems, song.video_id)
+        controller.enqueue(song)
+        wait_for(lambda: controller.state()["scoring_active"])
+        keeper, _position = controller._scoring_target()
+        for i, target in enumerate(keeper.melody.notes):
+            position = i * keeper.melody.hop + 0.09
+            keeper.feed(position, target)
+            keeper.feed_voice(0, position, target)
+            keeper.feed_voice(1, position, None)
+        player.finish()
+        wait_for(lambda: controller.status == PlayStatus.IDLE)
+        (score,) = scores
+        assert score["voices"] == [] and score["singer"] == ""
+        assert [entry["singer"] for entry in controller.state()["scoreboard"]] == [""]
+    finally:
+        controller.close()
+
+
+def test_engine_reports_the_pitch_of_each_live_microphone():
+    from ytktv.audio.engine import AudioEngine
+
+    settings = Settings()
+    engine = AudioEngine(settings)
+    mixer = Mixer(settings, 48000)
+    engine.mixer, engine.sample_rate = mixer, 48000
+    assert engine.mic_pitches() == {}  # not running
+    engine._output = object()  # looks running
+    if not engine.running:
+        pytest.skip("cannot fake a running engine on this build")
+    t = np.arange(512) / 48000
+    for block in range(20):
+        phase = 2 * np.pi * (block * 512 / 48000 + t)
+        tone = (0.3 * np.sin(440.0 * phase)).astype(np.float32)
+        mixer.mix([tone, None, np.zeros(512, dtype=np.float32), None], 512)
+    notes = engine.mic_pitches()
+    assert sorted(notes) == [0, 2]  # the channels that are switched on
+    assert abs(notes[0] - 69.0) < 0.5 and notes[2] is None  # A4 on one, silence on the other
