@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from ytktv import __version__, bootstrap
+from ytktv import __version__, bootstrap, children
 from ytktv.config import SettingsStore, cache_dir, data_dir
 from ytktv.core.controller import KTVController
 from ytktv.core.events import EventBus
@@ -202,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
     app.setStyleSheet(theme.STYLESHEET)
     collect_garbage_on_gui_thread(app)
 
+    children.start([data_dir()])
     have_mpv = _ensure_libmpv(app)
     ffmpeg = bootstrap.ensure_ffmpeg()
 
@@ -342,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
         server.stop()
         mv_window.release()
         controller.close()
+        children.stop()  # downloads, HD unlock and separation must not carry on alone
 
     app.aboutToQuit.connect(shutdown)
     return int(app.exec())

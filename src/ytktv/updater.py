@@ -14,7 +14,6 @@ import logging
 import os
 import platform
 import shutil
-import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -25,7 +24,7 @@ from typing import Any
 
 from packaging.version import InvalidVersion, Version
 
-from ytktv import GITHUB_REPO, __version__
+from ytktv import GITHUB_REPO, __version__, children
 from ytktv.bootstrap import is_frozen
 from ytktv.net import urlopen
 
@@ -194,12 +193,10 @@ def install_update(installer: Path) -> None:
     system = platform.system()
     if system == "Darwin":
         # Opens the standard macOS Installer, which asks for the admin password itself.
-        subprocess.Popen(["open", str(installer)])
+        children.launch_to_outlive(["open", str(installer)])
     elif system == "Windows":
-        flags = getattr(subprocess, "DETACHED_PROCESS", 0)
-        subprocess.Popen(
-            [str(installer), "/SILENT", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"],
-            creationflags=flags,
+        children.launch_to_outlive(
+            [str(installer), "/SILENT", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"]
         )
     elif system == "Linux":
         current = os.environ.get("APPIMAGE")
@@ -207,7 +204,7 @@ def install_update(installer: Path) -> None:
             raise RuntimeError("not running from an AppImage")
         installer.chmod(0o755)
         shutil.move(str(installer), current)
-        subprocess.Popen([current], start_new_session=True)
+        children.launch_to_outlive([current])
     else:
         raise RuntimeError(f"unsupported platform {system}")
     log.info("update handed to installer; exiting %s", sys.argv[0])
