@@ -131,8 +131,19 @@ def main() -> None:
     staging.mkdir(parents=True)
     builder = {"Darwin": macos, "Linux": linux, "Windows": windows}[platform.system()]
     sources = builder(work, staging)
-    if not any(path.name in bootstrap._libmpv_names() for path in staging.iterdir()):
+    libraries = [path for path in staging.iterdir() if path.name in bootstrap._libmpv_names()]
+    if not libraries:
         sys.exit("the pack does not contain libmpv")
+    # The pack must stand on its own: load it in a fresh process that has loaded none
+    # of the libraries a packaged YTKTV happens to bring along.
+    check = subprocess.run(
+        [sys.executable, "-c", "import ctypes, sys; ctypes.CDLL(sys.argv[1])", str(libraries[0])],
+        capture_output=True,
+        text=True,
+    )
+    if check.returncode != 0:
+        sys.exit(f"the pack's libmpv does not load on its own:\n{check.stderr.strip()[-2000:]}")
+    print(f"{libraries[0].name} loads on its own")
     shutil.copy(HERE / "mpv_pack" / "NOTICE.txt", staging / "NOTICE.txt")
     (staging / "SOURCES.txt").write_text("\n".join(sources) + "\n", encoding="utf-8")
 
