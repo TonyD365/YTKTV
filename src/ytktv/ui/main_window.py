@@ -544,6 +544,10 @@ class MainWindow(QMainWindow):
                 self.mv_window.set_lyrics(payload["lines"])
         elif topic == "danmaku":
             self.mv_window.add_danmaku(payload["text"])
+        elif topic == "melody":
+            self.mv_window.set_melody(self.controller.melody())
+        elif topic == "pitch":
+            self.mv_window.add_sung_pitch(payload["position"], payload["note"])
         elif topic == "score":
             self.mv_window.show_score(payload)
             self.show_toast(f"Score: {payload['points']}  ·  {payload['grade']}")

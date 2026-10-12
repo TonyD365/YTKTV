@@ -501,3 +501,60 @@ def test_queue_rows_are_reordered_by_dragging_the_grip(window, qtbot):
     song_list.drag_start(rows[1])  # dropped where it already is: nothing moves
     song_list.drag_end(middle(rows[1]))
     assert titles() == ["Song 5", "Song 3", "Song 4", "Song 2"]
+
+
+def test_pitch_lane_shows_the_tune_and_the_voice_in_its_octave(qtbot):
+    from ytktv.ui.mv_overlays import PitchLane
+
+    lane = PitchLane()
+    qtbot.addWidget(lane)
+    lane.resize(600, 120)
+    assert not lane.has_melody()
+    lane.set_melody(
+        {"hop": 0.05, "notes": [60.0] * 20 + [None] * 10 + [64.2] * 20, "transpose": 2.0}
+    )
+    assert lane.has_melody()
+    assert lane._bars == [(0.0, 1.0, 60.0), (1.5, 2.5, 64.0)]  # one bar per held note
+
+    lane.add_voice(0.5, 50.1)  # an octave below the tune (62 after the key change): on it
+    lane.add_voice(0.6, 77.0)  # three semitones off, whatever the octave
+    lane.add_voice(0.7, None)  # nothing heard: nothing drawn
+    assert [(round(note, 1), on_it) for _t, note, on_it in lane._voice] == [
+        (62.1, True),
+        (65.0, False),
+    ]
+    lane.add_voice(1.25, 70.0)  # in the gap between two notes: shown, but cannot be "on it"
+    assert lane._voice[-1][2] is False
+
+    lane.show()
+    lane.set_time(0.6)
+    empty = lane.grab().toImage()
+    lane.set_time(1.9)
+    assert lane.grab().toImage() != empty  # the lane scrolls with the song
+    lane.set_melody(None)
+    assert not lane.has_melody() and not lane.isVisible() and not lane._voice
+
+
+def test_score_card_grows_for_the_leaderboard(window, qtbot):
+    main, _ = window
+    mv = main.mv_window
+    mv.resize(1280, 720)
+    mv.show_score({"points": 80, "grade": "Great!", "title": "Song 1", "singer": ""})
+    alone = mv.score_card.height()
+    assert mv.score_card.board_rows() == 0
+    board = [
+        {"rank": 1, "points": 91, "title": "Song 2", "singer": "Ann"},
+        {"rank": 2, "points": 80, "title": "Song 1", "singer": ""},
+    ]
+    mv.show_score(
+        {
+            "points": 80,
+            "grade": "Great!",
+            "title": "Song 1",
+            "singer": "",
+            "rank": 2,
+            "board": board,
+        }
+    )
+    assert mv.score_card.board_rows() == 2 and mv.score_card.height() > alone
+    mv.score_card.grab()

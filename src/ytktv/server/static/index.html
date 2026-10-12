@@ -117,6 +117,10 @@
     </div>
     <h3>Selected</h3>
     <div id="queue"></div>
+    <div id="board-box" hidden>
+      <h3>Tonight's best</h3>
+      <div id="board"></div>
+    </div>
     <h3>Sung</h3>
     <div id="history"></div>
   </section>
@@ -334,6 +338,14 @@ function render() {
   setProgress(state.position, state.duration);
   stateAt = Date.now();
   renderQueue();
+
+  const board = $("board");
+  board.replaceChildren();
+  for (const entry of state.scoreboard || []) {
+    const who = entry.singer ? `${entry.singer} · ${entry.title}` : entry.title;
+    board.append(el("div", {class: "turn"}, el("b", {}, `${entry.rank}.  ${who}`), el("span", {}, String(entry.points))));
+  }
+  $("board-box").hidden = !board.children.length;
 
   const h = $("history");
   h.replaceChildren();

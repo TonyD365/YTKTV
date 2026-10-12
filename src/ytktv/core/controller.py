@@ -20,7 +20,7 @@ from ytktv.core.events import EventBus
 from ytktv.core.library import Library
 from ytktv.core.models import PlayStatus, QueueItem, Song, StemStatus, VocalMode
 from ytktv.core.queue import SongQueue
-from ytktv.core.scoring import Melody, ScoreKeeper, ScoringLoop
+from ytktv.core.scoring import Melody, Scoreboard, ScoreKeeper, ScoringLoop
 from ytktv.player.base import PlayerBackend
 from ytktv.youtube.parse import MediaSource
 
@@ -98,6 +98,7 @@ class KTVController:
         self._danmaku_times: list[float] = []
         self._keeper: ScoreKeeper | None = None  # scores the song that is playing
         self.last_score: dict[str, Any] | None = None
+        self.scoreboard = Scoreboard()  # tonight's scores; starts empty with the app
         self._scoring_loop: ScoringLoop | None = None
         self._wake = threading.Event()
         self._retries: dict[str, int] = {}
@@ -114,7 +115,9 @@ class KTVController:
         if stems is not None:
             stems.want_pitch = self.settings.scoring
         if audio is not None:
-            self._scoring_loop = ScoringLoop(audio.mic_pitch, self._scoring_target)
+            self._scoring_loop = ScoringLoop(
+                audio.mic_pitch, self._scoring_target, self._on_sung_pitch
+            )
             self._scoring_loop.start()
         self._apply_volume()
         player.set_guide(self.settings.guide_vocal / 100.0)
@@ -259,7 +262,7 @@ class KTVController:
                     self.queue.add_history(self.current.song)
                     self.library.save(self.queue.history())
                     self._announce_score(self.current)
-                self._keeper = None
+                had_melody, self._keeper = self._keeper is not None, None
                 self._started = False
                 item = self.queue.pop_next()
                 self.current = item
@@ -273,6 +276,8 @@ class KTVController:
                 self.speed = 1.0
             self._sync_preload()
             self.bus.emit("lyrics", {"id": item.id if item else None, "lines": []})
+            if had_melody:
+                self.bus.emit("melody", None)
             self._emit_state()
             # Silence the previous song now: the next one may take a while to be ready.
             self.player.stop()
@@ -489,6 +494,8 @@ class KTVController:
                 self._keeper = None
         if self.settings.scoring and item is not None:
             self._load_melody(item)
+        else:
+            self.bus.emit("melody", None)
         self._save_soon()
         self._emit_state()
 
@@ -507,6 +514,21 @@ class KTVController:
         with self._lock:
             if self.current is item and self._keeper is None:
                 self._keeper = ScoreKeeper(melody, transpose=float(self.pitch))
+        self.bus.emit("melody", None)  # the MV screen fetches it with melody()
+
+    def melody(self) -> dict[str, Any] | None:
+        """The tune the current song is scored against, for drawing; None when not scoring."""
+        keeper = self._keeper
+        if keeper is None:
+            return None
+        return {
+            "hop": keeper.melody.hop,
+            "notes": keeper.melody.notes,
+            "transpose": keeper.transpose,
+        }
+
+    def _on_sung_pitch(self, position: float, note: float | None) -> None:
+        self.bus.emit("pitch", {"position": position, "note": note})
 
     def _scoring_target(self) -> tuple[ScoreKeeper, float] | None:
         with self._lock:
@@ -524,7 +546,14 @@ class KTVController:
         result = keeper.result() if keeper is not None else None
         if result is None:
             return
-        self.last_score = {**result.to_dict(), "title": item.song.title, "singer": item.singer}
+        rank = self.scoreboard.add(result.points, item.song.title, item.singer)
+        self.last_score = {
+            **result.to_dict(),
+            "title": item.song.title,
+            "singer": item.singer,
+            "rank": rank,
+            "board": self.scoreboard.top(5),
+        }
         self.bus.emit("score", self.last_score)
 
     def set_lights(self, enabled: bool) -> None:
@@ -589,6 +618,7 @@ class KTVController:
         keeper = self._keeper
         if keeper is not None:
             keeper.transpose = float(self.pitch)  # the melody moves with the key
+            self.bus.emit("melody", None)
         self._emit_state()
 
     def set_speed(self, speed: float) -> None:
@@ -889,6 +919,7 @@ class KTVController:
             "scoring": settings.scoring,
             "scoring_active": self._keeper is not None,
             "last_score": self.last_score,
+            "scoreboard": self.scoreboard.top(10),
             "music_volume": settings.music_volume,
             "mic_volume": settings.mic_volume,
             "master_volume": settings.master_volume,

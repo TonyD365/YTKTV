@@ -31,10 +31,13 @@ from PySide6.QtWidgets import QLabel, QWidget
 from ytktv.player.mpv_player import MpvPlayer
 from ytktv.ui import theme
 from ytktv.ui.mv_overlays import (
+    BOARD_HEAD,
+    BOARD_ROW,
     DanmakuOverlay,
     EdgeLight,
     LightShow,
     LyricsOverlay,
+    PitchLane,
     ScoreCard,
 )
 from ytktv.ui.support import fade_in, fade_out, qr_pixmap
@@ -249,6 +252,7 @@ class MvWindow(QWidget):
         self._lights_enabled = True
         self.level_source: Callable[[], tuple[float, float]] | None = None
         self.lyrics = LyricsOverlay(self)
+        self.pitch_lane = PitchLane(self)
         self.danmaku = DanmakuOverlay(self)
         self.score_card = ScoreCard(self)
         self._score_timer = QTimer(self)
@@ -281,10 +285,17 @@ class MvWindow(QWidget):
         self.lights["top"].setGeometry(0, 0, w, strip_h)
         self.lights["bottom"].setGeometry(0, h - strip_h, w, strip_h)
         self.lyrics.setGeometry(0, int(h * 0.74), w, int(h * 0.24))
+        self.pitch_lane.setGeometry(int(w * 0.2), int(h * 0.57), int(w * 0.6), int(h * 0.15))
         self.danmaku.setGeometry(0, int(h * 0.12), w, int(h * 0.42))
-        card_w, card_h = int(h * 0.62), int(h * 0.5)
-        self.score_card.setGeometry((w - card_w) // 2, (h - card_h) // 2, card_w, card_h)
+        self._place_score_card()
         self._place_live_score()
+
+    def _place_score_card(self) -> None:
+        w, h = self.width(), self.height()
+        rows = self.score_card.board_rows()
+        grow = 1.0 + BOARD_HEAD + BOARD_ROW * rows if rows else 1.0
+        card_w, card_h = int(h * 0.62), int(h * 0.5 * grow)
+        self.score_card.setGeometry((w - card_w) // 2, (h - card_h) // 2, card_w, card_h)
 
     def _place_banner(self) -> None:
         unit = max(1.0, self.height() / 100.0)
@@ -343,10 +354,24 @@ class MvWindow(QWidget):
         """The end-of-song result: stays up a few seconds over whatever comes next."""
         singer = score.get("singer") or ""
         caption = f"{singer}  ·  {score['title']}" if singer else str(score["title"])
-        self.score_card.set_score(int(score["points"]), str(score["grade"]), caption)
+        board = score.get("board") or []
+        self.score_card.set_score(
+            int(score["points"]), str(score["grade"]), caption, int(score.get("rank") or 0), board
+        )
+        self._place_score_card()
         fade_in(self.score_card, 400)
         self.score_card.raise_()
-        self._score_timer.start(7000)
+        self._score_timer.start(9000 if len(board) > 1 else 7000)
+
+    def set_melody(self, melody: dict[str, Any] | None) -> None:
+        """Show the tune being scored as a lane of bars, or hide it with None."""
+        self.pitch_lane.set_melody(melody)
+        if melody is not None:
+            self.pitch_lane.raise_()
+            self.score_card.raise_()
+
+    def add_sung_pitch(self, position: float, note: float | None) -> None:
+        self.pitch_lane.add_voice(position, note)
 
     def set_lyrics(self, lines: list[dict[str, Any]]) -> None:
         self.lyrics.set_lines(lines)
@@ -373,9 +398,12 @@ class MvWindow(QWidget):
         elapsed, self._frame = min(0.25, now - self._frame), now
         self.danmaku.advance(elapsed)
         if self._playing:
+            # Position reports arrive twice a second; glide between them.
+            position = self._position + (now - self._position_at) * self._speed
             if self.lyrics.has_lines():
-                # Position reports arrive twice a second; glide between them.
-                self.lyrics.set_time(self._position + (now - self._position_at) * self._speed)
+                self.lyrics.set_time(position)
+            if self.pitch_lane.has_melody():
+                self.pitch_lane.set_time(position)
             if self._lights_enabled and self.level_source is not None:
                 left, right = self.level_source()
                 for side, (intensity, hue) in self._light_show.step(
@@ -460,6 +488,7 @@ class MvWindow(QWidget):
         self._lights_enabled = bool(state.get("lights", True))
         if status not in ("playing", "paused"):
             self.lyrics.set_lines([])
+            self.pitch_lane.set_melody(None)
             self.set_live_score(None)
         self._sync_animator()
         showing_video = current is not None and status in ("playing", "paused")

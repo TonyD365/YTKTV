@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import colorsys
 import random
+from bisect import bisect_right
+from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -30,6 +32,8 @@ LEAD_SECONDS = 3.0
 DANMAKU_SECONDS = 9.0
 DANMAKU_LANES = 6
 DANMAKU_LIMIT = 40
+# The leaderboard under a score, as shares of the height of the card without it.
+BOARD_HEAD, BOARD_ROW = 0.17, 0.09
 DANMAKU_COLORS = ("#ffffff", "#ff8ad0", "#7df3ff", "#ffe27a", "#9dffb0", "#c9a6ff")
 
 
@@ -451,6 +455,129 @@ class LightShow:
         return {side: (intensity, self._hue + offset) for side, offset in self._OFFSETS.items()}
 
 
+class PitchLane(_Overlay):
+    """The tune as bars scrolling past a line, with the singer's voice drawn over them.
+
+    Time runs left to right and the line marks now; higher notes are higher up. The
+    voice is shown in the octave of the tune, because singing it an octave lower or
+    higher counts just the same.
+    """
+
+    BEHIND, AHEAD = 2.0, 4.0  # seconds of the tune shown before and after now
+    SPAN = 16.0  # semitones from the bottom of the lane to the top
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._hop = 0.05
+        self._bars: list[tuple[float, float, float]] = []  # (start, end, note) in seconds
+        self._starts: list[float] = []
+        self._transpose = 0.0
+        self._position = 0.0
+        self._voice: deque[tuple[float, float, bool]] = deque(maxlen=60)  # (time, note, on it)
+
+    def set_melody(self, melody: dict[str, Any] | None) -> None:
+        """Take the tune to show (see KTVController.melody), or None to hide the lane."""
+        self._voice.clear()
+        self._bars = []
+        if melody is not None:
+            self._hop = float(melody["hop"])
+            self._transpose = float(melody["transpose"])
+            start: int | None = None
+            notes = list(melody["notes"]) + [None]
+            for i, note in enumerate(notes):
+                # A bar runs for as long as the tune stays on the same semitone.
+                same = start is not None and note is not None and round(note) == round(notes[start])
+                if start is not None and not same:
+                    bar = (start * self._hop, i * self._hop, float(round(notes[start])))
+                    self._bars.append(bar)
+                    start = None
+                if start is None and note is not None:
+                    start = i
+        self._starts = [bar[0] for bar in self._bars]
+        self.setVisible(bool(self._bars))
+        self.update()
+
+    def has_melody(self) -> bool:
+        return bool(self._bars)
+
+    def _visible_bars(self, low: float, high: float) -> list[tuple[float, float, float]]:
+        first = max(0, bisect_right(self._starts, low) - 1)
+        last = bisect_right(self._starts, high)
+        return [bar for bar in self._bars[first:last] if bar[1] > low]
+
+    def _target(self, when: float) -> float | None:
+        """The note of the tune at or nearest to *when* (within a third of a second)."""
+        near = self._visible_bars(when - 0.35, when + 0.35)
+        if not near:
+            return None
+        bar = min(
+            near,
+            key=lambda b: 0.0 if b[0] <= when < b[1] else min(abs(b[0] - when), abs(b[1] - when)),
+        )
+        return bar[2] + self._transpose
+
+    def add_voice(self, position: float, note: float | None) -> None:
+        """Record what was sung at *position*; None when nothing was heard."""
+        if note is None or not self._bars:
+            return
+        target = self._target(position)
+        centre = target if target is not None else self._centre(position)
+        offset = (note - centre + 6.0) % 12.0 - 6.0  # nearest octave to the tune
+        on_it = target is not None and abs(offset) <= 1.0
+        self._voice.append((position, centre + offset, on_it))
+
+    def _centre(self, when: float) -> float:
+        """The middle of the lane: follows the tune slowly so that it stays in view."""
+        around = self._visible_bars(when - 6.0, when + 6.0)
+        if not around:
+            return 60.0 + self._transpose
+        notes = sorted(bar[2] for bar in around)
+        return notes[len(notes) // 2] + self._transpose
+
+    def set_time(self, position: float) -> None:
+        if abs(position - self._position) > 1e-3:
+            self._position = position
+            self.update()
+
+    def paintEvent(self, _event: QPaintEvent) -> None:
+        if not self._bars:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = float(self.width()), float(self.height())
+        now = self._position
+        scale = w / (self.BEHIND + self.AHEAD)
+        now_x = self.BEHIND * scale
+        centre = self._centre(now)
+        row = h / self.SPAN
+
+        def y_of(note: float) -> float:
+            return max(row, min(h - row, h / 2 - (note - centre) * row))
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(8, 4, 20, 120))
+        painter.drawRoundedRect(QRectF(0, 0, w, h), row, row)
+        for start, end, note in self._visible_bars(now - self.BEHIND, now + self.AHEAD):
+            x0 = max(0.0, now_x + (start - now) * scale)
+            x1 = min(w, now_x + (end - now) * scale)
+            if x1 - x0 < 1.0:
+                continue
+            passed = end <= now
+            painter.setBrush(QColor(255, 255, 255, 70 if passed else 150))
+            y = y_of(note + self._transpose)
+            painter.drawRoundedRect(
+                QRectF(x0, y - row * 0.45, x1 - x0, row * 0.9), row * 0.4, row * 0.4
+            )
+        radius = row * 0.55
+        for when, note, on_it in self._voice:
+            if when < now - self.BEHIND:
+                continue
+            painter.setBrush(QColor(theme.GOLD) if on_it else QColor(theme.PINK))
+            painter.drawEllipse(QPointF(now_x + (when - now) * scale, y_of(note)), radius, radius)
+        painter.setPen(QPen(QColor(theme.CYAN), max(2.0, row * 0.25)))
+        painter.drawLine(QPointF(now_x, 2), QPointF(now_x, h - 2))
+
+
 class ScoreCard(_Overlay):
     """The big end-of-song score, in the middle of the screen."""
 
@@ -459,30 +586,54 @@ class ScoreCard(_Overlay):
         self._points = 0
         self._grade = ""
         self._caption = ""
+        self._rank = 0
+        self._board: list[dict[str, Any]] = []
 
-    def set_score(self, points: int, grade: str, caption: str) -> None:
+    def set_score(
+        self,
+        points: int,
+        grade: str,
+        caption: str,
+        rank: int = 0,
+        board: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Show a score; *board* is tonight's top scores and *rank* this one's place."""
         self._points, self._grade, self._caption = points, grade, caption
+        self._rank = rank
+        self._board = list(board or []) if len(board or []) > 1 else []
         self.update()
+
+    def board_rows(self) -> int:
+        """How many leaderboard lines the card will show (it is taller with them)."""
+        return len(self._board)
 
     def paintEvent(self, _event: QPaintEvent) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h = float(self.width()), float(self.height())
-        panel = QRectF(0, 0, w, h)
+        w, full = float(self.width()), float(self.height())
+        # The score takes the height the card has without a leaderboard; the rows of
+        # the leaderboard are added underneath.
+        rows = len(self._board)
+        h = full / (1.0 + BOARD_HEAD + BOARD_ROW * rows) if rows else full
+        panel = QRectF(0, 0, w, full)
         painter.setPen(QPen(QColor(theme.PINK), max(2.0, h * 0.012)))
         painter.setBrush(QColor(8, 4, 20, 225))
         painter.drawRoundedRect(panel.adjusted(2, 2, -2, -2), h * 0.08, h * 0.08)
 
-        def centred(
-            text: str, pixel_size: float, y: float, fill: QBrush | QColor, weight: Any
-        ) -> None:
+        def sized(pixel_size: float, weight: Any, text: str, room: float) -> tuple[QFont, float]:
             font = QFont()
             font.setWeight(weight)
             font.setPixelSize(max(8, int(pixel_size)))
             width = QFontMetricsF(font).horizontalAdvance(text)
-            if width > w * 0.9:
-                font.setPixelSize(max(8, int(pixel_size * w * 0.9 / width)))
+            if width > room:
+                font.setPixelSize(max(8, int(pixel_size * room / width)))
                 width = QFontMetricsF(font).horizontalAdvance(text)
+            return font, width
+
+        def centred(
+            text: str, pixel_size: float, y: float, fill: QBrush | QColor, weight: Any
+        ) -> None:
+            font, width = sized(pixel_size, weight, text, w * 0.9)
             _outlined_text(painter, font, text, QPointF((w - width) / 2, y), fill)
 
         centred("SCORE", h * 0.09, h * 0.17, QColor(theme.CYAN), QFont.Weight.Bold)
@@ -493,3 +644,19 @@ class ScoreCard(_Overlay):
         centred(self._grade, h * 0.12, h * 0.79, QColor(theme.GOLD), QFont.Weight.Black)
         if self._caption:
             centred(self._caption, h * 0.06, h * 0.92, QColor("white"), QFont.Weight.DemiBold)
+        if not rows:
+            return
+        y = h * (1.0 + BOARD_HEAD * 0.45)
+        centred("TONIGHT'S BEST", h * 0.05, y, QColor(theme.CYAN), QFont.Weight.Bold)
+        left, right = w * 0.08, w * 0.92
+        for entry in self._board:
+            y += h * BOARD_ROW
+            mine = entry["rank"] == self._rank
+            colour = QColor(theme.GOLD) if mine else QColor("white")
+            name = entry["singer"] or entry["title"]
+            label = f"{entry['rank']}.  {name}"
+            points = str(entry["points"])
+            font, _width = sized(h * 0.055, QFont.Weight.Bold, label, (right - left) * 0.8)
+            _outlined_text(painter, font, label, QPointF(left, y), colour)
+            font, width = sized(h * 0.055, QFont.Weight.Black, points, w * 0.2)
+            _outlined_text(painter, font, points, QPointF(right - width, y), colour)
