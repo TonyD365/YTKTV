@@ -187,3 +187,104 @@ def test_low_cut_removes_rumble_and_keeps_voice():
     mid = run_blocks(LowCut(SR).process, voice)
     assert rms(low[BLOCK * 20 :]) < rms(rumble) * 0.15
     assert rms(mid[BLOCK * 20 :]) == pytest.approx(rms(voice), rel=0.05)
+
+
+def _blocks(process, signal, size=512):
+    return np.concatenate(
+        [process(signal[i : i + size]) for i in range(0, len(signal) - size + 1, size)]
+    )
+
+
+def _rms_db(x):
+    return 20 * np.log10(np.sqrt(np.mean(x * x)) + 1e-12)
+
+
+def test_compressor_narrows_the_gap_between_quiet_and_loud():
+    from ytktv.audio.dsp import Compressor
+
+    t = np.arange(SR) / SR
+    quiet = (0.03 * np.sin(2 * np.pi * 300 * t)).astype(np.float32)
+    loud = (0.6 * np.sin(2 * np.pi * 300 * t)).astype(np.float32)
+
+    def settled(signal, amount):
+        compressor = Compressor(SR)
+        return _blocks(lambda x: compressor.process(x, amount), signal)[SR // 2 :]
+
+    untouched = settled(quiet, 0.0)
+    assert np.array_equal(untouched, quiet[SR // 2 : SR // 2 + len(untouched)])
+    gaps = [_rms_db(settled(loud, a)) - _rms_db(settled(quiet, a)) for a in (0.0, 0.25, 1.0)]
+    assert gaps[0] > gaps[1] + 4 > gaps[2] + 8  # more knob, less difference
+    assert _rms_db(settled(quiet, 0.5)) > _rms_db(quiet)  # quiet singing comes up
+    assert _rms_db(settled(loud, 0.5)) < _rms_db(loud)  # loud singing comes down
+    assert np.max(np.abs(settled(loud, 1.0))) < 1.0
+
+    # Turning the knob to zero glides back to the untouched signal without a step.
+    compressor = Compressor(SR)
+    _blocks(lambda x: compressor.process(x, 1.0), loud)
+    released = _blocks(lambda x: compressor.process(x, 0.0), loud)
+    assert np.max(np.abs(np.diff(released))) < 0.05
+    assert np.allclose(released[-512:], loud[len(released) - 512 : len(released)])
+
+
+def test_feedback_guard_cuts_a_squeal_and_leaves_voices_alone():
+    from ytktv.audio.dsp import FeedbackGuard
+
+    rng = np.random.default_rng(3)
+    t = np.arange(SR * 2) / SR
+    squeal = 0.3 * np.minimum(1, t * 4) * np.sin(2 * np.pi * 2300 * t)
+    squeal = (squeal + 0.003 * rng.standard_normal(len(t))).astype(np.float32)
+    guard = FeedbackGuard(SR)
+    out = _blocks(guard.process, squeal)
+    assert len(guard.notches) == 1
+    freq, depth = guard.notches[0]
+    assert abs(freq - 2300) < 15 and depth <= -24
+    assert _rms_db(out[-SR // 2 :]) < _rms_db(squeal[-SR // 2 :]) - 20
+    assert _rms_db(out[: SR // 20]) > _rms_db(squeal[: SR // 20]) - 1  # not before it is found
+
+    # A sung note has overtones and is left alone, with or without vibrato.
+    for vibrato in (0.0, 0.01):
+        pitch = 220 * (1 + vibrato * np.sin(2 * np.pi * 5.5 * t))
+        phase = 2 * np.pi * np.cumsum(pitch) / SR
+        voice = sum((0.5 ** (h - 1)) * np.sin(h * phase) for h in range(1, 12)) * 0.2
+        guard = FeedbackGuard(SR)
+        voice = voice.astype(np.float32)
+        assert np.array_equal(_blocks(guard.process, voice), voice[: len(voice) // 512 * 512])
+        assert guard.notches == []
+    guard = FeedbackGuard(SR)
+    _blocks(guard.process, (0.1 * rng.standard_normal(SR)).astype(np.float32))
+    assert guard.notches == []  # nor is noise
+
+    # Notches that are no longer needed are dropped.
+    guard = FeedbackGuard(SR)
+    _blocks(guard.process, squeal[:SR])
+    assert guard.notches
+    _blocks(guard.process, np.zeros(int(SR * (FeedbackGuard._KEEP_SECONDS + 1)), dtype=np.float32))
+    assert guard.notches == []
+
+
+def test_mic_chain_compresses_before_the_fader_and_can_switch_the_guard_off():
+    from ytktv.core.models import MicParams
+
+    t = np.arange(SR) / SR
+    loud = (0.6 * np.sin(2 * np.pi * 300 * t)).astype(np.float32)
+
+    def level(params):
+        chain = MicChain(SR)
+        # A test tone is as pure as a squeal, so the guard is left out of this part.
+        out = _blocks(lambda x: chain.process(x, params, False), loud)
+        return _rms_db(out[SR // 2 :, 0]), chain
+
+    base = MicParams(reverb=0.0, echo=0.0, comp=0.6, fader=0.8)
+    full, chain = level(base)
+    assert chain.compressor.reduction_db > 3
+    lower, chain = level(MicParams(reverb=0.0, echo=0.0, comp=0.6, fader=0.5))
+    # The fader only scales the result: the compressor works just as hard as before.
+    assert chain.compressor.reduction_db > 3
+    assert abs((full - lower) - 20 * np.log10(fader_gain(0.8) / fader_gain(0.5))) < 0.5
+
+    squeal = (0.3 * np.sin(2 * np.pi * 2300 * t)).astype(np.float32)
+    chain = MicChain(SR)
+    _blocks(lambda x: chain.process(x, base, True), squeal)
+    assert chain.guard.notches
+    _blocks(lambda x: chain.process(x, base, False), squeal[: SR // 4])
+    assert chain.guard.notches == []  # switched off: the notches are removed

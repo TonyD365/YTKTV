@@ -10,7 +10,7 @@
   <a href="https://github.com/TonyD365/YTKTV/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TonyD365/YTKTV/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776ab">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-22d3ee">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/TonyD365/YTKTV"></a>
+  <a href="LICENSE"><img alt="License: free to use, not for sale" src="https://img.shields.io/badge/license-free%20to%20use%2C%20not%20for%20sale-ffc94a"></a>
 </p>
 
 <p align="center">
@@ -45,7 +45,8 @@ microphones into the music with reverb and echo.
 - **Karaoke lyrics.** The **Lyrics** button in the control bar puts the words at the bottom of
   the MV screen, filling with colour line by line as the song plays. They come from the
   video's subtitles, or from YouTube's automatic captions when it has none (those are often
-  inaccurate for singing).
+  inaccurate for singing). The colour follows the singer word by word wherever YouTube's
+  captions say when each word was heard, and fills evenly otherwise.
 - **Finding songs.** Suggestions appear as you type, recent searches stay one tap away, and the
   Artists page lists well-known artists by scene. Song cards show whether a song is already
   selected and whether its instrumental is ready, so you can pick one that starts at once.
@@ -54,24 +55,30 @@ microphones into the music with reverb and echo.
   from the console or a phone.
 - **Scoring.** With the Score button on, each song is scored out of 100 by comparing the
   microphones with the original singer's melody, which is extracted while the instrumental is
-  prepared. A running score shows in the corner and a score card appears when the song ends.
-  Octaves do not matter, so anyone can sing in their own range.
+  prepared. While you sing, a lane on the MV screen shows the tune as bars and your voice as
+  dots over it (gold when you are on the note), with a running score in the corner. When the
+  song ends a score card shows your place among tonight's scores. Octaves do not matter, so
+  anyone can sing in their own range.
 - **Danmaku and lights.** Anyone can send a short message from the console or a phone and it
   flies across the MV screen. A glow around the screen pulses with the music.
 - **Smooth playback.** The next songs in the queue are downloaded ahead of time and played from
   disk; only the first song of a session streams, with a loading screen until it is ready.
   Separation runs in its own low-priority process so it cannot disturb the live sound.
 - **Mixing console.** Four microphone channels laid out like a hardware desk: input selection,
-  GAIN, 3-band EQ, ECHO, FX (reverb), PAN, fader, MUTE and PEAK LEDs; MUSIC, MICS and MAIN bus
+  GAIN, 3-band EQ, COMP (compressor), ECHO, FX (reverb), PAN, fader, MUTE and PEAK LEDs; MUSIC, MICS and MAIN bus
   faders, an OUTPUT meter for the total level (music and microphones), and output device
   selection. Effect presets (Pop, Ballad, Rock, KTV Hall, Dry, plus your own) set the EQ, reverb
   and echo of every channel at once, and each microphone can be adjusted from the phone page. Each channel has a low cut and a noise gate, so an open microphone stays silent
-  until someone sings. Microphones are mixed into the output
-  automatically.
+  until someone sings. A **Feedback Guard** listens for the squeal of a microphone feeding
+  back and cuts just that frequency. Microphones are mixed into the output automatically.
 - **KTV controls.** Queue, Priority (play next), Skip, Replay, Pause, Key up/down (±6 semitones),
   Tempo, favorites, sung history, plus Applause / Cheer / Air Horn / Drum Roll buttons.
 - **Phone remote.** A local web page for searching, queueing and remote control. No app to
-  install: scan the QR code.
+  install: scan the QR code. Each phone sees its own songs with how many are ahead and roughly
+  how long until its turn (phones are told apart by their address on the network).
+- **Reordering.** On the console's Selected Songs page, drag a song by its grip to move it.
+- **Setup wizard.** The first start walks through the sound output, the MV screen and a
+  microphone check. Run it again from Settings.
 - **Automatic updates.** Installed builds update themselves from the latest GitHub release.
 
 ## Install
@@ -97,6 +104,12 @@ xattr -d com.apple.quarantine ~/Downloads/YTKTV-<version>-macos-universal.pkg
 If macOS still refuses to open the app after installing, run
 `sudo xattr -dr com.apple.quarantine /Applications/YTKTV.app`. On Windows, choose
 **More info → Run anyway** in the SmartScreen prompt.
+
+**mpv is downloaded on first start.** YTKTV plays video with [mpv](https://mpv.io), a separate
+free program under the GPL. It is not inside the installers; the first time YTKTV starts it
+asks once and downloads the `YTKTV-mpv-<platform>.zip` published with the same release (you
+need to be online for that first start). The zip holds mpv, the libraries it needs, their
+license texts and a list of where each came from.
 
 ### Vocal separation and your graphics card
 
@@ -235,6 +248,8 @@ Versions come from git tags; there is no version number in the source.
    publish.
 3. The `Release` workflow builds the universal macOS `.pkg`, the Windows installer and the
    Linux AppImage from that tag and attaches them, together with `SHA256SUMS`, to the release.
+   It also attaches one `YTKTV-mpv-<platform>.zip` per platform: mpv is kept out of the
+   installers and fetched by the app on first start.
 
 Installed copies check `releases/latest` at startup and every six hours. Once the installers
 are attached they download the one for their platform, verify its checksum, and offer to
@@ -247,8 +262,9 @@ The macOS package is signed and notarized when the Developer ID secrets listed a
 the macOS build step in `.github/workflows/release.yml` are configured; otherwise it is ad-hoc
 signed.
 
-To build the macOS package locally: `brew install mpv`, `pip install -e ".[package]"`, then
-`packaging/macos/build_pkg.sh`.
+To build the macOS package locally: `pip install -e ".[package]"`, then
+`packaging/macos/build_pkg.sh`. With mpv installed (`brew install mpv`),
+`python packaging/build_mpv_pack.py macos-arm64 dist` builds the separate mpv download.
 
 ## Contributing
 
@@ -264,11 +280,24 @@ your own computer using [yt-dlp](https://github.com/yt-dlp/yt-dlp) and
 [mpv](https://mpv.io), and the tracks it separates are cached only on that computer. Playing
 videos this way may not be permitted by YouTube's Terms of Service, and how you may use
 copyrighted music depends on where you live and where you sing. You are responsible for how you
-use it. It is meant for private, non-commercial use, such as a party at home; a public or
-commercial venue normally needs a licence from the rights holders.
+use it. YTKTV's own license lets you use the software in a business, but that says nothing
+about the music: playing songs in a public or commercial venue normally needs licences from
+the rights holders, and YouTube's terms are written for personal viewing.
 
 The software is provided "as is", without warranty of any kind; see the [license](LICENSE).
 
 ## License
 
-[MIT](LICENSE)
+YTKTV is free to use, copy, modify and share under the [YTKTV License](LICENSE). In short:
+
+- **You may use it commercially**, for example to run a karaoke venue, a bar or an event, and
+  charge your customers for that.
+- **You may not sell the software itself**, nor a modified version or a fork of it, under any
+  name.
+- Anything you distribute that is based on it stays under the same license.
+
+The [license text](LICENSE) is what counts. It covers YTKTV's own code. The installers also
+contain Qt, an FFmpeg program and Python packages, which stay under their own licenses; mpv
+is a separate download under the GPL and is not covered by YTKTV's license at all. It is not an OSI-approved open-source license,
+because those do not allow a ban on selling. Versions 1.3.3 and earlier were released under
+the MIT License and remain available under it.

@@ -109,6 +109,40 @@ class ScoreKeeper:
         return Score(points, accuracy, participation, grade_for(points))
 
 
+SCOREBOARD_LIMIT = 100
+
+
+class Scoreboard:
+    """The scores of one evening, best first."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._entries: list[dict[str, Any]] = []
+        self._count = 0
+
+    def add(self, points: int, title: str, singer: str) -> int:
+        """Record a score and return its place tonight (1 = the best so far)."""
+        with self._lock:
+            self._count += 1
+            entry = {"points": points, "title": title, "singer": singer, "order": self._count}
+            self._entries.append(entry)
+            # A later score that only equals an earlier one does not push it down.
+            self._entries.sort(key=lambda e: (-e["points"], e["order"]))
+            del self._entries[SCOREBOARD_LIMIT:]
+            return self._entries.index(entry) + 1 if entry in self._entries else len(self._entries)
+
+    def top(self, count: int = 10) -> list[dict[str, Any]]:
+        with self._lock:
+            return [
+                {"rank": i + 1, "points": e["points"], "title": e["title"], "singer": e["singer"]}
+                for i, e in enumerate(self._entries[:count])
+            ]
+
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
+
+
 class ScoringLoop:
     """Samples the microphone pitch a few times a second and feeds the current keeper."""
 
@@ -118,10 +152,15 @@ class ScoringLoop:
         self,
         mic_pitch: Callable[[], float | None],
         current: Callable[[], tuple[ScoreKeeper, float] | None],
+        on_sample: Callable[[float, float | None], None] | None = None,
     ) -> None:
-        """*current* returns (keeper, playback position) while a song is being scored."""
+        """*current* returns (keeper, playback position) while a song is being scored.
+
+        *on_sample* is told every (position, sung note or None), for drawing the voice.
+        """
         self._mic_pitch = mic_pitch
         self._current = current
+        self._on_sample = on_sample
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -143,6 +182,9 @@ class ScoringLoop:
                 continue
             keeper, position = active
             try:
-                keeper.feed(position, self._mic_pitch())
+                sung = self._mic_pitch()
+                keeper.feed(position, sung)
+                if self._on_sample is not None:
+                    self._on_sample(position, sung)
             except Exception:
                 continue  # one bad frame must not end scoring for the night

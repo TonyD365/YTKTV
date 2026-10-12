@@ -20,7 +20,7 @@ from ytktv.core.events import EventBus
 from ytktv.core.library import Library
 from ytktv.core.models import PlayStatus, QueueItem, Song, StemStatus, VocalMode
 from ytktv.core.queue import SongQueue
-from ytktv.core.scoring import Melody, ScoreKeeper, ScoringLoop
+from ytktv.core.scoring import Melody, Scoreboard, ScoreKeeper, ScoringLoop
 from ytktv.player.base import PlayerBackend
 from ytktv.youtube.parse import MediaSource
 
@@ -33,6 +33,7 @@ log = logging.getLogger(__name__)
 
 PITCH_RANGE = 6  # semitones either way
 SPEEDS = (0.8, 0.9, 1.0, 1.1, 1.2)
+UNKNOWN_SONG_SECONDS = 240  # assumed for wait estimates when YouTube gave no length
 _POSITION_INTERVAL = 0.5
 _OPEN_RETRIES = 2
 _PRELOAD_AHEAD = 2  # how many upcoming songs to keep downloaded
@@ -97,6 +98,7 @@ class KTVController:
         self._danmaku_times: list[float] = []
         self._keeper: ScoreKeeper | None = None  # scores the song that is playing
         self.last_score: dict[str, Any] | None = None
+        self.scoreboard = Scoreboard()  # tonight's scores; starts empty with the app
         self._scoring_loop: ScoringLoop | None = None
         self._wake = threading.Event()
         self._retries: dict[str, int] = {}
@@ -113,7 +115,9 @@ class KTVController:
         if stems is not None:
             stems.want_pitch = self.settings.scoring
         if audio is not None:
-            self._scoring_loop = ScoringLoop(audio.mic_pitch, self._scoring_target)
+            self._scoring_loop = ScoringLoop(
+                audio.mic_pitch, self._scoring_target, self._on_sung_pitch
+            )
             self._scoring_loop.start()
         self._apply_volume()
         player.set_guide(self.settings.guide_vocal / 100.0)
@@ -121,8 +125,10 @@ class KTVController:
 
     # -- queue ------------------------------------------------------------
 
-    def enqueue(self, song: Song, singer: str = "", priority: bool = False) -> QueueItem:
-        item = self.queue.add(song, singer=singer, priority=priority)
+    def enqueue(
+        self, song: Song, singer: str = "", priority: bool = False, owner: str = ""
+    ) -> QueueItem:
+        item = self.queue.add(song, singer=singer, priority=priority, owner=owner)
         if self.stems is not None and self.settings.auto_separate:
             self.stems.request(song.video_id)
         with self._lock:
@@ -137,7 +143,9 @@ class KTVController:
         self._emit_state()
         return item
 
-    def enqueue_many(self, songs: list[Song], singer: str = "", shuffle: bool = False) -> int:
+    def enqueue_many(
+        self, songs: list[Song], singer: str = "", shuffle: bool = False, owner: str = ""
+    ) -> int:
         """Queue several songs at once (a playlist). Returns how many were added."""
         songs = list(songs)
         if shuffle:
@@ -145,7 +153,7 @@ class KTVController:
         if not songs:
             return 0
         for song in songs:
-            self.queue.add(song, singer=singer)
+            self.queue.add(song, singer=singer, owner=owner)
             if self.stems is not None and self.settings.auto_separate:
                 self.stems.request(song.video_id)
         with self._lock:
@@ -254,7 +262,7 @@ class KTVController:
                     self.queue.add_history(self.current.song)
                     self.library.save(self.queue.history())
                     self._announce_score(self.current)
-                self._keeper = None
+                had_melody, self._keeper = self._keeper is not None, None
                 self._started = False
                 item = self.queue.pop_next()
                 self.current = item
@@ -268,6 +276,8 @@ class KTVController:
                 self.speed = 1.0
             self._sync_preload()
             self.bus.emit("lyrics", {"id": item.id if item else None, "lines": []})
+            if had_melody:
+                self.bus.emit("melody", None)
             self._emit_state()
             # Silence the previous song now: the next one may take a while to be ready.
             self.player.stop()
@@ -484,6 +494,8 @@ class KTVController:
                 self._keeper = None
         if self.settings.scoring and item is not None:
             self._load_melody(item)
+        else:
+            self.bus.emit("melody", None)
         self._save_soon()
         self._emit_state()
 
@@ -502,6 +514,21 @@ class KTVController:
         with self._lock:
             if self.current is item and self._keeper is None:
                 self._keeper = ScoreKeeper(melody, transpose=float(self.pitch))
+        self.bus.emit("melody", None)  # the MV screen fetches it with melody()
+
+    def melody(self) -> dict[str, Any] | None:
+        """The tune the current song is scored against, for drawing; None when not scoring."""
+        keeper = self._keeper
+        if keeper is None:
+            return None
+        return {
+            "hop": keeper.melody.hop,
+            "notes": keeper.melody.notes,
+            "transpose": keeper.transpose,
+        }
+
+    def _on_sung_pitch(self, position: float, note: float | None) -> None:
+        self.bus.emit("pitch", {"position": position, "note": note})
 
     def _scoring_target(self) -> tuple[ScoreKeeper, float] | None:
         with self._lock:
@@ -519,7 +546,14 @@ class KTVController:
         result = keeper.result() if keeper is not None else None
         if result is None:
             return
-        self.last_score = {**result.to_dict(), "title": item.song.title, "singer": item.singer}
+        rank = self.scoreboard.add(result.points, item.song.title, item.singer)
+        self.last_score = {
+            **result.to_dict(),
+            "title": item.song.title,
+            "singer": item.singer,
+            "rank": rank,
+            "board": self.scoreboard.top(5),
+        }
         self.bus.emit("score", self.last_score)
 
     def set_lights(self, enabled: bool) -> None:
@@ -584,6 +618,7 @@ class KTVController:
         keeper = self._keeper
         if keeper is not None:
             keeper.transpose = float(self.pitch)  # the melody moves with the key
+            self.bus.emit("melody", None)
         self._emit_state()
 
     def set_speed(self, speed: float) -> None:
@@ -631,6 +666,11 @@ class KTVController:
             setattr(mic, name, value)
         if any(name in presets.PRESET_FIELDS for name in cleaned):
             self.settings.mic_preset = self._matching_preset()
+        self._save_soon()
+        self.bus.emit("mixer", None)
+
+    def set_feedback_guard(self, enabled: bool) -> None:
+        self.settings.feedback_guard = bool(enabled)
         self._save_soon()
         self.bus.emit("mixer", None)
 
@@ -690,6 +730,7 @@ class KTVController:
             ],
             "preset": self.settings.mic_preset,
             "monitor": self.settings.mic_monitor,
+            "feedback_guard": self.settings.feedback_guard,
             "running": bool(self.audio and self.audio.running),
         }
 
@@ -823,11 +864,13 @@ class KTVController:
         self.toast(f"Imported {len(songs)} songs into {name}")
         return name
 
-    def enqueue_playlist(self, name: str, shuffle: bool = False, singer: str = "") -> int:
+    def enqueue_playlist(
+        self, name: str, shuffle: bool = False, singer: str = "", owner: str = ""
+    ) -> int:
         songs = self.library.playlist(name)
         if songs is None:
             raise KeyError(name)
-        return self.enqueue_many(songs, singer=singer, shuffle=shuffle)
+        return self.enqueue_many(songs, singer=singer, shuffle=shuffle, owner=owner)
 
     # -- state ------------------------------------------------------------
 
@@ -840,6 +883,32 @@ class KTVController:
         data["preload"] = self.preloader.status(item.song.video_id) if self.preloader else "none"
         return data
 
+    def _queue_dicts(self, current: QueueItem | None) -> list[dict[str, Any]]:
+        """The queue, each song with a rough number of seconds until its turn."""
+        # This runs for every UI refresh and every push to the phones, so the lookups
+        # that are the same for every song are done once, outside the loop.
+        stem_status = self.stems.status if self.stems else None
+        preload_status = self.preloader.status if self.preloader else None
+        pace = 1.0 / (self.speed or 1.0)
+        wait = max(0.0, self.duration - self.position) * pace if current else 0.0
+        items = []
+        for item in self.queue.snapshot():
+            song = item.song
+            video_id = song.video_id
+            items.append(
+                {
+                    "id": item.id,
+                    "singer": item.singer,
+                    "owner": item.owner,
+                    "song": song.to_dict(),
+                    "stem": stem_status(video_id).value if stem_status else "none",
+                    "preload": preload_status(video_id) if preload_status else "none",
+                    "wait": int(wait + 0.5),
+                }
+            )
+            wait += (song.duration or UNKNOWN_SONG_SECONDS) * pace
+        return items
+
     def state(self) -> dict[str, Any]:
         with self._lock:
             current = self.current
@@ -850,7 +919,7 @@ class KTVController:
             "status": status.value,
             "loading": self.loading if status == PlayStatus.LOADING else "",
             "current": self._item_dict(current) if current else None,
-            "queue": [self._item_dict(item) for item in self.queue.snapshot()],
+            "queue": self._queue_dicts(current),
             "history": [song.to_dict() for song in self.queue.history()[:50]],
             "position": self.position,
             "duration": self.duration,
@@ -864,6 +933,7 @@ class KTVController:
             "scoring": settings.scoring,
             "scoring_active": self._keeper is not None,
             "last_score": self.last_score,
+            "scoreboard": self.scoreboard.top(10),
             "music_volume": settings.music_volume,
             "mic_volume": settings.mic_volume,
             "master_volume": settings.master_volume,

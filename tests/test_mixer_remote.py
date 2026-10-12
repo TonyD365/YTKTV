@@ -175,3 +175,15 @@ def test_desktop_mixer_follows_remote_changes_and_presets(qtbot, ktv, monkeypatc
     assert panel.delete_preset.isEnabled()
     panel._delete_preset()
     assert "Echo heavy" not in controller.settings.mic_presets
+
+
+def test_compressor_and_feedback_guard_are_remote_controls_too(ktv):
+    controller, _, _ = ktv
+    controller.set_mic(0, comp=0.7)
+    assert controller.settings.mics[0].comp == 0.7
+    controller.set_mic(0, comp=5)
+    assert controller.settings.mics[0].comp == 1.0  # clamped
+    state = controller.mixer_state()
+    assert state["mics"][0]["comp"] == 1.0 and state["feedback_guard"] is True
+    controller.set_feedback_guard(False)
+    assert controller.mixer_state()["feedback_guard"] is False

@@ -41,6 +41,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="check that this build can use the HD unlock component, and exit (used by CI)",
     )
     parser.add_argument(
+        "--mpv-self-test",
+        action="store_true",
+        help="check that the mpv libraries can play through YTKTV's filters, and exit (used by CI)",
+    )
+    parser.add_argument(
         "--separation-self-test",
         action="store_true",
         help="install the separation runtime, separate a test clip, and exit (used by CI)",
@@ -76,12 +81,18 @@ def _ensure_libmpv(app: Any) -> bool:
             "(macOS: install Homebrew, then 'brew install mpv') and start YTKTV again.",
         )
         return False
-    answer = QMessageBox.question(
-        None,
-        "Install mpv?",
-        "YTKTV plays video with mpv (libmpv), which is not installed yet.\n\n"
-        f"Install it now?\n\n{plan}",
-    )
+    if bootstrap.is_frozen():
+        question = (
+            "YTKTV plays video with mpv, a separate free program that is not part of this "
+            "installer. It is downloaded once and kept for later starts.\n\n"
+            f"Download it now?\n\n{plan}"
+        )
+    else:
+        question = (
+            "YTKTV plays video with mpv (libmpv), which is not installed yet.\n\n"
+            f"Install it now?\n\n{plan}"
+        )
+    answer = QMessageBox.question(None, "Install mpv?", question)
     if answer != QMessageBox.StandardButton.Yes:
         return False
 
@@ -158,6 +169,11 @@ def main(argv: list[str] | None = None) -> int:
         from ytktv.youtube import hd_unlock
 
         return hd_unlock.self_check(lambda line: log.info("%s", line))
+
+    if args.mpv_self_test:
+        from ytktv import mpv_pack
+
+        return mpv_pack.self_test(lambda line: log.info("%s", line))
 
     if args.separation_self_test:
         from ytktv.separation import runtime as separation_runtime
@@ -314,8 +330,11 @@ def main(argv: list[str] | None = None) -> int:
         hd_setup.status.connect(window.settings_page.set_hd_unlock_status)
         window.settings_page.install_hd_unlock.connect(hd_setup.install)
         hd_setup.publish()
+    window.settings_page.run_setup.connect(window.run_setup)
     window.show()
     window.place_mv()
+    if not settings.setup_done:
+        window.run_setup()
     if not have_mpv:
         window.show_toast("Video playback is unavailable: mpv is not installed.", error=True)
 

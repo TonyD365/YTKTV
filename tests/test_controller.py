@@ -408,3 +408,18 @@ def test_low_quality_restricted_video_tells_the_room_why(ktv):
         )
     )
     assert sum("360p" in message for message in toasts) == 1
+
+
+def test_queue_reports_how_long_until_each_song(ktv):
+    controller, player, _ = ktv
+    songs = [make_song(i) for i in range(1, 5)]
+    for song in songs:
+        controller.enqueue(song)
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    controller.duration, controller.position = 200.0, 50.0
+    waits = [item["wait"] for item in controller.state()["queue"]]
+    first, second = songs[1].duration or 240, songs[2].duration or 240
+    assert waits == [150, 150 + first, 150 + first + second]
+
+    controller.speed = 1.2  # faster playback, shorter waits
+    assert controller.state()["queue"][0]["wait"] == 125

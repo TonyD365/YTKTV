@@ -75,9 +75,15 @@ class QueueItem:
     song: Song
     singer: str = ""
     id: str = field(default_factory=_new_id)
+    owner: str = ""  # which phone asked for it (see server.client_id); "" for the console
 
     def to_dict(self) -> dict[str, Any]:
-        return {"id": self.id, "singer": self.singer, "song": self.song.to_dict()}
+        return {
+            "id": self.id,
+            "singer": self.singer,
+            "owner": self.owner,
+            "song": self.song.to_dict(),
+        }
 
 
 @dataclass
@@ -90,6 +96,7 @@ class MicParams:
     low_db: float = 0.0
     reverb: float = 0.25  # FX send, 0..1
     echo: float = 0.15  # ECHO send, 0..1
+    comp: float = 0.25  # COMP, 0 (off) .. 1 (heavy compression)
     pan: float = 0.0  # -1 left .. +1 right
     fader: float = 0.8  # channel fader 0..1 (0.8 = unity)
     mute: bool = False

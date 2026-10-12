@@ -44,3 +44,19 @@ def test_corrupt_file_falls_back_to_defaults(tmp_path):
 def test_short_mic_list_is_padded(tmp_path):
     settings = Settings.from_dict({"mics": [{"gain": 1.5}]})
     assert len(settings.mics) == MIC_CHANNELS and settings.mics[0].gain == 1.5
+
+
+def test_setup_wizard_is_for_new_installs_only(tmp_path):
+    from ytktv.config import SettingsStore
+
+    fresh = SettingsStore(tmp_path / "new" / "settings.json")
+    assert fresh.settings.setup_done is False  # nothing saved yet: a first start
+
+    old = tmp_path / "old.json"
+    old.write_text('{"music_volume": 55}', encoding="utf-8")  # saved before the wizard existed
+    store = SettingsStore(old)
+    assert store.settings.setup_done is True and store.settings.music_volume == 55
+
+    store.settings.setup_done = False
+    store.save()
+    assert SettingsStore(old).settings.setup_done is False  # an explicit value is kept

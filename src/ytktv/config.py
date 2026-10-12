@@ -55,6 +55,7 @@ class Settings:
     master_volume: int = 100
     mics: list[MicSettings] = field(default_factory=_default_mics)
     mic_monitor: bool = True  # mix microphones into the output automatically
+    feedback_guard: bool = True  # notch out microphone feedback when it starts to squeal
     # Effect presets saved by the user: name -> the EQ / reverb / echo values.
     mic_presets: dict[str, dict[str, float]] = field(default_factory=dict)
     mic_preset: str = ""  # the preset the channels currently match, if any
@@ -79,6 +80,8 @@ class Settings:
     separation_declined: str = ""
 
     auto_update: bool = True
+    # The first-run setup has been finished or skipped.
+    setup_done: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Settings:
@@ -111,7 +114,11 @@ class SettingsStore:
 
     def _load(self) -> Settings:
         try:
-            return Settings.from_dict(json.loads(self.path.read_text(encoding="utf-8")))
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            # Settings from before the setup wizard existed belong to someone who has
+            # already set everything up by hand.
+            data.setdefault("setup_done", True)
+            return Settings.from_dict(data)
         except FileNotFoundError:
             return Settings()
         except Exception:

@@ -475,6 +475,14 @@ class MainWindow(QMainWindow):
         else:
             self.mv_window.toggle_fullscreen()
 
+    def run_setup(self) -> None:
+        """Open the step-by-step setup (first start, or from Settings)."""
+        from ytktv.ui.setup_wizard import SetupWizard
+
+        self._setup = SetupWizard(self.controller, self.place_mv, self)
+        self._setup.finished.connect(lambda _result: self.mixer_page.refresh_devices())
+        self._setup.open()
+
     def place_mv(self) -> None:
         settings = self.controller.settings
         self.mv_window.place_on_screen(
@@ -544,6 +552,10 @@ class MainWindow(QMainWindow):
                 self.mv_window.set_lyrics(payload["lines"])
         elif topic == "danmaku":
             self.mv_window.add_danmaku(payload["text"])
+        elif topic == "melody":
+            self.mv_window.set_melody(self.controller.melody())
+        elif topic == "pitch":
+            self.mv_window.add_sung_pitch(payload["position"], payload["note"])
         elif topic == "score":
             self.mv_window.show_score(payload)
             self.show_toast(f"Score: {payload['points']}  ·  {payload['grade']}")

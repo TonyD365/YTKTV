@@ -108,6 +108,10 @@ QComboBox:hover {{ border-color: {PURPLE}; }}
 QComboBox::drop-down {{ border: none; width: 24px; }}
 QComboBox QAbstractItemView {{ background: {PANEL}; border: 1px solid {PURPLE}; selection-background-color: {PURPLE};
     outline: none; }}
+#grip {{ color: {MUTED}; font-size: 22px; }}
+#grip:hover {{ color: {TEXT}; }}
+#songRow[dragging="true"] {{ border-color: {PINK}; }}
+#dropMarker {{ background: {PINK}; border-radius: 2px; }}
 QMenu {{ background: {PANEL}; border: 1px solid {PURPLE}; padding: 6px; }}
 QMenu::item {{ padding: 9px 22px; border-radius: 6px; font-size: 14px; font-weight: 600; color: {TEXT}; }}
 QMenu::item:selected {{ background: {PURPLE}; }}

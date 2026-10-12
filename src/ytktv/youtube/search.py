@@ -17,7 +17,7 @@ from typing import Any
 from ytktv.core.models import Song
 from ytktv.net import urlopen
 from ytktv.youtube.hd_unlock import HdUnlock
-from ytktv.youtube.lyrics import LyricLine, parse_json3, pick_track
+from ytktv.youtube.lyrics import LyricLine, borrow_word_timing, parse_json3, pick_tracks
 from ytktv.youtube.parse import (
     MediaSource,
     entry_to_song,
@@ -367,11 +367,23 @@ class YouTube:
         if self._info_cache.get((video_id, max_height)) is None:
             self.resolve(video_id, max_height)
         info = self._info_cache.get((video_id, max_height)) or {}
-        url = pick_track(info, allow_auto)
-        lines: list[LyricLine] = []
-        if url:
+
+        def fetch(url: str) -> list[LyricLine]:
             with urlopen(url, timeout=20) as response:
-                lines = parse_json3(json.loads(response.read()))
+                return parse_json3(json.loads(response.read()))
+
+        uploaded, automatic = pick_tracks(info)
+        lines: list[LyricLine] = []
+        if uploaded:
+            lines = fetch(uploaded)
+            if automatic and allow_auto:
+                # The uploader's words, moving in the rhythm the automatic captions heard.
+                try:
+                    lines = borrow_word_timing(lines, fetch(automatic))
+                except Exception:
+                    log.info("no word timing for %s", video_id, exc_info=True)
+        elif automatic and allow_auto:
+            lines = fetch(automatic)
         self._lyrics_cache.put(key, lines)
         return lines
 

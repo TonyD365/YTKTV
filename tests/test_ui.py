@@ -209,6 +209,27 @@ def test_lyrics_overlay_follows_playback_time(qtbot):
     assert not overlay.isVisible() and not overlay.has_lines()
 
 
+def test_lyrics_overlay_colour_follows_word_timing(qtbot):
+    from ytktv.ui.mv_overlays import LyricsOverlay
+
+    overlay = LyricsOverlay()
+    qtbot.addWidget(overlay)
+    overlay.resize(800, 200)
+    # "la" is sung at once, then nothing until "di" eight seconds later.
+    overlay.set_lines(
+        [{"start": 10.0, "end": 20.0, "text": "la di", "words": [[10.0, 0], [18.0, 3]]}]
+    )
+    overlay.show()
+    overlay.set_time(14.0)
+    index, waiting = overlay._current()
+    assert index == 0 and 0.3 < waiting < 0.7  # "la" is done, "di" has not started
+    overlay.set_time(17.5)
+    assert overlay._current() == (0, waiting)  # an even fill would have moved on
+    overlay.set_time(19.9)
+    assert overlay._current()[1] > waiting
+    overlay.grab()
+
+
 def test_lyrics_overlay_draws_lines_once_and_ahead_of_time(qtbot, monkeypatch):
     """Drawing a line is slow: it happens once, in steps, before the line is needed."""
     from ytktv.ui import mv_overlays
@@ -437,3 +458,157 @@ def test_score_toggle_live_score_and_score_card(window, qtbot):
     assert mv.score_card._points == 92 and "Ann" in mv.score_card._caption
     mv.score_card.grab()  # painting must not fail
     assert "92" in main.toast.text()
+
+
+def test_queue_rows_are_reordered_by_dragging_the_grip(window, qtbot):
+    main, controller = window
+    for i in range(1, 6):
+        controller.enqueue(make_song(i))
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    main.show_page("queue")
+    song_list = main.pages["queue"].list
+    qtbot.waitUntil(lambda: len(song_list._rows) == 4, timeout=3000)
+    qtbot.wait(50)  # let the rows take their places
+
+    def titles():
+        return [item.song.title for item in controller.queue.snapshot()]
+
+    def middle(row):
+        return row.mapToGlobal(row.rect().center())
+
+    assert titles() == ["Song 2", "Song 3", "Song 4", "Song 5"]
+    rows = list(song_list._rows)
+    below_last = rows[3].mapToGlobal(rows[3].rect().bottomLeft()) + QPoint(20, 30)
+
+    song_list.drag_start(rows[0])  # the first song to the very end
+    song_list.drag_to(below_last)
+    assert song_list._marker.isVisible()
+    song_list.drag_end(below_last)
+    assert titles() == ["Song 3", "Song 4", "Song 5", "Song 2"]
+    assert not song_list._marker.isVisible()
+
+    qtbot.waitUntil(lambda: song_list._rows and song_list._rows[0] is not rows[0], timeout=3000)
+    qtbot.wait(50)
+    rows = list(song_list._rows)
+    above_first = rows[0].mapToGlobal(rows[0].rect().topLeft()) + QPoint(20, 2)
+    song_list.drag_start(rows[2])  # "Song 5" to the top
+    song_list.drag_end(above_first)
+    assert titles() == ["Song 5", "Song 3", "Song 4", "Song 2"]
+
+    qtbot.waitUntil(lambda: song_list._rows and song_list._rows[0] is not rows[0], timeout=3000)
+    qtbot.wait(50)
+    rows = list(song_list._rows)
+    song_list.drag_start(rows[1])  # dropped where it already is: nothing moves
+    song_list.drag_end(middle(rows[1]))
+    assert titles() == ["Song 5", "Song 3", "Song 4", "Song 2"]
+
+
+def test_pitch_lane_shows_the_tune_and_the_voice_in_its_octave(qtbot):
+    from ytktv.ui.mv_overlays import PitchLane
+
+    lane = PitchLane()
+    qtbot.addWidget(lane)
+    lane.resize(600, 120)
+    assert not lane.has_melody()
+    lane.set_melody(
+        {"hop": 0.05, "notes": [60.0] * 20 + [None] * 10 + [64.2] * 20, "transpose": 2.0}
+    )
+    assert lane.has_melody()
+    assert lane._bars == [(0.0, 1.0, 60.0), (1.5, 2.5, 64.0)]  # one bar per held note
+
+    lane.add_voice(0.5, 50.1)  # an octave below the tune (62 after the key change): on it
+    lane.add_voice(0.6, 77.0)  # three semitones off, whatever the octave
+    lane.add_voice(0.7, None)  # nothing heard: nothing drawn
+    assert [(round(note, 1), on_it) for _t, note, on_it in lane._voice] == [
+        (62.1, True),
+        (65.0, False),
+    ]
+    lane.add_voice(1.25, 70.0)  # in the gap between two notes: shown, but cannot be "on it"
+    assert lane._voice[-1][2] is False
+
+    lane.show()
+    lane.set_time(0.6)
+    empty = lane.grab().toImage()
+    lane.set_time(1.9)
+    assert lane.grab().toImage() != empty  # the lane scrolls with the song
+    lane.set_melody(None)
+    assert not lane.has_melody() and not lane.isVisible() and not lane._voice
+
+
+def test_score_card_grows_for_the_leaderboard(window, qtbot):
+    main, _ = window
+    mv = main.mv_window
+    mv.resize(1280, 720)
+    mv.show_score({"points": 80, "grade": "Great!", "title": "Song 1", "singer": ""})
+    alone = mv.score_card.height()
+    assert mv.score_card.board_rows() == 0
+    board = [
+        {"rank": 1, "points": 91, "title": "Song 2", "singer": "Ann"},
+        {"rank": 2, "points": 80, "title": "Song 1", "singer": ""},
+    ]
+    mv.show_score(
+        {
+            "points": 80,
+            "grade": "Great!",
+            "title": "Song 1",
+            "singer": "",
+            "rank": 2,
+            "board": board,
+        }
+    )
+    assert mv.score_card.board_rows() == 2 and mv.score_card.height() > alone
+    mv.score_card.grab()
+
+
+def test_setup_wizard_applies_each_choice_and_does_not_come_back(window, qtbot, monkeypatch):
+    from ytktv.ui.setup_wizard import OFF, SetupWizard
+
+    main, controller = window
+    monkeypatch.setattr("ytktv.audio.devices.list_inputs", lambda: ["Test Mic", "USB Mic"])
+    monkeypatch.setattr("ytktv.audio.devices.list_outputs", lambda: ["Test Speakers", "HDMI"])
+    placed = []
+    wizard = SetupWizard(controller, lambda: placed.append(1), main)
+    qtbot.addWidget(wizard)
+    assert controller.settings.setup_done is False
+    assert wizard.step_label.text().startswith("STEP 1 OF 3") and not wizard.back.isEnabled()
+
+    wizard.output.setCurrentText("HDMI")
+    wizard._output_chosen(0)
+    assert controller.settings.output_device == "HDMI"
+
+    wizard.next.click()
+    assert wizard.step_label.text().startswith("STEP 2 OF 3") and wizard.back.isEnabled()
+    assert wizard.screen_combo.itemData(0) == -1 and wizard.screen_combo.count() >= 2
+    wizard.screen_combo.setCurrentIndex(1)
+    wizard._screen_chosen(1)
+    assert controller.settings.mv_screen == 0 and placed == [1]
+
+    wizard.next.click()
+    assert wizard.next.text() == "Finish" and wizard._meter.isActive()
+    wizard.mic.setCurrentText("USB Mic")
+    wizard._mic_chosen(0)
+    strip = controller.settings.mics[0]
+    assert strip.enabled and strip.device == "USB Mic"
+    wizard._show_level()
+    assert "not running" in wizard.heard.text()  # no sound card in the tests
+    wizard.mic.setCurrentText(OFF)
+    wizard._mic_chosen(0)
+    assert not strip.enabled and strip.device == "USB Mic"  # switched off, device remembered
+    wizard._show_level()
+    assert wizard.heard.text() == "Channel 1 is off."
+
+    wizard.back.click()
+    assert wizard.step_label.text().startswith("STEP 2 OF 3") and not wizard._meter.isActive()
+    wizard.go(2)
+    wizard.next.click()
+    assert controller.settings.setup_done is True and not wizard.isVisible()
+
+
+def test_setup_wizard_counts_as_done_when_closed_or_skipped(window, qtbot):
+    from ytktv.ui.setup_wizard import SetupWizard
+
+    main, controller = window
+    wizard = SetupWizard(controller, lambda: None, main)
+    qtbot.addWidget(wizard)
+    wizard.reject()
+    assert controller.settings.setup_done is True

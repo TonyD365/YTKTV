@@ -9,6 +9,11 @@ name: Release
 #      Apple Silicon and Intel), the Windows installer and the Linux AppImage
 #      from that tag, and uploads them plus SHA256SUMS to the release.
 #
+# mpv is not inside the installers: it is under the GPL, which YTKTV's license
+# is not compatible with. Each build also produces YTKTV-mpv-<platform>.zip, a
+# separate download holding libmpv and its libraries, which the app fetches on
+# first start. Those zips are attached to the release next to the installers.
+#
 # Installed copies of YTKTV poll /releases/latest and update once the
 # installers are attached. A release marked as a pre-release is never offered
 # as an update.
@@ -93,6 +98,9 @@ jobs:
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           brew install mpv
+          python packaging/build_mpv_pack.py "${{ matrix.name }}" dist
+          # From here on mpv must come from the pack, as on a user's Mac.
+          brew uninstall --ignore-dependencies mpv ffmpeg libass
           if ! packaging/macos/import_certificate.sh; then
             echo "::notice::No signing certificate configured; building an ad-hoc signed package."
             unset CODESIGN_IDENTITY INSTALLER_IDENTITY APPLE_ID
@@ -106,6 +114,9 @@ jobs:
           # pwsh does not stop when a native command fails, so check each one.
           function Check { if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }
           python -c "from ytktv import bootstrap; bootstrap.install_windows_libmpv(print)"; Check
+          python packaging/build_mpv_pack.py "${{ matrix.name }}" dist; Check
+          # From here on mpv must come from the pack, as on a user's PC.
+          python -c "from ytktv import bootstrap; (bootstrap.lib_dir() / 'libmpv-2.dll').unlink()"; Check
           python packaging/make_icon.py build/icon; Check
           python -m PyInstaller packaging/ytktv.spec --noconfirm --distpath dist --workpath build/pyinstaller; Check
           $version = python -c "import ytktv; print(ytktv.__version__)"; Check
@@ -119,11 +130,55 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libmpv2 libportaudio2 libegl1 libgl1 \
-            libxkbcommon0 libdbus-1-3 libfontconfig1 file
+            libxkbcommon0 libdbus-1-3 libfontconfig1 file patchelf
+          python packaging/build_mpv_pack.py "${{ matrix.name }}" dist
+          # From here on mpv must come from the pack, as on a user's computer.
+          sudo apt-get purge -y libmpv2
+          sudo apt-get autoremove -y --purge
+          sudo apt-get install -y --no-install-recommends libportaudio2 libegl1 libgl1 \
+            libxkbcommon0 libdbus-1-3 libfontconfig1
           curl -fsSL -o appimagetool \
             https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool && sudo mv appimagetool /usr/local/bin/appimagetool
           APPIMAGE_EXTRACT_AND_RUN=1 PYTHON=python packaging/linux/build_appimage.sh
+
+      # mpv must not be inside the app, and the app must be able to play through the
+      # separate mpv download: unpack the pack just built and run the real filter chain.
+      - name: Check mpv is not inside the app
+        shell: bash
+        run: |
+          found="$(find dist/YTKTV dist/YTKTV.app -iname '*mpv*' \( -name '*.dylib' -o -name '*.dll' -o -name '*.so*' \) 2>/dev/null || true)"
+          if [ -n "$found" ]; then
+            echo "::error::mpv libraries were packaged into the app:"; echo "$found"; exit 1
+          fi
+          ls -la dist/YTKTV-mpv-*.zip
+
+      - name: Test the mpv download with the packaged app (macOS)
+        if: runner.os == 'macOS'
+        env:
+          YTKTV_MPV_ROOT: ${{ runner.temp }}/mpv-pack
+        run: |
+          YTKTV_MPV_PACK="$(ls "$PWD"/dist/YTKTV-mpv-*.zip)" \
+            dist/YTKTV.app/Contents/MacOS/YTKTV --mpv-self-test
+
+      - name: Test the mpv download with the packaged app (Linux)
+        if: runner.os == 'Linux'
+        env:
+          YTKTV_MPV_ROOT: ${{ runner.temp }}/mpv-pack
+        run: |
+          YTKTV_MPV_PACK="$(ls "$PWD"/dist/YTKTV-mpv-*.zip)" dist/YTKTV/YTKTV --mpv-self-test
+
+      - name: Test the mpv download with the packaged app (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          YTKTV_MPV_ROOT: ${{ runner.temp }}\mpv-pack
+          YTKTV_LOG_FILE: ${{ runner.temp }}\mpv-self-test.log
+        run: |
+          $env:YTKTV_MPV_PACK = (Get-ChildItem dist\YTKTV-mpv-*.zip).FullName
+          $process = Start-Process -FilePath dist\YTKTV\YTKTV.exe -ArgumentList '--mpv-self-test' -Wait -PassThru
+          Get-Content $env:YTKTV_LOG_FILE -ErrorAction SilentlyContinue
+          exit $process.ExitCode
 
       # The HD unlock needs yt-dlp to find a bundled plugin and the solver's JavaScript;
       # both are easy to lose when freezing, so ask the packaged app to check itself.
@@ -189,6 +244,13 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mpvpack-${{ matrix.name }}
+          path: dist/YTKTV-mpv-*.zip
+          if-no-files-found: error
+          retention-days: 7
+
   macos-universal:
     name: Build (macos-universal)
     needs: build
@@ -235,6 +297,11 @@ jobs:
         with:
           path: installers
           pattern: installer-*
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          pattern: mpvpack-*
           merge-multiple: true
       - name: Checksums
         working-directory: installers

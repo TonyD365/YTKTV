@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import logging
 import socket
 import threading
@@ -11,7 +12,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Protocol
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -99,6 +100,7 @@ class MicIn(BaseModel):
     high_db: float | None = Field(default=None, ge=-12, le=12)
     reverb: float | None = Field(default=None, ge=0, le=1)
     echo: float | None = Field(default=None, ge=0, le=1)
+    comp: float | None = Field(default=None, ge=0, le=1)
     pan: float | None = Field(default=None, ge=-1, le=1)
     fader: float | None = Field(default=None, ge=0, le=1)
     mute: bool | None = None
@@ -114,6 +116,16 @@ class DanmakuIn(BaseModel):
 
 # Controller events that are forwarded to phones over the WebSocket.
 _PUSHED_TOPICS = frozenset({"state", "position", "toast", "danmaku", "score", "playlists", "mixer"})
+
+
+def client_id(request: Request) -> str:
+    """A short name for the device a request came from, so a phone can find its own songs.
+
+    Phones are told apart by their address on the network. The address itself is not
+    handed out to the other phones, only a fingerprint of it.
+    """
+    host = request.client.host if request.client else ""
+    return hashlib.sha256(host.encode()).hexdigest()[:10] if host else ""
 
 
 class _Broadcaster:
@@ -189,8 +201,12 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         except Exception as exc:
             raise HTTPException(502, "YouTube search failed") from exc
 
+    @app.get("/api/me")
+    def me(request: Request) -> dict[str, str]:
+        return {"id": client_id(request)}
+
     @app.post("/api/queue")
-    def enqueue(body: EnqueueIn) -> dict[str, Any]:
+    def enqueue(body: EnqueueIn, request: Request) -> dict[str, Any]:
         song: Song | None = body.song.to_song() if body.song else None
         if song is None and body.url:
             video_id = extract_video_id(body.url)
@@ -200,7 +216,7 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         if song is None:
             raise HTTPException(400, "no song given")
         return controller.enqueue(
-            song, singer=body.singer.strip(), priority=body.priority
+            song, singer=body.singer.strip(), priority=body.priority, owner=client_id(request)
         ).to_dict()
 
     @app.delete("/api/queue/{item_id}")
@@ -352,9 +368,11 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/playlists/{name}/enqueue")
-    def enqueue_playlist(name: str, body: PlaylistEnqueueIn) -> dict[str, int]:
+    def enqueue_playlist(name: str, body: PlaylistEnqueueIn, request: Request) -> dict[str, int]:
         try:
-            added = controller.enqueue_playlist(name, body.shuffle, body.singer.strip())
+            added = controller.enqueue_playlist(
+                name, body.shuffle, body.singer.strip(), client_id(request)
+            )
         except KeyError as exc:
             raise HTTPException(404, "no such playlist") from exc
         return {"added": added}

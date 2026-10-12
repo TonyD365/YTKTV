@@ -117,6 +117,7 @@ class ChannelStrip(_StripFrame):
         self.eq_widgets = list(eq_knobs)
         for widget in eq_knobs:
             widget.ink = QColor("#141416")
+        knob("COMP", "comp", 0.0, 1.0, 0.25, "#ff8a2a")
         knob("ECHO", "echo", 0.0, 1.0, 0.15, "#2f7df0")
         knob("FX", "reverb", 0.0, 1.0, 0.25, "#f2d024")
         knob("PAN", "pan", -1.0, 1.0, 0.0, "#e03030", "L", "R")
@@ -255,6 +256,7 @@ class MixerPanel(QWidget):
         master.setSpacing(8)
         body.addLayout(master)
 
+        self._notches = 0  # frequencies the feedback guard is cutting right now
         self.lcd = QLabel()
         self.lcd.setObjectName("lcd")
         self.lcd.setMinimumWidth(250)
@@ -279,6 +281,14 @@ class MixerPanel(QWidget):
         buttons.addWidget(self.monitor)
         buttons.addWidget(rescan)
         master.addLayout(buttons)
+        self.guard = QPushButton("FEEDBACK GUARD")
+        self.guard.setCheckable(True)
+        self.guard.setChecked(settings.feedback_guard)
+        self.guard.setToolTip(
+            "Find the squeal of a microphone feeding back and cut just that frequency"
+        )
+        self.guard.toggled.connect(self.controller.set_feedback_guard)
+        master.addWidget(self.guard)
 
         master.addWidget(QLabel("EFFECT PRESET"))
         self.preset = QComboBox()
@@ -388,6 +398,9 @@ class MixerPanel(QWidget):
             strip.refresh()
         self._refresh_presets()
         settings = self.controller.settings
+        self.guard.blockSignals(True)
+        self.guard.setChecked(settings.feedback_guard)
+        self.guard.blockSignals(False)
         self.music.set_value(settings.music_volume / 100.0)
         self.mic_bus.set_value(settings.mic_volume / 100.0)
         self.main.set_value(settings.master_volume / 100.0)
@@ -406,6 +419,12 @@ class MixerPanel(QWidget):
             dropped = f"  XRUN {audio.underruns}" if audio.underruns else ""
             lines.append(f"MIX  {state}  {audio.sample_rate / 1000:g} kHz{dropped}")
         lines.append(f"SEP  {(controller.accelerator or 'Detecting...')[:26]}")
+        if not controller.settings.feedback_guard:
+            lines.append("FBK  OFF")
+        elif self._notches:
+            lines.append(f"FBK  CUTTING {self._notches} FREQ")
+        else:
+            lines.append("FBK  ON")
         self.lcd.setText("\n".join(lines))
 
     def _show_output(self, mic_left: float, mic_right: float) -> None:
@@ -424,6 +443,9 @@ class MixerPanel(QWidget):
         levels = audio.levels()
         for strip, peak in zip(self.strips, levels["mics"], strict=False):
             strip.set_level(peak)
+        if levels["notches"] != self._notches:
+            self._notches = levels["notches"]
+            self._update_lcd()
         mics = levels["master"]
         self._show_output(mics[0], mics[1])
 

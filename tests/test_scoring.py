@@ -271,6 +271,11 @@ def test_controller_scores_a_song_and_announces_it(tmp_path):
     controller.settings.wait_for_instrumental = False
     scores = []
     controller.bus.subscribe(lambda topic, data: scores.append(data) if topic == "score" else None)
+    heard, melody_events = [], []
+    controller.bus.subscribe(lambda topic, data: heard.append(data) if topic == "pitch" else None)
+    controller.bus.subscribe(
+        lambda topic, _d: melody_events.append(1) if topic == "melody" else None
+    )
     try:
         assert stems.want_pitch is True and controller.state()["scoring"] is True
         song = make_song(1)
@@ -281,9 +286,15 @@ def test_controller_scores_a_song_and_announces_it(tmp_path):
         wait_for(lambda: controller.state()["scoring_active"])
         assert controller.status == PlayStatus.PLAYING and controller.live_score() is None
 
+        melody = controller.melody()
+        assert melody["hop"] == 0.05 and list(melody["notes"]) == PHRASE
+        assert melody["transpose"] == 0.0
         controller.set_pitch(2)
         keeper, position = controller._scoring_target()
         assert keeper.transpose == 2.0 and position == controller.position
+        assert controller.melody()["transpose"] == 2.0
+        controller._on_sung_pitch(1.5, 62.0)
+        assert heard[-1] == {"position": 1.5, "note": 62.0} and melody_events
         sing(keeper, lambda i, target: None if target is None else target + 2)
         assert controller.live_score() == 100
 
@@ -302,9 +313,13 @@ def test_controller_scores_a_song_and_announces_it(tmp_path):
                 "grade": "Superstar!",
                 "title": "Song 1",
                 "singer": "Ann",
+                "rank": 1,
+                "board": [{"rank": 1, "points": 100, "title": "Song 1", "singer": "Ann"}],
             }
         ]
         assert controller.state()["last_score"]["points"] == 100
+        assert controller.state()["scoreboard"] == scores[0]["board"]
+        assert controller.melody() is None  # nothing is being scored any more
         assert not controller.state()["scoring_active"]  # song 2 has no melody: not scored
 
         player.finish()
@@ -355,3 +370,40 @@ def test_worker_writes_the_melody_of_separated_vocals(tmp_path):
     )
     assert melody.notes[25] is None
     assert math.isclose(len(melody.notes) * melody.hop, 2.5)
+
+
+def test_scoreboard_ranks_the_evening_best_first():
+    from ytktv.core.scoring import Scoreboard
+
+    board = Scoreboard()
+    assert board.top() == []
+    assert board.add(70, "Song A", "Ann") == 1
+    assert board.add(90, "Song B", "Bo") == 1
+    assert board.add(80, "Song C", "") == 2
+    assert board.add(90, "Song D", "Di") == 2  # a tie does not push the earlier score down
+    assert [(e["rank"], e["points"], e["title"]) for e in board.top(3)] == [
+        (1, 90, "Song B"),
+        (2, 90, "Song D"),
+        (3, 80, "Song C"),
+    ]
+    assert len(board.top()) == 4
+    board.clear()
+    assert board.top() == []
+
+
+def test_scoring_loop_reports_what_was_sung():
+    from ytktv.core.scoring import ScoringLoop
+
+    keeper = ScoreKeeper(Melody(0.05, (60.0,) * 400))
+    heard = []
+    notes = iter([60.0, None, 61.5])
+    loop = ScoringLoop(
+        lambda: next(notes, None), lambda: (keeper, 1.0), lambda p, n: heard.append((p, n))
+    )
+    loop.INTERVAL = 0.001
+    loop.start()
+    try:
+        wait_for(lambda: len(heard) >= 3)
+    finally:
+        loop.stop()
+    assert heard[:3] == [(1.0, 60.0), (1.0, None), (1.0, 61.5)]
