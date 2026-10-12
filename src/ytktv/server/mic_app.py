@@ -91,3 +91,56 @@ def create_mic_app(phones: PhoneMics, channel_of: Any = None) -> FastAPI:
             phones.disconnect(key)
 
     return app
+
+
+def self_test(report: Any = print) -> int:
+    """Check that this build can serve the microphone page over HTTPS. 0 = fine.
+
+    Makes a certificate, starts the server on this computer only, and fetches the
+    page through TLS. A packaged build that lost a piece of the TLS or web stack
+    fails here instead of on somebody's phone.
+    """
+    import socket
+    import ssl
+    import tempfile
+    import time
+    import urllib.request
+
+    from ytktv.server import tls
+    from ytktv.server.app import ServerThread
+
+    try:
+        with tempfile.TemporaryDirectory() as folder:
+            certificate = tls.ensure_certificate(Path(folder), "127.0.0.1")
+            with socket.socket() as probe:
+                probe.bind(("127.0.0.1", 0))
+                port = probe.getsockname()[1]
+            server = ServerThread(
+                create_mic_app(PhoneMics()), port, host="127.0.0.1", certificate=certificate
+            )
+            server.start()
+            try:
+                trusting = ssl.create_default_context(cafile=str(certificate[0]))
+                deadline = time.monotonic() + 15
+                while True:
+                    try:
+                        with urllib.request.urlopen(
+                            f"https://127.0.0.1:{port}/", timeout=5, context=trusting
+                        ) as response:
+                            body = response.read().decode("utf-8")
+                        break
+                    except OSError:
+                        if time.monotonic() > deadline:
+                            raise
+                        time.sleep(0.2)
+            finally:
+                server.stop()
+            if "Use this phone as a microphone" not in body:
+                raise RuntimeError("the microphone page was not served")
+            report(f"Served the microphone page over HTTPS ({len(body)} characters).")
+    except Exception as exc:
+        log.exception("phone microphone self-test failed")
+        report(f"FAILED: {exc}")
+        return 1
+    report("phone microphone self-test passed")
+    return 0

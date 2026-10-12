@@ -41,6 +41,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="check that this build can use the HD unlock component, and exit (used by CI)",
     )
     parser.add_argument(
+        "--phone-mic-self-test",
+        action="store_true",
+        help="check that this build can serve the phone microphone page, and exit (used by CI)",
+    )
+    parser.add_argument(
         "--mpv-self-test",
         action="store_true",
         help="check that the mpv libraries can play through YTKTV's filters, and exit (used by CI)",
@@ -169,6 +174,11 @@ def main(argv: list[str] | None = None) -> int:
         from ytktv.youtube import hd_unlock
 
         return hd_unlock.self_check(lambda line: log.info("%s", line))
+
+    if args.phone_mic_self_test:
+        from ytktv.server import mic_app
+
+        return mic_app.self_test(lambda line: log.info("%s", line))
 
     if args.mpv_self_test:
         from ytktv import mpv_pack
