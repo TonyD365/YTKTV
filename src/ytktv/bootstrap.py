@@ -16,6 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from ytktv import mpv_pack
 from ytktv.config import data_dir
 from ytktv.net import urlopen
 
@@ -54,6 +55,8 @@ def _search_dirs() -> list[Path]:
     bundled = bundle_dir()
     if bundled:
         dirs.append(bundled)
+    if mpv_pack.installed():
+        dirs.append(mpv_pack.pack_dir())  # downloaded by a packaged build on first start
     dirs.append(lib_dir())
     if platform.system() == "Darwin":
         dirs += [Path("/opt/homebrew/lib"), Path("/usr/local/lib")]
@@ -121,6 +124,11 @@ def _linux_install_command() -> list[str] | None:
 def install_plan() -> str | None:
     """Human-readable description of what :func:`install_libmpv` would do."""
     system = platform.system()
+    if is_frozen():
+        # Packaged builds leave mpv out (its license does not allow shipping it inside
+        # YTKTV) and fetch the build that was made together with them.
+        asset = mpv_pack.asset_name()
+        return f"Download {asset} from github.com/{mpv_pack.REPO} (one time)" if asset else None
     if system == "Darwin":
         return "brew install mpv" if shutil.which("brew") else None
     if system == "Windows":
@@ -175,6 +183,10 @@ def install_windows_libmpv(report: Callable[[str], None]) -> None:
         _extract_7z(archive, target.name, lib_dir())
         if target.stat().st_size < 1_000_000:
             raise RuntimeError("extracted libmpv is truncated")
+        # Which build this is, for anyone who needs its source.
+        (lib_dir() / "libmpv-source.txt").write_text(
+            asset["browser_download_url"] + "\n", encoding="utf-8"
+        )
     except Exception:
         # Never leave a partial DLL behind: it would be found and fail to load later.
         target.unlink(missing_ok=True)
@@ -187,7 +199,9 @@ def install_libmpv(report: Callable[[str], None] = lambda _msg: None) -> bool:
     """Install libmpv for this platform. Returns True when it is usable afterwards."""
     system = platform.system()
     try:
-        if system == "Darwin":
+        if is_frozen():
+            mpv_pack.install(report)
+        elif system == "Darwin":
             brew = shutil.which("brew")
             if not brew:
                 return False

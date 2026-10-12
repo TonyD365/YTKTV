@@ -8,6 +8,11 @@
 #                                 download  ship the uv installer; the app fetches the right
 #                                           GPU or CPU runtime on first run (Windows, Linux)
 #                                 none      no separation at all
+#   YTKTV_MPV_MODE              how the build gets mpv:
+#                                 download  leave it out; the app fetches the separate mpv
+#                                           download on first start (default: mpv is under
+#                                           the GPL and must not ship inside YTKTV)
+#                                 bundle    copy libmpv into the app (private builds only)
 #   YTKTV_ICON_DIR=path         folder with icon.icns / icon.ico (optional)
 #   CODESIGN_IDENTITY=name      macOS Developer ID Application identity (optional)
 
@@ -30,10 +35,14 @@ if SEPARATION_MODE not in ("bundle", "download", "none"):
 CODESIGN_IDENTITY = os.environ.get("CODESIGN_IDENTITY") or None
 ICON_DIR = Path(os.environ.get("YTKTV_ICON_DIR", ROOT / "build" / "icon"))
 
-libmpv = bootstrap.find_libmpv()
-if libmpv is None:
+MPV_MODE = os.environ.get("YTKTV_MPV_MODE", "download")
+if MPV_MODE not in ("download", "bundle"):
+    sys.exit(f"unknown YTKTV_MPV_MODE {MPV_MODE!r}")
+
+libmpv = bootstrap.find_libmpv() if MPV_MODE == "bundle" else None
+if MPV_MODE == "bundle" and libmpv is None:
     sys.exit("libmpv was not found; install mpv before building (see README).")
-if not os.path.isabs(libmpv):
+if libmpv is not None and not os.path.isabs(libmpv):
     # On Linux the lookup returns a bare soname ("libmpv.so.2"); PyInstaller needs the file.
     import re
     import subprocess
@@ -47,10 +56,11 @@ if not os.path.isabs(libmpv):
 # Refuse to package a library that cannot be loaded (e.g. a truncated download).
 import ctypes
 
-try:
-    ctypes.CDLL(libmpv)
-except OSError as exc:
-    sys.exit(f"libmpv at {libmpv} cannot be loaded: {exc}")
+if libmpv is not None:
+    try:
+        ctypes.CDLL(libmpv)
+    except OSError as exc:
+        sys.exit(f"libmpv at {libmpv} cannot be loaded: {exc}")
 
 PACKAGE = Path(ytktv.__file__).parent
 datas = [
@@ -67,7 +77,7 @@ datas += collect_data_files("yt_dlp_plugins", include_py_files=True)
 datas += collect_data_files("yt_dlp_ejs")
 datas += copy_metadata("bgutil-ytdlp-pot-provider")
 datas += copy_metadata("ytktv")
-binaries = [(libmpv, ".")]
+binaries = [(libmpv, ".")] if libmpv is not None else []
 hiddenimports = ["uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols.http.auto",
                  "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on"]
 excludes = ["tkinter", "pytest", "IPython", "matplotlib"]
@@ -141,7 +151,8 @@ if SYSTEM == "Darwin":
             "NSMicrophoneUsageDescription": "YTKTV mixes your microphones into the karaoke sound.",
             "NSLocalNetworkUsageDescription": "YTKTV lets phones on your network pick songs.",
             "LSApplicationCategoryType": "public.app-category.music",
-            # The bundled Homebrew libraries only run on the macOS they were built on or newer.
+            # The mpv download holds Homebrew libraries, which only run on the macOS
+            # they were built on or newer.
             "LSMinimumSystemVersion": platform.mac_ver()[0].split(".")[0] + ".0",
         },
     )

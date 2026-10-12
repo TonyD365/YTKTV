@@ -1,0 +1,22 @@
+mpv libraries for YTKTV
+=======================
+
+This archive is NOT part of YTKTV and is not covered by YTKTV's license. It is a
+separate download containing mpv (https://mpv.io) and the libraries it needs,
+among them FFmpeg (https://ffmpeg.org). YTKTV fetches it on first start and
+loads it to play video.
+
+These builds of mpv and FFmpeg are free software under the GNU General Public
+License, version 2 or later; the other libraries are under their own free
+software licenses. The license texts that came with the builds are included in
+this archive as LICENSE-* files. You may use, copy, modify and redistribute
+these libraries under those licenses, whatever YTKTV's own license says.
+
+Source code
+-----------
+
+The libraries were not modified. They were taken unchanged from the packages
+listed in SOURCES.txt, which names the exact versions; the source code of each
+is available from the project or distribution named there. If you cannot get
+the source for a library in this archive that way, open an issue at
+https://github.com/TonyD365/YTKTV/issues and it will be provided.
