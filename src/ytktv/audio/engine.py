@@ -116,6 +116,10 @@ class Mixer:
         self.sample_rate = sample_rate
         self.chains = [MicChain(sample_rate) for _ in settings.mics]
         self.limiter = Limiter()
+        # Times a microphone delivered something that is not sound (see _usable), and
+        # times the effects had to be started afresh because of it.
+        self.bad_inputs = 0
+        self.resets = 0
         self.sfx = SfxBank(sample_rate)
         self._voices: list[list[Any]] = []  # [stereo samples, position]
         self._voice_lock = threading.Lock()
@@ -135,9 +139,30 @@ class Mixer:
                 self._voices.append([samples, 0])
         return True
 
+    def _usable(self, block: np.ndarray) -> np.ndarray:
+        """Return *block* with anything that is not sound replaced by silence.
+
+        A sound card can hand over a broken number now and then (a wireless receiver
+        reconnecting, a driver hiccup). Echo, reverb and the filters all feed their
+        own output back in, so a single such number would circulate in them for
+        ever, and from then on the mixer would send nothing but broken numbers,
+        which silences the whole output device, music included.
+        """
+        if np.isfinite(block).all() and float(np.max(np.abs(block), initial=0.0)) <= 8.0:
+            return block
+        self.bad_inputs += 1
+        return np.clip(np.nan_to_num(block, nan=0.0, posinf=0.0, neginf=0.0), -1.0, 1.0)
+
+    def _start_afresh(self) -> None:
+        """Throw away everything the effects remember: their memory has gone bad."""
+        self.chains = [MicChain(self.sample_rate) for _ in self.settings.mics]
+        self.limiter = Limiter()
+        self.resets += 1
+
     def mix(self, inputs: list[np.ndarray | None], frames: int) -> np.ndarray:
         """Mix one block. ``inputs[i]`` is mic i's mono block, or None when unused."""
         settings = self.settings
+        inputs = [None if block is None else self._usable(block) for block in inputs]
         bus = np.zeros((frames, 2), dtype=np.float32)
         live = [block for block in inputs if block is not None]
         if live:
@@ -166,6 +191,11 @@ class Mixer:
                 self._voices = [v for v in self._voices if v[1] < len(v[0])]
         bus *= np.float32(settings.master_volume / 100.0)
         bus = self.limiter.process(bus)
+        if not np.isfinite(bus).all():
+            # Should be impossible after _usable, but the cost of being wrong is total
+            # silence until the app is restarted: never pass it on, and recover.
+            self._start_afresh()
+            bus = np.zeros((frames, 2), dtype=np.float32)
         if frames:
             peaks = np.max(np.abs(bus), axis=0)
             self.master_peak = (float(peaks[0]), float(peaks[1]))
@@ -323,4 +353,6 @@ class AudioEngine:
             "mics": list(self.mixer.mic_peaks),
             "master": list(self.mixer.master_peak),
             "notches": sum(len(chain.guard.notches) for chain in self.mixer.chains),
+            "bad_inputs": self.mixer.bad_inputs,
+            "resets": self.mixer.resets,
         }
