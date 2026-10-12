@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import platform
+import re
 import shutil
 import sys
 import urllib.error
@@ -186,6 +187,41 @@ def download_update(
 def can_self_install() -> bool:
     """Only packaged builds replace themselves; source checkouts just get told."""
     return is_frozen()
+
+
+_DOWNLOAD_NAME = re.compile(r"^YTKTV-(\d[^-]*)-")
+
+
+def clean_old_downloads(dest_dir: Path, current: str = __version__) -> int:
+    """Delete downloaded installers that are of no more use. Returns the bytes freed.
+
+    An installer is kept only while it is newer than the running version, that is,
+    downloaded and waiting to be installed. Every update used to leave its installer
+    behind, half a gigabyte at a time.
+    """
+    freed = 0
+    try:
+        running = Version(current)
+        files = [path for path in dest_dir.iterdir() if path.is_file()]
+    except (InvalidVersion, OSError):
+        return 0
+    for path in files:
+        match = _DOWNLOAD_NAME.match(path.name)
+        try:
+            waiting = match is not None and Version(match.group(1)) > running
+        except InvalidVersion:
+            waiting = False
+        if waiting:
+            continue
+        try:
+            size = path.stat().st_size
+            path.unlink()
+            freed += size
+        except OSError:
+            log.debug("could not delete %s", path, exc_info=True)
+    if freed:
+        log.info("deleted old update downloads: %d MB", freed // 1048576)
+    return freed
 
 
 def install_update(installer: Path) -> None:
