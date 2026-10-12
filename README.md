@@ -105,6 +105,12 @@ If macOS still refuses to open the app after installing, run
 `sudo xattr -dr com.apple.quarantine /Applications/YTKTV.app`. On Windows, choose
 **More info → Run anyway** in the SmartScreen prompt.
 
+**mpv is downloaded on first start.** YTKTV plays video with [mpv](https://mpv.io), a separate
+free program under the GPL. It is not inside the installers; the first time YTKTV starts it
+asks once and downloads the `YTKTV-mpv-<platform>.zip` published with the same release (you
+need to be online for that first start). The zip holds mpv, the libraries it needs, their
+license texts and a list of where each came from.
+
 ### Vocal separation and your graphics card
 
 | System | How the installer provides it | Runs on |
@@ -242,6 +248,8 @@ Versions come from git tags; there is no version number in the source.
    publish.
 3. The `Release` workflow builds the universal macOS `.pkg`, the Windows installer and the
    Linux AppImage from that tag and attaches them, together with `SHA256SUMS`, to the release.
+   It also attaches one `YTKTV-mpv-<platform>.zip` per platform: mpv is kept out of the
+   installers and fetched by the app on first start.
 
 Installed copies check `releases/latest` at startup and every six hours. Once the installers
 are attached they download the one for their platform, verify its checksum, and offer to
@@ -254,8 +262,9 @@ The macOS package is signed and notarized when the Developer ID secrets listed a
 the macOS build step in `.github/workflows/release.yml` are configured; otherwise it is ad-hoc
 signed.
 
-To build the macOS package locally: `brew install mpv`, `pip install -e ".[package]"`, then
-`packaging/macos/build_pkg.sh`.
+To build the macOS package locally: `pip install -e ".[package]"`, then
+`packaging/macos/build_pkg.sh`. With mpv installed (`brew install mpv`),
+`python packaging/build_mpv_pack.py macos-arm64 dist` builds the separate mpv download.
 
 ## Contributing
 
@@ -287,7 +296,8 @@ YTKTV is free to use, copy, modify and share under the [YTKTV License](LICENSE).
   name.
 - Anything you distribute that is based on it stays under the same license.
 
-The [license text](LICENSE) is what counts. It covers YTKTV's own code; the installers also
-contain mpv, FFmpeg, Qt and other projects, which stay under their own licenses. It is not an OSI-approved open-source license,
+The [license text](LICENSE) is what counts. It covers YTKTV's own code. The installers also
+contain Qt, an FFmpeg program and Python packages, which stay under their own licenses; mpv
+is a separate download under the GPL and is not covered by YTKTV's license at all. It is not an OSI-approved open-source license,
 because those do not allow a ban on selling. Versions 1.3.3 and earlier were released under
 the MIT License and remain available under it.
