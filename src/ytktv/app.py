@@ -161,7 +161,19 @@ def make_separator(settings: Any, runtime: Any = None) -> Any:
     )
 
 
+def _give_missing_console_streams_somewhere_to_go() -> None:
+    """A windowed Windows build has no console: sys.stdout and sys.stderr are None.
+
+    Libraries that print, or merely ask the stream a question, fail on that, so the
+    missing streams are pointed at nothing.
+    """
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))  # noqa: SIM115
+
+
 def main(argv: list[str] | None = None) -> int:
+    _give_missing_console_streams_somewhere_to_go()
     args = parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,

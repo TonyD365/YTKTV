@@ -440,8 +440,17 @@ class ServerThread:
         tls: dict[str, Any] = {}
         if certificate is not None:
             tls = {"ssl_certfile": str(certificate[0]), "ssl_keyfile": str(certificate[1])}
+        # log_config=None: uvicorn's own logging set-up asks the console whether it has
+        # colours, and a windowed Windows build has no console at all (sys.stderr is
+        # None), which made the server fail to start there. YTKTV's logging is enough.
         config = uvicorn.Config(
-            app, host=host, port=port, log_level="warning", access_log=False, **tls
+            app,
+            host=host,
+            port=port,
+            log_level="warning",
+            access_log=False,
+            log_config=None,
+            **tls,
         )
         self._server = uvicorn.Server(config)
         self._thread = threading.Thread(target=self._server.run, name="ytktv-server", daemon=True)

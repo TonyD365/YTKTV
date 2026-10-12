@@ -138,6 +138,42 @@ def self_test(report: Any = print) -> int:
             if "Use this phone as a microphone" not in body:
                 raise RuntimeError("the microphone page was not served")
             report(f"Served the microphone page over HTTPS ({len(body)} characters).")
+
+            # The ordinary phone page goes through the same server code, without TLS.
+            from ytktv.config import SettingsStore
+            from ytktv.core.controller import KTVController
+            from ytktv.player.fake import FakePlayer
+            from ytktv.server.app import create_app
+            from ytktv.youtube.search import YouTube
+
+            youtube = YouTube()
+            controller = KTVController(
+                SettingsStore(Path(folder) / "settings.json"), FakePlayer(), youtube
+            )
+            with socket.socket() as probe:
+                probe.bind(("127.0.0.1", 0))
+                port = probe.getsockname()[1]
+            remote = ServerThread(create_app(controller, youtube), port, host="127.0.0.1")
+            remote.start()
+            try:
+                deadline = time.monotonic() + 15
+                while True:
+                    try:
+                        with urllib.request.urlopen(
+                            f"http://127.0.0.1:{port}/api/state", timeout=5
+                        ) as response:
+                            state = json.loads(response.read())
+                        break
+                    except OSError:
+                        if time.monotonic() > deadline:
+                            raise
+                        time.sleep(0.2)
+            finally:
+                remote.stop()
+                controller.close()
+            if state.get("status") != "idle":
+                raise RuntimeError("the phone remote did not answer as expected")
+            report("Served the phone remote's state over HTTP.")
     except Exception as exc:
         log.exception("phone microphone self-test failed")
         report(f"FAILED: {exc}")
