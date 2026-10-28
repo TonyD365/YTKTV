@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QMenu,
     QProgressBar,
@@ -40,6 +39,7 @@ from ytktv.ui.pages import (
     SearchPage,
     SettingsPage,
 )
+from ytktv.ui.party_page import PartyPage
 from ytktv.ui.support import (
     EventBridge,
     ThumbnailLoader,
@@ -60,6 +60,7 @@ NAV = (
     ("playlists", "Playlists"),
     ("queue", "Selected"),
     ("history", "Sung"),
+    ("party", "Party"),
     ("mixer", "Mixer"),
     ("settings", "Settings"),
 )
@@ -223,14 +224,6 @@ class MainWindow(QMainWindow):
             self._nav_buttons[key] = button
             layout.addWidget(button)
         layout.addStretch()
-        self.danmaku_input = QLineEdit()
-        self.danmaku_input.setPlaceholderText("Danmaku: say something...")
-        self.danmaku_input.setMaxLength(60)
-        self.danmaku_input.setFixedWidth(240)
-        self.danmaku_input.setStyleSheet("font-size: 13px; padding: 7px 10px; border-radius: 10px;")
-        self.danmaku_input.setToolTip("Send a message that flies across the MV screen")
-        self.danmaku_input.returnPressed.connect(self._send_danmaku)
-        layout.addWidget(self.danmaku_input)
         mv = QPushButton("⛶  MV Full Screen")
         mv.setCheckable(False)
         mv.clicked.connect(self._toggle_mv)
@@ -251,6 +244,7 @@ class MainWindow(QMainWindow):
             "playlists": PlaylistsPage(self.ctx),
             "queue": QueuePage(self.ctx),
             "history": HistoryPage(self.ctx),
+            "party": PartyPage(self.ctx, self._send_danmaku),
             "mixer": self.mixer_page,
             "settings": self.settings_page,
         }
@@ -414,14 +408,14 @@ class MainWindow(QMainWindow):
         self.lights_button.clicked.connect(self.controller.set_lights)
         return self.lights_button
 
-    def _send_danmaku(self) -> None:
-        text = self.danmaku_input.text().strip()
+    def _send_danmaku(self, text: str) -> bool:
+        text = text.strip()
         if not text:
-            return
+            return False
         if self.controller.send_danmaku(text):
-            self.danmaku_input.clear()
-        else:
-            self.show_toast("Too many messages at once. Try again in a moment.", error=True)
+            return True
+        self.show_toast("Too many messages at once. Try again in a moment.", error=True)
+        return False
 
     def _step_level(self, name: str, steps: int) -> None:
         """Move a level one segment up or down; the display follows from the new state."""

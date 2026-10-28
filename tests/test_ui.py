@@ -371,10 +371,11 @@ def test_mv_window_shows_lyrics_and_danmaku_and_console_controls_work(window, qt
     qtbot.waitUntil(lambda: mv.lyrics.has_lines() and mv.lyrics.isVisible(), timeout=3000)
     assert mv._animator.isActive()
 
-    main.danmaku_input.setText("nice!")
-    main._send_danmaku()
+    party = main.pages["party"]
+    party.danmaku_input.setText("nice!")
+    party.send()
     qtbot.waitUntil(lambda: mv.danmaku.active(), timeout=3000)
-    assert main.danmaku_input.text() == ""
+    assert party.danmaku_input.text() == ""
 
     for _ in range(6):
         main.level_keys["guide_vocal"][1].click()

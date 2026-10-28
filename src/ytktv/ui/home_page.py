@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ytktv.core.controller import REACTIONS
 from ytktv.ui.pages import Context, Page
 
 # (page, label, icon, colour): one tile each, in reading order.
@@ -86,20 +85,6 @@ class HomePage(Page):
             row.setTextFormat(Qt.TextFormat.PlainText)
             room.addWidget(row)
             self.next_rows.append(row)
-        cheer = QLabel("CHEER THE SINGER")
-        cheer.setObjectName("caption")
-        room.addWidget(cheer)
-        emojis = QGridLayout()  # two rows of four: eight in one row do not fit
-        emojis.setSpacing(6)
-        for index, emoji in enumerate(REACTIONS):
-            button = QPushButton(emoji)
-            button.setObjectName("reaction")
-            button.setStyleSheet("font-size: 22px;")
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.setToolTip("Float this up the MV screen")
-            button.clicked.connect(lambda _c=False, e=emoji: ctx.controller.send_reaction(e))
-            emojis.addWidget(button, index // 4, index % 4)
-        room.addLayout(emojis)
         self.more = QPushButton("See the whole queue")
         self.more.setCursor(Qt.CursorShape.PointingHandCursor)
         self.more.clicked.connect(lambda: open_page("queue"))
