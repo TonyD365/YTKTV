@@ -54,9 +54,14 @@ class DeskWindow(QMainWindow):
         column.addWidget(address_label)
 
         tabs = QTabWidget()
+        tabs.setDocumentMode(True)
         tabs.setStyleSheet(
             "QTabWidget::pane { border: 0; } QScrollArea, QScrollArea > QWidget > QWidget"
             " { background: transparent; }"
+            " QTabBar::tab { background: #1c1a2e; color: #c9c3e6; padding: 8px 22px;"
+            " border-radius: 8px; margin-right: 6px; font-size: 15px; }"
+            " QTabBar::tab:selected { background: #ff3d9a; color: white; }"
+            " QTabBar::tab:hover:!selected { background: #2a2745; }"
         )
         wall = QScrollArea()
         wall.setWidgetResizable(True)
