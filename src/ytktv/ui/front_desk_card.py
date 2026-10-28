@@ -6,6 +6,7 @@ import time
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -17,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv.config import SettingsStore
-from ytktv.rooms import binding
+from ytktv.rooms import binding, discovery
 from ytktv.rooms.client import RoomClient
 
 
@@ -40,8 +41,17 @@ class FrontDeskCard(QFrame):
         self.form = QWidget()
         form = QVBoxLayout(self.form)
         form.setContentsMargins(0, 0, 0, 0)
+        found_row = QHBoxLayout()
+        self.found = QComboBox()
+        self.found.setPlaceholderText("Desks on this network")
+        self.found.currentIndexChanged.connect(self._pick_found)
+        search = QPushButton("Find Desks")
+        search.clicked.connect(self.find_desks)
+        found_row.addWidget(self.found, stretch=1)
+        found_row.addWidget(search)
+        form.addLayout(found_row)
         self.address = QLineEdit()
-        self.address.setPlaceholderText("Desk address, e.g. 192.168.1.10:8770")
+        self.address.setPlaceholderText("…or type its address, e.g. 192.168.1.10:8770")
         self.code = QLineEdit()
         self.code.setPlaceholderText("6-digit code shown on the desk")
         self.code.setMaxLength(6)
@@ -98,14 +108,36 @@ class FrontDeskCard(QFrame):
                 f" has been offline for 7 days ({days:.0f} so far)."
             )
 
+    def find_desks(self) -> None:
+        self.found.clear()
+        try:
+            desks = discovery.browse(2.0)
+        except Exception:
+            desks = []
+        for desk in desks:
+            self.found.addItem(f"{desk.name} · {desk.address}", desk.address)
+        if not desks:
+            self.found.setPlaceholderText("No desk found. Type its address below.")
+
+    def _pick_found(self, index: int) -> None:
+        if index >= 0:
+            self.address.setText(str(self.found.itemData(index)))
+
     def bind(self) -> None:
         try:
-            binding.bind(
-                self.store.settings, self.address.text(), self.code.text(), self.name.text()
-            )
+            pairing = binding.request(self.address.text(), self.code.text(), self.name.text())
         except Exception as exc:
             QMessageBox.warning(self, "Could not bind", f"Check the address and code.\n\n{exc}")
             return
+        answer = QMessageBox.question(
+            self,
+            "Check the security code",
+            f"Does the front desk show these four pictures?\n\n{pairing.fingerprint}\n\n"
+            "Only press Yes if they match exactly.",
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        binding.apply(self.store.settings, pairing)
         self.store.save()
         if self.client is not None:
             self.client.start()

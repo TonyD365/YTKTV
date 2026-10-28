@@ -29,6 +29,8 @@ dependencies = [
     "certifi",
     "asn1crypto>=1.5",
     "ecdsa>=0.19",
+    # Finds the front desk on the local network even when its IP address changes.
+    "zeroconf>=0.132",
 ]
 
 [project.optional-dependencies]

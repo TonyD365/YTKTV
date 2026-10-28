@@ -21,13 +21,24 @@ def main() -> int:
     app.setStyleSheet(theme.STYLESHEET)
     store = DeskStore(data_dir() / "desk.sqlite3")
     hub = Hub()
-    server = ServerThread(create_desk_app(store, hub), DESK_PORT)
+    from ytktv.rooms.discovery import Announcer
+    from ytktv.server.tls import ensure_certificate
+
+    ip = lan_ip()
+    certificate = ensure_certificate(data_dir() / "desk-tls", ip)
+    server = ServerThread(create_desk_app(store, hub), DESK_PORT, certificate=certificate)
     server.start()
-    window = DeskWindow(store, hub, f"{lan_ip()}:{DESK_PORT}")
+    try:
+        announcer: Announcer | None = Announcer(store.desk_id, "YTKTV Desk", ip, DESK_PORT)
+    except Exception:  # no multicast here; rooms can still type the address
+        announcer = None
+    window = DeskWindow(store, hub, f"{ip}:{DESK_PORT}")
     window.show()
     try:
         return app.exec()
     finally:
+        if announcer is not None:
+            announcer.close()
         server.stop()
 
 

@@ -127,7 +127,7 @@ class DeskWindow(QMainWindow):
         head.setObjectName("panelHead")
         self.calls_label = QLabel("No calls right now")
         self.calls_label.setObjectName("muted")
-        hint = QLabel(f"Rooms connect to this desk at {address}")
+        hint = QLabel(f"Rooms connect to this desk at {address} · {store.fingerprint}")
         hint.setObjectName("muted")
         call_row.addWidget(head)
         call_row.addSpacing(16)
@@ -308,6 +308,8 @@ class DeskWindow(QMainWindow):
             self.panel_info.setText(
                 f"On the YTKTV in that room: Settings → Front Desk.\n"
                 f"Desk address: {self.address}\n\n"
+                f"Security code: {self.store.fingerprint}\n"
+                "The room must show the same four pictures; if not, do not confirm.\n\n"
                 f"The code works once and expires in {int(left) // 60}:{int(left) % 60:02d}."
             )
             self.code_label.show()

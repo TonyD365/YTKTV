@@ -13,7 +13,8 @@ from typing import Any
 import websockets
 
 from ytktv.config import SettingsStore
-from ytktv.rooms import binding
+from ytktv.rooms import binding, discovery
+from ytktv.rooms.protocol import DeskImpostor, RoomSession
 
 log = logging.getLogger(__name__)
 HEARTBEAT = 5.0
@@ -57,14 +58,38 @@ class RoomClient:
                 self._set_online(False)
             self._stop.wait(RETRY)
 
+    def _locate(self) -> None:
+        """Follow the desk to its current IP address, found by its ID."""
+        settings = self.store.settings
+        try:
+            address = discovery.find(settings.desk_id)
+        except Exception as exc:  # no multicast on this network: keep the last address
+            log.debug("desk discovery: %s", exc)
+            return
+        if address and binding.desk_url(address) != settings.desk_url:
+            settings.desk_url = binding.desk_url(address)
+            self.store.save()
+
     async def _session(self) -> None:
         settings = self.store.settings
+        if not self.online:
+            await asyncio.to_thread(self._locate)
+        session = RoomSession(settings.room_id, settings.room_key, settings.desk_key)
         url = settings.desk_url.replace("http", "ws", 1) + "/ws/room"
-        async with websockets.connect(url, open_timeout=5) as ws:
-            await ws.send(json.dumps({"room_id": settings.room_id, "key": settings.room_key}))
-            reply = json.loads(await asyncio.wait_for(ws.recv(), 5))
-            if reply.get("type") == "unbind":  # the desk no longer knows this room
-                self._handle(reply)
+        ssl_context = binding.tls_context() if url.startswith("wss") else None
+        async with websockets.connect(url, open_timeout=5, ssl=ssl_context) as ws:
+            await ws.send(session.hello())
+            try:
+                async with asyncio.timeout(10):
+                    first = session.open(str(await ws.recv()))
+                    if first.get("type") == "challenge":
+                        await ws.send(session.answer(first))
+                        first = session.open(str(await ws.recv()))
+            except DeskImpostor:
+                log.warning("ignored a machine pretending to be the front desk")
+                return
+            if first.get("type") != "ack":
+                self._handle(first)  # a signed unbind: the desk no longer knows this room
                 return
             self._set_online(True)
             while not self._stop.is_set() and binding.is_bound(self.store.settings):
@@ -72,10 +97,14 @@ class RoomClient:
                 self.store.save()
                 await ws.send(json.dumps({"type": "heartbeat"}))
                 try:
-                    message = json.loads(await asyncio.wait_for(ws.recv(), HEARTBEAT))
+                    async with asyncio.timeout(HEARTBEAT):
+                        raw = await ws.recv()
                 except TimeoutError:
                     continue
-                self._handle(message)
+                try:
+                    self._handle(session.open(str(raw)))
+                except DeskImpostor:
+                    log.warning("ignored a message the desk did not sign")
 
     def _handle(self, message: dict[str, Any]) -> None:
         kind = str(message.get("type", ""))

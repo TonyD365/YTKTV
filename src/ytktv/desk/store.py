@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import hashlib
 import secrets
 import sqlite3
 import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+
+from ytktv.rooms import crypto
 
 CODE_SECONDS = 300  # a pairing code works for five minutes, once
 
@@ -20,10 +21,6 @@ class Room:
     last_seen: float
 
 
-def _hash(key: str) -> str:
-    return hashlib.sha256(key.encode()).hexdigest()
-
-
 class DeskStore:
     def __init__(self, path: Path | str = ":memory:") -> None:
         self._db = sqlite3.connect(str(path), check_same_thread=False)
@@ -32,9 +29,18 @@ class DeskStore:
         with self._lock:
             self._db.execute(
                 "CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL,"
-                " key_hash TEXT NOT NULL, last_seen REAL NOT NULL DEFAULT 0)"
+                " key TEXT NOT NULL, last_seen REAL NOT NULL DEFAULT 0)"
             )
+            self._db.execute("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)")
+            row = self._db.execute("SELECT v FROM meta WHERE k='private_key'").fetchone()
+            if row is None:
+                row = (crypto.new_private_key(),)
+                self._db.execute("INSERT INTO meta VALUES ('private_key', ?)", row)
             self._db.commit()
+        self.private_key: str = row[0]
+        self.public_key = crypto.public_key(self.private_key)
+        self.desk_id = crypto.desk_id(self.public_key)
+        self.fingerprint = crypto.fingerprint(self.public_key)
 
     def new_code(self, now: float | None = None) -> str:
         now = time.time() if now is None else now
@@ -55,16 +61,17 @@ class DeskStore:
             name = (
                 name or f"Room {self._db.execute('SELECT COUNT(*) FROM rooms').fetchone()[0] + 1}"
             )
-            self._db.execute(
-                "INSERT INTO rooms VALUES (?, ?, ?, ?)", (room_id, name, _hash(key), now)
-            )
+            self._db.execute("INSERT INTO rooms VALUES (?, ?, ?, ?)", (room_id, name, key, now))
             self._db.commit()
         return Room(room_id, name, now), key
 
-    def verify(self, room_id: str, key: str) -> bool:
+    def key(self, room_id: str) -> str | None:
         with self._lock:
-            row = self._db.execute("SELECT key_hash FROM rooms WHERE id=?", (room_id,)).fetchone()
-        return row is not None and secrets.compare_digest(row[0], _hash(key))
+            row = self._db.execute("SELECT key FROM rooms WHERE id=?", (room_id,)).fetchone()
+        return None if row is None else str(row[0])
+
+    def sign(self, data: bytes) -> str:
+        return crypto.sign(self.private_key, data)
 
     def seen(self, room_id: str, now: float | None = None) -> None:
         with self._lock:

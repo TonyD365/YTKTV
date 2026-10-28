@@ -89,6 +89,8 @@ class Settings:
     desk_url: str = ""
     room_id: str = ""
     room_key: str = ""
+    desk_id: str = ""  # stays the same when the desk's IP address changes
+    desk_key: str = ""  # the desk's public key: rooms obey only what it signs
     room_name: str = ""
     desk_last_seen: float = 0.0  # time.time() of the last contact with the desk
 
