@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QMenu,
     QProgressBar,
     QPushButton,
-    QSlider,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -26,6 +25,7 @@ from PySide6.QtWidgets import (
 from ytktv.core.controller import PITCH_RANGE, SPEEDS, KTVController
 from ytktv.core.models import VocalMode
 from ytktv.ui.home_page import HomePage
+from ytktv.ui.level_hud import LevelHud, from_segments, to_segments
 from ytktv.ui.mixer_panel import MixerPanel
 from ytktv.ui.mv_window import MvWindow
 from ytktv.ui.pages import (
@@ -118,6 +118,8 @@ class MainWindow(QMainWindow):
         column.addWidget(self._build_control_bar())
 
         self._root = root
+        self._levels: dict[str, int] = {}
+        self.level_hud = LevelHud(root)
         self.toast = QLabel(root)
         self.toast.setObjectName("toast")
         self.toast.setTextFormat(Qt.TextFormat.PlainText)
@@ -262,8 +264,8 @@ class MainWindow(QMainWindow):
         bar.setObjectName("controlBar")
         bar.setFixedHeight(104)
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(10, 8, 10, 10)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 8, 8, 10)
+        layout.setSpacing(6)
         controller = self.controller
 
         def group(title: str, *widgets: QWidget, stretch: int = 0) -> None:
@@ -302,7 +304,7 @@ class MainWindow(QMainWindow):
             self.mode_buttons[mode] = widget
         # The instant modes are used less often, so they share one menu button.
         self.more_modes = QPushButton(_MORE_MODES)
-        self.more_modes.setFixedSize(92, 44)
+        self.more_modes.setFixedSize(84, 44)
         self.more_modes.setCheckable(True)
         self.more_modes.setCursor(Qt.CursorShape.PointingHandCursor)
         self.more_modes.setToolTip("Vocal modes that need no preparation")
@@ -376,26 +378,24 @@ class MainWindow(QMainWindow):
             button("+", lambda: self._step_speed(1), "Faster", round=True),
         )
 
-        # Volumes
-        self.music_slider = self._volume_slider("music")
-        self.mic_slider = self._volume_slider("mic")
-        self.guide_slider = QSlider(Qt.Orientation.Horizontal)
-        self.guide_slider.setRange(0, 100)
-        self.guide_slider.setMinimumWidth(52)
-        self.guide_slider.setValue(controller.settings.guide_vocal)
-        self.guide_slider.setToolTip(
-            "Guide vocal: how much of the original singer stays audible in Instrumental mode"
-        )
-        self.guide_slider.valueChanged.connect(controller.set_guide_vocal)
-        group("GUIDE", self.guide_slider, stretch=1)
-        group("MUSIC", self.music_slider, stretch=1)
-        group("MIC", self.mic_slider, stretch=1)
+        # Levels: a minus and a plus key each, like a KTV remote. Every press shows the
+        # level on the console and on the MV screen.
+        self.level_keys: dict[str, tuple[QPushButton, QPushButton]] = {}
+        for name, title, what in (
+            ("guide_vocal", "GUIDE", "the original singer in Instrumental mode"),
+            ("music_volume", "MUSIC", "the music"),
+            ("mic_volume", "MIC", "the microphones"),
+        ):
+            down = button("−", partial(self._step_level, name, -1), f"Quieter: {what}", 32)
+            up = button("+", partial(self._step_level, name, 1), f"Louder: {what}", 32)
+            self.level_keys[name] = (down, up)
+            group(title, down, up)
 
         # Crowd
         group(
             "CROWD",
-            button("Applause", lambda: self._sfx("applause"), "Applause", 74, gold=True),
-            button("Cheer", lambda: self._sfx("cheer"), "Crowd cheer", 58, gold=True),
+            button("Applause", lambda: self._sfx("applause"), "Applause", 70, gold=True),
+            button("Cheer", lambda: self._sfx("cheer"), "Crowd cheer", 54, gold=True),
             button("📣", lambda: self._sfx("airhorn"), "Air horn", round=True),
             button("🥁", lambda: self._sfx("drumroll"), "Drum roll", round=True),
             self._lights_button(),
@@ -423,13 +423,19 @@ class MainWindow(QMainWindow):
         else:
             self.show_toast("Too many messages at once. Try again in a moment.", error=True)
 
-    def _volume_slider(self, name: str) -> QSlider:
-        slider = QSlider(Qt.Orientation.Horizontal)
-        slider.setRange(0, 100)
-        slider.setMinimumWidth(52)
-        slider.setValue(getattr(self.controller.settings, f"{name}_volume"))
-        slider.valueChanged.connect(lambda value: self.controller.set_volume(name, value))
-        return slider
+    def _step_level(self, name: str, steps: int) -> None:
+        """Move a level one segment up or down; the display follows from the new state."""
+        value = from_segments(to_segments(int(self._state[name])) + steps)
+        if name == "guide_vocal":
+            self.controller.set_guide_vocal(value)
+        else:
+            self.controller.set_volume(name.removesuffix("_volume"), value)
+        self._show_level(name, value)
+
+    def _show_level(self, name: str, value: int) -> None:
+        self.level_hud.setGeometry((self.width() - 480) // 2, self.height() - 104 - 116, 480, 96)
+        self.level_hud.show_level(name, value)
+        self.mv_window.show_level(name, value)
 
     # -- actions ----------------------------------------------------------
 
@@ -634,15 +640,11 @@ class MainWindow(QMainWindow):
         else:
             tip = "Score each song: the microphones are compared with the original singer's melody"
         self.score_button.setToolTip(tip)
-        for slider, name in (
-            (self.music_slider, "music_volume"),
-            (self.mic_slider, "mic_volume"),
-            (self.guide_slider, "guide_vocal"),
-        ):
-            if not slider.isSliderDown() and slider.value() != state[name]:
-                slider.blockSignals(True)
-                slider.setValue(state[name])
-                slider.blockSignals(False)
+        # A level changed somewhere else (a phone, the mixer): show it too.
+        for name in ("music_volume", "mic_volume", "guide_vocal"):
+            if self._levels.get(name, state[name]) != state[name]:
+                self._show_level(name, state[name])
+            self._levels[name] = state[name]
 
         for page in self.pages.values():
             if isinstance(page, Page):

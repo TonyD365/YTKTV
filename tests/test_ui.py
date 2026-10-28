@@ -73,9 +73,12 @@ def test_control_bar_buttons_drive_the_controller(window, qtbot):
     qtbot.waitUntil(lambda: main.more_modes.text() == "Vocal Cut", timeout=3000)
     assert main.more_modes.isChecked() and main.mode_actions[VocalMode.CENTER_CUT].isChecked()
     assert not main.mode_buttons[VocalMode.INSTRUMENTAL].isChecked()
-    main.music_slider.setValue(33)
-    assert controller.settings.music_volume == 33
+    main.level_keys["music_volume"][0].click()  # one segment quieter: 80 -> 75
+    assert controller.settings.music_volume == 75
     assert controller.settings.mic_volume == 80
+    assert main.level_hud.isVisible() and main.level_hud.kind == "music_volume"
+    assert main.level_hud.value == 75
+    assert main.mv_window.level_hud.value == 75  # shown on the MV screen too
 
 
 def test_mixer_strip_edits_settings(window, qtbot):
@@ -373,8 +376,9 @@ def test_mv_window_shows_lyrics_and_danmaku_and_console_controls_work(window, qt
     qtbot.waitUntil(lambda: mv.danmaku.active(), timeout=3000)
     assert main.danmaku_input.text() == ""
 
-    main.guide_slider.setValue(40)
-    assert controller.settings.guide_vocal == 40
+    for _ in range(6):
+        main.level_keys["guide_vocal"][1].click()
+    assert controller.settings.guide_vocal == 38  # six of sixteen segments
     assert main.lights_button.isChecked()
     main.lights_button.click()
     assert controller.settings.lights is False
@@ -705,3 +709,18 @@ def test_reactions_float_up_the_mv_screen(window, qtbot):
     assert not mv.reactions.active()
     sent = sum(controller.send_reaction(REACTIONS[0]) for _ in range(40))
     assert 0 < sent < 40  # too many at once are refused
+
+
+def test_levels_stay_within_range_and_changes_from_a_phone_show_up(window, qtbot):
+    main, controller = window
+    for _ in range(30):
+        main.level_keys["mic_volume"][1].click()
+    assert controller.settings.mic_volume == 100
+    for _ in range(30):
+        main.level_keys["mic_volume"][0].click()
+    assert controller.settings.mic_volume == 0
+    main.level_hud.hide()
+    controller.set_volume("music", 40)  # as if from the phone page
+    qtbot.waitUntil(lambda: main.level_hud.isVisible(), timeout=3000)
+    assert main.level_hud.kind == "music_volume" and main.level_hud.value == 40
+    main.level_hud.grab()

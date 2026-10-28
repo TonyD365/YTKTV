@@ -59,7 +59,7 @@ class HomePage(Page):
         now_box.setSpacing(8)
         self.cover = QLabel()
         self.cover.setObjectName("homeCover")
-        self.cover.setMinimumHeight(200)
+        self.cover.setMinimumHeight(110)
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cover.setScaledContents(True)
         now_box.addWidget(self.cover, stretch=1)
@@ -89,15 +89,16 @@ class HomePage(Page):
         cheer = QLabel("CHEER THE SINGER")
         cheer.setObjectName("caption")
         room.addWidget(cheer)
-        emojis = QHBoxLayout()
+        emojis = QGridLayout()  # two rows of four: eight in one row do not fit
         emojis.setSpacing(6)
-        for emoji in REACTIONS:
+        for index, emoji in enumerate(REACTIONS):
             button = QPushButton(emoji)
             button.setObjectName("reaction")
+            button.setStyleSheet("font-size: 22px;")
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setToolTip("Float this up the MV screen")
             button.clicked.connect(lambda _c=False, e=emoji: ctx.controller.send_reaction(e))
-            emojis.addWidget(button)
+            emojis.addWidget(button, index // 4, index % 4)
         room.addLayout(emojis)
         self.more = QPushButton("See the whole queue")
         self.more.setCursor(Qt.CursorShape.PointingHandCursor)

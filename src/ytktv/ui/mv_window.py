@@ -30,6 +30,7 @@ from PySide6.QtWidgets import QLabel, QWidget
 
 from ytktv.player.mpv_player import MpvPlayer
 from ytktv.ui import theme
+from ytktv.ui.level_hud import LevelHud
 from ytktv.ui.mv_overlays import (
     BOARD_HEAD,
     BOARD_ROW,
@@ -256,6 +257,7 @@ class MvWindow(QWidget):
         self.pitch_lane = PitchLane(self)
         self.danmaku = DanmakuOverlay(self)
         self.reactions = ReactionOverlay(self)
+        self.level_hud = LevelHud(self)
         self.score_card = ScoreCard(self)
         self._score_timer = QTimer(self)
         self._score_timer.setSingleShot(True)
@@ -384,6 +386,13 @@ class MvWindow(QWidget):
         self.lyrics.set_lines(lines)
         self.lyrics.raise_()
         self._sync_animator()
+
+    def show_level(self, name: str, value: int) -> None:
+        """Show a volume change across the top of the MV screen, like a TV does."""
+        w, h = self.width(), self.height()
+        hud_w, hud_h = int(w * 0.34), int(h * 0.1)
+        self.level_hud.setGeometry((w - hud_w) // 2, int(h * 0.06), hud_w, hud_h)
+        self.level_hud.show_level(name, value)
 
     def add_reaction(self, emoji: str) -> None:
         self.reactions.add(emoji)
