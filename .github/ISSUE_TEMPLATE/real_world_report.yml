@@ -1,0 +1,58 @@
+name: 🎤 Real-world report
+description: Tell us how YTKTV did in your room, with your speakers, microphones and phones
+title: "[report] <computer> + <speakers> + <microphones>"
+labels: [real-world-test]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Real rooms are the best test YTKTV can get, thank you! It works or it does not: both are
+        useful. Reports are collected under the `real-world-test` label.
+  - type: input
+    id: version
+    attributes:
+      label: YTKTV version and system
+      placeholder: 1.5.0 on a MacBook Air M5, macOS 26
+    validations:
+      required: true
+  - type: input
+    id: speakers
+    attributes:
+      label: Speakers or TV, and how they are connected
+      placeholder: Living-room TV over HDMI / soundbar over Bluetooth / AirPlay speaker
+    validations:
+      required: true
+  - type: input
+    id: microphones
+    attributes:
+      label: Microphones
+      placeholder: Two wireless microphones on a USB receiver / an iPhone 16 as a phone microphone
+  - type: dropdown
+    id: tried
+    attributes:
+      label: What did you try?
+      multiple: true
+      options:
+        - Singing with microphones
+        - A phone as a microphone
+        - Original / instrumental
+        - Scoring
+        - Lyrics
+        - The feedback guard
+        - Queueing from phones
+  - type: dropdown
+    id: delay
+    attributes:
+      label: Did you hear your own voice late?
+      options:
+        - No, it felt immediate
+        - A little, but fine
+        - Clearly late
+        - Did not sing
+  - type: textarea
+    id: notes
+    attributes:
+      label: How did it go?
+      description: What worked, what did not, numbers on the mixer display (XRUN, BAD), anything that surprised you.
+    validations:
+      required: true

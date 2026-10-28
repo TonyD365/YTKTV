@@ -29,8 +29,8 @@ looks and works like real hardware puts your microphones on top with echo and re
 for macOS, Windows and Linux.
 
 <p align="center">
-  <img src="docs/images/mv-screen.png" alt="The MV screen: karaoke lyrics filling word by word, the pitch lane with the singer's voice as dots, a running score, messages flying across and lights around the edge" width="860">
-  <br><sub>The MV screen: lyrics that follow the singer, a pitch lane, a live score, danmaku and lights.</sub>
+  <img src="docs/images/demo.gif" alt="The MV screen while someone sings: the lyrics fill with colour word by word, the voice is drawn over the tune in the pitch lane, messages fly across and the lights pulse" width="860">
+  <br><sub>The MV screen while someone sings: lyrics that follow the singer, a pitch lane, a live score, danmaku and lights.</sub>
 </p>
 
 ## Highlights
@@ -282,13 +282,15 @@ your system and what happened. It really helps.
 
 ## Roadmap
 
-Ideas for the next versions; tell us in an issue which you would like first.
+The roadmap lives in [issues labelled `roadmap`](https://github.com/TonyD365/YTKTV/issues?q=is%3Aissue+label%3Aroadmap),
+and the [website](https://tonyd365.github.io/YTKTV/#roadmap) shows it live. Give a 👍 to the
+ones you want first, or comment with how you would like them to work.
 
-- A room PIN, so only the people in the room can skip songs and change the sound
-- An offline song library: keep sung songs, with their instrumentals, for parties without internet
-- Recording: take the song you just sang home as a file
-- A Chinese interface
-- Signed installers, without the `xattr` step or the SmartScreen warning
+- [A room PIN for the phone page](https://github.com/TonyD365/YTKTV/issues/31)
+- [An offline song library](https://github.com/TonyD365/YTKTV/issues/32)
+- [Recording a performance](https://github.com/TonyD365/YTKTV/issues/33)
+- [A Chinese interface](https://github.com/TonyD365/YTKTV/issues/34)
+- [Signed installers](https://github.com/TonyD365/YTKTV/issues/35)
 
 ## Development
 
@@ -355,6 +357,9 @@ touching any release.
 The macOS package is signed and notarized when the Developer ID secrets listed at the top of
 the macOS build step in `.github/workflows/release.yml` are configured; otherwise it is ad-hoc
 signed.
+
+The pictures in the README and on the website come from `python scripts/readme_images.py`
+(add `--phone` for the phone page, which needs Google Chrome); nothing opens on screen.
 
 To build the macOS package locally: `pip install -e ".[package]"`, then
 `packaging/macos/build_pkg.sh`. With mpv installed (`brew install mpv`),

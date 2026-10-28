@@ -92,6 +92,14 @@
   summary { cursor: pointer; font-weight: 700; }
   details p { color: var(--muted); margin: 10px 0 0; }
 
+  .roadmap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; max-width: 900px; margin: 0 auto; }
+  @media (max-width: 700px) { .roadmap { grid-template-columns: minmax(0, 1fr); } }
+  .roadmap a { display: block; text-decoration: none; color: var(--text); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; }
+  .roadmap a:hover { border-color: var(--purple); }
+  .roadmap .state { font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--cyan); }
+  .roadmap .done .state { color: #5dffb0; }
+  .roadmap b { display: block; margin-top: 2px; }
   .downloads { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; max-width: 900px; margin: 0 auto; }
   @media (max-width: 800px) { .downloads { grid-template-columns: minmax(0, 1fr); } }
   .downloads .card { text-align: center; }
@@ -111,6 +119,7 @@
     <a class="logo" href="#top"><img src="images/icon.png" alt="">YTKTV</a>
     <nav>
       <a class="optional" href="#features" data-i18n="nav.features">Features</a>
+      <a class="optional" href="#roadmap" data-i18n="nav.roadmap">Roadmap</a>
       <a class="optional" href="#faq" data-i18n="nav.faq">FAQ</a>
       <a href="https://github.com/TonyD365/YTKTV">GitHub</a>
       <button class="lang" id="lang" type="button">中文</button>
@@ -209,6 +218,14 @@
     </div>
   </section>
 
+  <section id="roadmap">
+    <div class="wrap">
+      <h2 data-i18n="road.title">Coming next</h2>
+      <p class="sub" data-i18n="road.sub" data-html>Live from GitHub: issues labelled <code>roadmap</code>. Vote with a 👍 or join the discussion.</p>
+      <div class="roadmap" id="roadmap-items"><p class="small" data-i18n="road.loading">Loading…</p></div>
+    </div>
+  </section>
+
   <section id="faq">
     <div class="wrap">
       <h2 data-i18n="faq.title">Questions</h2>
@@ -234,7 +251,7 @@
 "use strict";
 const REPO = "TonyD365/YTKTV";
 const ZH = {
-  "nav.features": "功能", "nav.faq": "常见问题",
+  "nav.features": "功能", "nav.roadmap": "路线图", "nav.faq": "常见问题",
   "hero.title": "把任何电脑变成 <span>KTV 包厢</span>",
   "hero.lead": "YouTube 上的每首歌都在点歌本里。电视放 MV 和卡拉 OK 歌词，AI 去掉原唱人声，朋友们用手机点歌，调音台把你的麦克风叠加上去。",
   "hero.download": "免费下载", "hero.github": "在 GitHub 上查看", "hero.platforms": "macOS · Windows · Linux",
@@ -255,6 +272,8 @@ const ZH = {
   "dl.title": "下载", "dl.sub": "免费，支持 macOS、Windows 和 Linux。",
   "dl.mac": "Apple 芯片和 Intel", "dl.win": "Windows 10 和 11，64 位", "dl.linux": "x86-64 AppImage", "dl.button": "下载",
   "dl.note": "安装包还没有签名。macOS 上打开安装包前先在终端执行 <code>xattr -d com.apple.quarantine ~/Downloads/YTKTV-*.pkg</code>；Windows 上点 <b>更多信息 → 仍要运行</b>。第一次启动会自动下载视频播放器 mpv。",
+  "road.title": "接下来要做的", "road.sub": "实时来自 GitHub 上带 <code>roadmap</code> 标签的 issue。点 👍 投票，或者参与讨论。",
+  "road.loading": "加载中…", "road.planned": "计划中", "road.done": "已完成",
   "faq.title": "常见问题",
   "q1.q": "免费吗？可以拿来开店吗？", "q1.a": "都可以。YTKTV 免费，许可证允许商用，比如开 KTV；不允许出售这个软件本身。在公开场所放音乐通常还需要向版权方取得许可。",
   "q2.q": "我的声音从音箱出来有延迟。", "q2.a": "几乎都是因为用了无线音箱：AirPlay 会延迟 1–2 秒，蓝牙几百毫秒，任何设置都改不了。用线连接音箱或电视，并在 Mixer → MAIN OUT 里选它。",
@@ -280,6 +299,7 @@ function apply(lang) {
   document.getElementById("lang").textContent = lang === "zh" ? "English" : "中文";
   try { localStorage.setItem("lang", lang); } catch (e) { /* private mode */ }
   showVersion();
+  showRoadmap();
 }
 document.getElementById("lang").addEventListener("click", () => apply(language === "zh" ? "en" : "zh"));
 
@@ -313,6 +333,40 @@ const os = visitorOS();
 if (os) document.querySelector(`.downloads [data-os="${os}"]`).classList.add("mine");
 try { if (localStorage.getItem("lang") === "zh" || (!localStorage.getItem("lang") && /^zh/i.test(navigator.language))) apply("zh"); }
 catch (e) { if (/^zh/i.test(navigator.language)) apply("zh"); }
+// The roadmap is the open and finished issues labelled "roadmap", read live from GitHub, so
+// it never goes stale: closing an issue as completed moves it to "Done".
+let roadmap = null;
+function showRoadmap() {
+  if (!roadmap) return;
+  const box = document.getElementById("roadmap-items");
+  const zh = language === "zh";
+  box.replaceChildren();
+  const items = roadmap
+    .filter((issue) => !issue.pull_request && (issue.state === "open" || issue.state_reason === "completed"))
+    .sort((a, b) => (a.state === b.state ? b.reactions["+1"] - a.reactions["+1"] : a.state === "open" ? -1 : 1));
+  for (const issue of items) {
+    const done = issue.state !== "open";
+    const link = document.createElement("a");
+    link.href = issue.html_url;
+    link.className = done ? "done" : "";
+    const state = document.createElement("span");
+    state.className = "state";
+    const votes = issue.reactions["+1"] ? `  ·  👍 ${issue.reactions["+1"]}` : "";
+    state.textContent = (done ? (zh ? ZH["road.done"] : "Done") : (zh ? ZH["road.planned"] : "Planned")) + votes;
+    const title = document.createElement("b");
+    title.textContent = issue.title;
+    link.append(state, title);
+    box.append(link);
+  }
+  if (!items.length) box.textContent = zh ? "路线图即将公布。" : "The roadmap will be published soon.";
+}
+fetch(`https://api.github.com/repos/${REPO}/issues?labels=roadmap&state=all&per_page=50`)
+  .then((response) => response.ok ? response.json() : Promise.reject(response.status))
+  .then((issues) => { roadmap = issues; showRoadmap(); })
+  .catch(() => {
+    const box = document.getElementById("roadmap-items");
+    box.innerHTML = `<a href="https://github.com/${REPO}/issues?q=label%3Aroadmap"><b>See the roadmap on GitHub</b></a>`;
+  });
 fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
   .then((response) => response.ok ? response.json() : Promise.reject(response.status))
   .then((data) => {

@@ -1,6 +1,6 @@
-name: A song does not work
+name: 🎵 A song does not work
 description: A particular song will not play, has no lyrics, or its instrumental sounds wrong
-labels: [song]
+labels: [song, triage]
 body:
   - type: markdown
     attributes:

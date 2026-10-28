@@ -25,7 +25,7 @@
 > 程序界面目前是英文的，中文界面在[计划](#计划)里。
 
 <p align="center">
-  <img src="docs/images/mv-screen.png" alt="MV 屏幕：逐字变色的歌词、音高线、实时分数、飘过的弹幕和氛围灯" width="860">
+  <img src="docs/images/demo.gif" alt="唱歌时的 MV 屏幕：歌词逐字变色、音高线上画出歌声、弹幕飘过、氛围灯闪动" width="860">
   <br><sub>MV 屏幕：跟着歌手逐字变色的歌词、音高线、实时分数、弹幕和氛围灯。</sub>
 </p>
 
