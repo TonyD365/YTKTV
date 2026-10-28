@@ -63,13 +63,14 @@
   .tag.mine { color: var(--pink); border-color: var(--pink); }
   .turn { display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
     padding: 9px 12px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 12px; }
-  .turn b { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .turn span { font-size: 12px; color: var(--pink); white-space: nowrap; }
+  .turn b { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .turn span { flex: none; max-width: 55%; font-size: 12px; color: var(--pink); text-align: right; }
   .miclink { display: block; text-align: center; margin: 4px 0 14px; padding: 12px; border-radius: 12px;
     border: 1px solid var(--pink); color: var(--pink); font-weight: 700; text-decoration: none; }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
   h3 { font-size: 12px; letter-spacing: 2px; color: var(--cyan); text-transform: uppercase; margin: 16px 0 8px; }
-  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  /* minmax(0, ...): a long label wraps instead of widening the page past the screen. */
+  .pad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .pad button { background: var(--panel); border: 1px solid var(--line); color: var(--text);
     border-radius: 14px; padding: 16px 4px; font-weight: 800; font-size: 14px; }
   .pad button.on { background: linear-gradient(135deg, var(--pink), var(--purple)); border-color: transparent; }

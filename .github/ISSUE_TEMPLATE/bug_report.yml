@@ -46,9 +46,24 @@ body:
     attributes:
       label: YouTube link
       description: Only needed when a particular song does not play, has no lyrics, or sounds wrong.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where is the problem?
+      options:
+        - Starting YTKTV or installing it
+        - Video or music playback
+        - Microphones or the mixing console
+        - Original / instrumental (vocal separation)
+        - The phone page or a phone microphone
+        - Lyrics or scoring
+        - Updates
+        - Something else
   - type: textarea
     id: log
     attributes:
       label: Log output
-      description: If you can, start YTKTV from a terminal with `--debug` and paste what it prints.
+      description: |
+        If you can, start YTKTV with a log file and paste it here. See "Getting a log" in
+        https://github.com/TonyD365/YTKTV/blob/main/docs/guide/troubleshooting.md
       render: text
