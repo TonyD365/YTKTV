@@ -38,6 +38,7 @@ from ytktv.ui.mv_overlays import (
     LightShow,
     LyricsOverlay,
     PitchLane,
+    ReactionOverlay,
     ScoreCard,
 )
 from ytktv.ui.support import fade_in, fade_out, qr_pixmap
@@ -254,6 +255,7 @@ class MvWindow(QWidget):
         self.lyrics = LyricsOverlay(self)
         self.pitch_lane = PitchLane(self)
         self.danmaku = DanmakuOverlay(self)
+        self.reactions = ReactionOverlay(self)
         self.score_card = ScoreCard(self)
         self._score_timer = QTimer(self)
         self._score_timer.setSingleShot(True)
@@ -288,6 +290,7 @@ class MvWindow(QWidget):
         self.lyrics.setGeometry(0, int(h * 0.74), w, int(h * 0.24))
         self.pitch_lane.setGeometry(int(w * 0.2), int(h * 0.57), int(w * 0.6), int(h * 0.15))
         self.danmaku.setGeometry(0, int(h * 0.12), w, int(h * 0.42))
+        self.reactions.setGeometry(0, 0, w, h)
         self._place_score_card()
         self._place_live_score()
 
@@ -382,13 +385,19 @@ class MvWindow(QWidget):
         self.lyrics.raise_()
         self._sync_animator()
 
+    def add_reaction(self, emoji: str) -> None:
+        self.reactions.add(emoji)
+        self._sync_animator()
+
     def add_danmaku(self, text: str) -> None:
         self.danmaku.add(text)
         self._sync_animator()
 
     def _sync_animator(self) -> None:
         """Run the animation timer only while something on screen is moving."""
-        needed = self.isVisible() and (self._playing or self.danmaku.active())
+        needed = self.isVisible() and (
+            self._playing or self.danmaku.active() or self.reactions.active()
+        )
         if needed and not self._animator.isActive():
             self._frame = time.monotonic()
             self._animator.start()
@@ -401,6 +410,7 @@ class MvWindow(QWidget):
         now = time.monotonic()
         elapsed, self._frame = min(0.25, now - self._frame), now
         self.danmaku.advance(elapsed)
+        self.reactions.advance(elapsed)
         if self._playing:
             # Position reports arrive twice a second; glide between them.
             position = self._position + (now - self._position_at) * self._speed

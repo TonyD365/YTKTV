@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import colorsys
+import math
 import random
 from bisect import bisect_right
 from collections import deque
@@ -383,6 +384,74 @@ class DanmakuOverlay(_Overlay):
                 sprite = _TextSprite(font, item["text"], item["color"], key[1]).finish()
                 item["sprite"] = (key, sprite)
             item["sprite"][1].draw(painter, item["x"], lane_height * (item["lane"] + 0.74))
+
+
+class ReactionOverlay(_Overlay):
+    """Emoji that float up from the bottom of the screen and fade, a handful at a time."""
+
+    RISE_SECONDS = 2.6
+    PER_REACTION = 5
+    LIMIT = 60
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._items: list[dict[str, Any]] = []
+        self._sprites: dict[tuple[str, int, float], _TextSprite] = {}
+
+    def active(self) -> bool:
+        return bool(self._items)
+
+    def _sprite(self, emoji: str) -> _TextSprite:
+        size = max(24, int(self.height() * 0.07))
+        key = (emoji, size, self.devicePixelRatioF())
+        if key not in self._sprites:
+            font = QFont()
+            font.setPixelSize(size)
+            self._sprites[key] = _TextSprite(
+                font, emoji, QColor("white"), key[2], outline=False
+            ).finish()
+        return self._sprites[key]
+
+    def add(self, emoji: str) -> None:
+        w, h = float(self.width()), float(self.height())
+        for _ in range(self.PER_REACTION):
+            if len(self._items) >= self.LIMIT:
+                break
+            self._items.append(
+                {
+                    "emoji": emoji,
+                    "x": w * random.uniform(0.15, 0.85),
+                    "y": h * random.uniform(0.95, 1.05),
+                    "drift": w * random.uniform(-0.04, 0.04),
+                    "age": -random.uniform(0.0, 0.5),  # not all at once
+                }
+            )
+        self.show()
+        self.raise_()
+
+    def advance(self, seconds: float) -> None:
+        if not self._items:
+            return
+        for item in self._items:
+            item["age"] += seconds
+        self._items = [item for item in self._items if item["age"] < self.RISE_SECONDS]
+        if not self._items:
+            self.hide()
+        self.update()
+
+    def paintEvent(self, _event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        h = float(self.height())
+        for item in self._items:
+            age = item["age"]
+            if age < 0:
+                continue
+            share = age / self.RISE_SECONDS
+            sprite = self._sprite(item["emoji"])
+            painter.setOpacity(max(0.0, 1.0 - share) ** 0.7)
+            x = item["x"] + item["drift"] * math.sin(share * math.pi * 2)
+            sprite.draw(painter, x - sprite.width / 2, item["y"] - h * 0.75 * share)
+        painter.setOpacity(1.0)
 
 
 class EdgeLight(_Overlay):

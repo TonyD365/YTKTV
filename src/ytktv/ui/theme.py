@@ -37,12 +37,21 @@ QProgressBar {{ background: {PANEL_2}; border: none; border-radius: 3px; max-hei
 QProgressBar::chunk {{ border-radius: 3px;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PINK}, stop:1 {CYAN}); }}
 
-#navBar {{ background: rgba(10, 5, 24, 0.6); border-right: 1px solid {LINE}; }}
-#navBar QPushButton {{ text-align: left; padding: 16px 18px; border: none; border-left: 4px solid transparent;
-    font-size: 16px; font-weight: 700; color: {MUTED}; background: transparent; }}
+#navBar {{ background: rgba(10, 5, 24, 0.6); border-bottom: 1px solid {LINE}; }}
+#navBar QPushButton {{ padding: 14px 16px; border: none; border-bottom: 4px solid transparent;
+    font-size: 15px; font-weight: 700; color: {MUTED}; background: transparent; }}
 #navBar QPushButton:hover {{ color: {TEXT}; background: rgba(139, 92, 255, 0.15); }}
-#navBar QPushButton:checked {{ color: {TEXT}; border-left: 4px solid {PINK};
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(255,61,154,0.35), stop:1 rgba(255,61,154,0)); }}
+#navBar QPushButton:checked {{ color: {TEXT}; border-bottom: 4px solid {PINK}; }}
+#tile {{ border: none; border-radius: 18px; color: white; font-size: 22px; font-weight: 800;
+    padding: 14px; text-align: center; }}
+#tile:hover {{ border: 3px solid white; }}
+#tile:pressed {{ padding-top: 17px; }}
+#reaction {{ font-size: 22px; padding: 6px 0; border-radius: 12px; }}
+#homeNow {{ background: {PANEL}; border: 1px solid {LINE}; border-radius: 18px; }}
+#homeCover {{ background: #000; border-radius: 12px; }}
+#homeTitle {{ font-size: 20px; font-weight: 800; }}
+#homeRow {{ background: {PANEL}; border: 1px solid {LINE}; border-radius: 12px; padding: 10px 14px;
+    font-size: 15px; }}
 
 #pageTitle {{ font-size: 24px; font-weight: 900; letter-spacing: 1px; }}
 #hint {{ color: {MUTED}; font-size: 14px; }}

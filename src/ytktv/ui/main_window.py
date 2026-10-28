@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from ytktv.core.controller import PITCH_RANGE, SPEEDS, KTVController
 from ytktv.core.models import VocalMode
+from ytktv.ui.home_page import HomePage
 from ytktv.ui.mixer_panel import MixerPanel
 from ytktv.ui.mv_window import MvWindow
 from ytktv.ui.pages import (
@@ -51,15 +52,16 @@ from ytktv.ui.support import (
 from ytktv.youtube.search import YouTube
 
 NAV = (
-    ("search", "🔍   Search"),
-    ("hot", "🔥   Hot Songs"),
-    ("artists", "★   Artists"),
-    ("favorites", "♥   Favorites"),
-    ("playlists", "≡   Playlists"),
-    ("queue", "🎤   Selected"),
-    ("history", "✓   Sung"),
-    ("mixer", "🎚   Mixer"),
-    ("settings", "⚙   Settings"),
+    ("home", "⌂  Home"),
+    ("search", "Search"),
+    ("hot", "Hot Songs"),
+    ("artists", "Artists"),
+    ("favorites", "Favorites"),
+    ("playlists", "Playlists"),
+    ("queue", "Selected"),
+    ("history", "Sung"),
+    ("mixer", "Mixer"),
+    ("settings", "Settings"),
 )
 
 
@@ -111,11 +113,8 @@ class MainWindow(QMainWindow):
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(0)
         column.addWidget(self._build_top_bar())
-        middle = QHBoxLayout()
-        middle.setSpacing(0)
-        middle.addWidget(self._build_nav())
-        middle.addWidget(self._build_pages(), stretch=1)
-        column.addLayout(middle, stretch=1)
+        column.addWidget(self._build_nav())  # the menu runs across the top, under the header
+        column.addWidget(self._build_pages(), stretch=1)
         column.addWidget(self._build_control_bar())
 
         self._root = root
@@ -207,9 +206,9 @@ class MainWindow(QMainWindow):
     def _build_nav(self) -> QWidget:
         nav = QFrame()
         nav.setObjectName("navBar")
-        nav.setFixedWidth(188)
-        layout = QVBoxLayout(nav)
-        layout.setContentsMargins(0, 14, 0, 14)
+        nav.setFixedHeight(54)
+        layout = QHBoxLayout(nav)
+        layout.setContentsMargins(12, 0, 12, 0)
         layout.setSpacing(2)
         self._nav_group = QButtonGroup(self)
         self._nav_buttons: dict[str, QPushButton] = {}
@@ -222,19 +221,15 @@ class MainWindow(QMainWindow):
             self._nav_buttons[key] = button
             layout.addWidget(button)
         layout.addStretch()
-        box = QVBoxLayout()
-        box.setContentsMargins(12, 0, 12, 8)
-        box.setSpacing(6)
-        box.addWidget(_caption("DANMAKU"))
         self.danmaku_input = QLineEdit()
-        self.danmaku_input.setPlaceholderText("Say something...")
+        self.danmaku_input.setPlaceholderText("Danmaku: say something...")
         self.danmaku_input.setMaxLength(60)
-        self.danmaku_input.setStyleSheet("font-size: 13px; padding: 8px 10px; border-radius: 10px;")
+        self.danmaku_input.setFixedWidth(240)
+        self.danmaku_input.setStyleSheet("font-size: 13px; padding: 7px 10px; border-radius: 10px;")
         self.danmaku_input.setToolTip("Send a message that flies across the MV screen")
         self.danmaku_input.returnPressed.connect(self._send_danmaku)
-        box.addWidget(self.danmaku_input)
-        layout.addLayout(box)
-        mv = QPushButton("⛶   MV Full Screen")
+        layout.addWidget(self.danmaku_input)
+        mv = QPushButton("⛶  MV Full Screen")
         mv.setCheckable(False)
         mv.clicked.connect(self._toggle_mv)
         layout.addWidget(mv)
@@ -246,6 +241,7 @@ class MainWindow(QMainWindow):
         self.settings_page.display_changed.connect(self.place_mv)
         self.mixer_page = MixerPanel(self.controller)
         self.pages: dict[str, QWidget] = {
+            "home": HomePage(self.ctx, self.show_page),
             "search": SearchPage(self.ctx),
             "hot": HotPage(self.ctx),
             "artists": ArtistsPage(self.ctx),
@@ -258,7 +254,7 @@ class MainWindow(QMainWindow):
         }
         for page in self.pages.values():
             self.stack.addWidget(page)
-        self.show_page("search")
+        self.show_page("home")
         return self.stack
 
     def _build_control_bar(self) -> QWidget:
@@ -560,6 +556,8 @@ class MainWindow(QMainWindow):
                 self.mv_window.set_lyrics(payload["lines"])
         elif topic == "danmaku":
             self.mv_window.add_danmaku(payload["text"])
+        elif topic == "reaction":
+            self.mv_window.add_reaction(payload["emoji"])
         elif topic == "melody":
             self.mv_window.set_melody(self.controller.melody())
         elif topic == "pitch":
@@ -599,9 +597,7 @@ class MainWindow(QMainWindow):
             self.time_label.setText("")
         queue = state["queue"]
         self.next_title.setText(queue[0]["song"]["title"] if queue else "-")
-        self._nav_buttons["queue"].setText(
-            f"🎤   Selected  ({len(queue)})" if queue else "🎤   Selected"
-        )
+        self._nav_buttons["queue"].setText(f"Selected ({len(queue)})" if queue else "Selected")
 
         for mode, button in self.mode_buttons.items():
             button.setChecked(mode.value == state["vocal_mode"])

@@ -671,3 +671,37 @@ def test_first_song_shows_its_lyrics_without_touching_the_button(window, qtbot, 
     qtbot.waitUntil(lambda: main._state["status"] == "playing", timeout=3000)
     qtbot.wait(100)
     assert mv.lyrics.has_lines()  # shown without pressing Lyrics off and on
+
+
+def test_home_tiles_open_their_pages_and_show_the_room(window, qtbot):
+    main, controller = window
+    home = main.pages["home"]
+    assert main.stack.currentWidget() is home  # the console opens on the tile wall
+    controller.enqueue(make_song(1), singer="Kim")
+    controller.enqueue(make_song(2), singer="Alex")
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    qtbot.waitUntil(lambda: home.now_title.text() == "Song 1", timeout=3000)
+    assert home.now_singer.text() == "Kim"
+    assert home.next_rows[0].text().startswith("Song 2") and "Alex" in home.next_rows[0].text()
+    assert home.tiles["queue"].text().endswith("Selected (1)")
+    for key, tile in home.tiles.items():
+        tile.click()
+        assert main.stack.currentWidget() is main.pages[key]
+        assert main._nav_buttons[key].isChecked()
+
+
+def test_reactions_float_up_the_mv_screen(window, qtbot):
+    from ytktv.core.controller import REACTIONS
+
+    main, controller = window
+    mv = main.mv_window
+    mv.resize(800, 450)
+    assert controller.send_reaction("🔥") is True
+    assert controller.send_reaction("not an emoji") is False
+    qtbot.waitUntil(lambda: mv.reactions.active(), timeout=3000)
+    mv.reactions.advance(1.0)
+    mv.reactions.grab()  # painting works part way up
+    mv.reactions.advance(mv.reactions.RISE_SECONDS + 1)
+    assert not mv.reactions.active()
+    sent = sum(controller.send_reaction(REACTIONS[0]) for _ in range(40))
+    assert 0 < sent < 40  # too many at once are refused
