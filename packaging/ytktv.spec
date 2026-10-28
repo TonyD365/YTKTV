@@ -112,6 +112,16 @@ analysis = Analysis(
     excludes=excludes,
     noarchive=False,
 )
+if MPV_MODE != "bundle":
+    # python-mpv looks libmpv up by name, and PyInstaller follows that to whatever mpv
+    # the build machine has installed. It must not ship: mpv is under the GPL and is
+    # installed separately (see bootstrap.install_libmpv).
+    def _is_mpv(entry):
+        name = Path(entry[0]).name.lower()
+        return name.startswith(("libmpv", "mpv-")) and (".so" in name or name.endswith((".dll", ".dylib")))
+
+    analysis.binaries = [entry for entry in analysis.binaries if not _is_mpv(entry)]
+
 pyz = PYZ(analysis.pure)
 
 icon = None

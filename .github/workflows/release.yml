@@ -98,7 +98,6 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
-          brew install mpv  # for the playback check below, as a user would install it
           if ! packaging/macos/import_certificate.sh; then
             echo "::notice::No signing certificate configured; building an ad-hoc signed package."
             unset CODESIGN_IDENTITY INSTALLER_IDENTITY APPLE_ID
@@ -111,7 +110,6 @@ jobs:
         run: |
           # pwsh does not stop when a native command fails, so check each one.
           function Check { if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }
-          python -c "from ytktv import bootstrap; bootstrap.install_windows_libmpv(print)"; Check
           python packaging/make_icon.py build/icon; Check
           python -m PyInstaller packaging/ytktv.spec --noconfirm --distpath dist --workpath build/pyinstaller; Check
           $version = python -c "import ytktv; print(ytktv.__version__)"; Check
@@ -124,22 +122,32 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libmpv2 libportaudio2 libegl1 libgl1 \
+          sudo apt-get install -y --no-install-recommends libportaudio2 libegl1 libgl1 \
             libxkbcommon0 libdbus-1-3 libfontconfig1 file
           curl -fsSL -o appimagetool \
             https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool && sudo mv appimagetool /usr/local/bin/appimagetool
           APPIMAGE_EXTRACT_AND_RUN=1 PYTHON=python packaging/linux/build_appimage.sh
 
-      # mpv must not be inside the app, and the app must be able to play through an mpv
-      # installed the way a user installs it: run the real filter chain with it.
+      # mpv must not be inside the app (it was not installed while building, so neither it
+      # nor the FFmpeg libraries it uses could be picked up). Then install it the way a user
+      # would and have the packaged app play through it with the real filter chain.
       - name: Check mpv is not inside the app
         shell: bash
         run: |
-          found="$(find dist/YTKTV dist/YTKTV.app -iname '*mpv*' \( -name '*.dylib' -o -name '*.dll' -o -name '*.so*' \) 2>/dev/null || true)"
+          found="$(find dist/YTKTV dist/YTKTV.app \( -iname 'libmpv*' -o -iname 'mpv-*.dll' -o -iname 'libavcodec*' -o -iname 'avcodec-*.dll' \) 2>/dev/null || true)"
           if [ -n "$found" ]; then
             echo "::error::mpv libraries were packaged into the app:"; echo "$found"; exit 1
           fi
+
+      - name: Install mpv as a user would
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            macOS) brew install mpv ;;
+            Linux) sudo apt-get install -y --no-install-recommends libmpv2 ;;
+            Windows) python -c "from ytktv import bootstrap; bootstrap.install_windows_libmpv(print)" ;;
+          esac
 
       - name: Play through mpv with the packaged app (macOS)
         if: runner.os == 'macOS'
