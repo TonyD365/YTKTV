@@ -6,6 +6,7 @@ import ctypes
 import logging
 import time
 from collections.abc import Callable
+from html import escape
 from typing import Any
 
 from PySide6.QtCore import QByteArray, QPointF, QRectF, Qt, QTimer, Signal
@@ -259,6 +260,14 @@ class MvWindow(QWidget):
         self.reactions = ReactionOverlay(self)
         self.level_hud = LevelHud(self)
         self.score_card = ScoreCard(self)
+        self.game_card = QLabel(self)
+        self.game_card.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.game_card.setWordWrap(True)
+        self.game_card.setTextFormat(Qt.TextFormat.RichText)
+        self.game_card.hide()
+        self._game_timer = QTimer(self)
+        self._game_timer.setSingleShot(True)
+        self._game_timer.timeout.connect(lambda: fade_out(self.game_card, 500))
         self._score_timer = QTimer(self)
         self._score_timer.setSingleShot(True)
         self._score_timer.timeout.connect(lambda: fade_out(self.score_card, 700))
@@ -355,6 +364,29 @@ class MvWindow(QWidget):
         if not self.live_score.isVisible():
             fade_in(self.live_score, 300)
         self.live_score.raise_()
+
+    def show_game(self, result: dict[str, str]) -> None:
+        """A party game's result, big in the middle of the screen for a few seconds."""
+        unit = max(1.0, self.height() / 100.0)
+        border, radius = max(2, int(unit * 0.3)), int(unit * 3)
+        self.game_card.setStyleSheet(
+            f"background: rgba(8, 4, 20, 0.88); color: white; border: {border}px solid "
+            f"{theme.PINK}; border-radius: {radius}px; padding: {radius}px;"
+        )
+        title, text = escape(result["title"]), escape(result["text"])
+        detail = escape(result.get("detail", ""))
+        self.game_card.setText(
+            f"<div style='font-size:{int(unit * 4)}px;color:{theme.CYAN}'>{title}</div>"
+            f"<div style='font-size:{int(unit * 8)}px;font-weight:800'>{text}</div>"
+            f"<div style='font-size:{int(unit * 3.5)}px'>{detail}</div>"
+        )
+        w, h = self.width(), self.height()
+        self.game_card.setFixedWidth(int(w * 0.6))
+        self.game_card.adjustSize()
+        self.game_card.move((w - self.game_card.width()) // 2, (h - self.game_card.height()) // 2)
+        fade_in(self.game_card, 250)
+        self.game_card.raise_()
+        self._game_timer.start(7000)
 
     def show_score(self, score: dict[str, Any]) -> None:
         """The end-of-song result: stays up a few seconds over whatever comes next."""

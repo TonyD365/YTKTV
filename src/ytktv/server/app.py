@@ -284,6 +284,13 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
             raise HTTPException(404, "unknown effect")
         return {"ok": controller.play_sfx(name)}
 
+    @app.post("/api/game/{name}")
+    def game(name: str) -> dict[str, str]:
+        try:
+            return controller.play_game(name)
+        except ValueError as exc:
+            raise HTTPException(404, "no such game") from exc
+
     @app.post("/api/danmaku")
     def danmaku(body: DanmakuIn) -> dict[str, bool]:
         if not controller.send_danmaku(body.text):

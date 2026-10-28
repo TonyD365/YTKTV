@@ -138,6 +138,12 @@ def test_phones_are_told_apart_and_find_their_own_songs(client):
     assert [item["owner"] for item in state["queue"]] == [me, me, ""]  # the last from the console
 
 
+def test_games_over_http(client):
+    http, _ = client
+    assert http.post("/api/game/dare").json()["title"].endswith("Dare")
+    assert http.post("/api/game/chess").status_code == 404
+
+
 def test_reactions_over_http(client):
     http, controller = client
     seen = []

@@ -39,7 +39,7 @@ for macOS, Windows and Linux.
 |---|---|
 | 🎵 **Every YouTube video is a song**<br>Search, paste a link or browse hot songs. Plays without ads. | 🎤 **Original or instrumental, any song**<br>AI vocal removal in the background, on your GPU when there is one. Switch without a gap. |
 | 📱 **Phones are the remote, and the microphone**<br>Scan a QR code to queue songs. A phone can even sing into the mixer. | 🎚️ **A mixing console that feels real**<br>Four channels with EQ, compressor, echo, reverb and a feedback guard. |
-| 🏆 **Live pitch and scores**<br>See your voice against the tune as you sing, then tonight's leaderboard. Duets score each singer. | ✨ **The KTV atmosphere**<br>Karaoke lyrics, guide vocal, key and tempo, danmaku, applause buttons and lights. |
+| 🏆 **Live pitch and scores**<br>See your voice against the tune as you sing, then tonight's leaderboard. Duets score each singer. | ✨ **The KTV atmosphere**<br>Karaoke lyrics, guide vocal, key and tempo, danmaku, applause buttons, lights and party games (dice, who sings next, truth or dare). |
 
 | The song console | The mixing console |
 |---|---|
