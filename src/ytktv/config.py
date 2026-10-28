@@ -85,6 +85,12 @@ class Settings:
     auto_update: bool = True
     # The first-run setup has been finished or skipped.
     setup_done: bool = False
+    # Binding to a YTKTV Desk (front desk). Empty desk_url = a stand-alone machine.
+    desk_url: str = ""
+    room_id: str = ""
+    room_key: str = ""
+    room_name: str = ""
+    desk_last_seen: float = 0.0  # time.time() of the last contact with the desk
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Settings:
