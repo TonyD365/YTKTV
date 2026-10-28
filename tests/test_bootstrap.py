@@ -11,9 +11,12 @@ def test_homebrew_is_found_outside_the_finders_short_path(tmp_path, monkeypatch)
     monkeypatch.setattr(
         bootstrap.Path,
         "exists",
-        lambda self: True if str(self) == "/opt/homebrew/bin/brew" else real_exists(self),
+        lambda self: (
+            True if self == bootstrap.Path("/opt/homebrew/bin/brew") else real_exists(self)
+        ),
     )
-    assert bootstrap.homebrew() == "/opt/homebrew/bin/brew"
+    # Compared as paths: Windows writes the same path with backslashes.
+    assert bootstrap.Path(bootstrap.homebrew()) == bootstrap.Path("/opt/homebrew/bin/brew")
     monkeypatch.setattr(bootstrap.platform, "system", lambda: "Darwin")
     assert bootstrap.install_plan() == "brew install mpv"
 
