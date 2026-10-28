@@ -130,3 +130,39 @@ def test_front_desk_card_and_desk_window(qtbot, tmp_path):
     window.room_list.setCurrentRow(0)
     window.unbind_room()
     assert desk.rooms() == []
+
+
+def test_room_state_follows_the_desk():
+    from ytktv.rooms.state import RoomState, format_left
+
+    state = RoomState()
+    assert state.closed and state.seconds_left() is None
+    assert state.apply({"type": "open", "guest": "Kim", "ends_at": 1000.0})
+    assert not state.closed and state.guest == "Kim" and state.seconds_left(now=400) == 600
+    assert state.apply({"type": "open", "ends_at": None}) and state.seconds_left() is None
+    assert state.apply({"type": "close"}) and state.closed
+    assert not state.apply({"type": "ack"})
+    assert format_left(65) == "1:05" and format_left(3725) == "1:02:05"
+
+
+def test_the_desk_opens_extends_and_closes_rooms(qtbot):
+    from ytktv.desk.server import Hub
+    from ytktv.desk.window import DeskWindow
+
+    store = DeskStore()
+    room, _ = store.pair(store.new_code(), "Kids")
+    assert store.room(room.room_id).message() == {"type": "close"}
+    window = DeskWindow(store, Hub(), "192.168.1.10:8770")
+    qtbot.addWidget(window)
+    window.select(room.room_id)
+    window.open_room(guest="Kim", length="1 hour")
+    opened = store.room(room.room_id)
+    assert opened.is_open and opened.guest == "Kim" and opened.message()["type"] == "open"
+    first_end = opened.ends_at
+    window.extend_room(length="30 minutes")
+    assert store.room(room.room_id).ends_at == pytest.approx(first_end + 1800)
+    assert "Kim" in window.panel_info.text()
+    window.close_room(confirm=False)
+    assert not store.room(room.room_id).is_open
+    store.open_room(room.room_id, "", None)
+    assert store.room(room.room_id).message() == {"type": "open", "guest": "", "ends_at": None}

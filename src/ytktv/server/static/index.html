@@ -90,6 +90,7 @@
 </style>
 </head>
 <body>
+<div id="room-closed" style="display:none;position:fixed;inset:0;z-index:99;background:#07040f;color:#fff;align-items:center;justify-content:center;flex-direction:column;font-size:22px;font-weight:700">🎤<div>This room is closed</div></div>
 <header>
   <div class="brand">YTKTV</div>
   <div class="now">
@@ -334,6 +335,7 @@ $("search-form").addEventListener("submit", (e) => {
 
 function render() {
   if (!state) return;
+  $("room-closed").style.display = state.room_closed ? "flex" : "none";
   const cur = state.current;
   $("now-label").textContent = state.loading || {idle: "Now Playing", loading: "Loading", playing: "Now Playing", paused: "Paused"}[state.status];
   $("now-title").textContent = cur ? cur.song.title + (cur.singer ? `  ·  ${cur.singer}` : "") : "Nothing yet. Pick a song!";

@@ -114,6 +114,9 @@ def create_desk_app(store: DeskStore, hub: Hub | None = None) -> FastAPI:
         hub.channels[room_id] = channel
         store.seen(room_id)
         await channel.send({"type": "ack"})
+        room = store.room(room_id)
+        if room is not None:  # a room that restarted learns whether it is open
+            await channel.send(room.message())
         try:
             while True:
                 json.loads(await ws.receive_text())
@@ -125,6 +128,13 @@ def create_desk_app(store: DeskStore, hub: Hub | None = None) -> FastAPI:
                 del hub.channels[room_id]
 
     return app
+
+
+def tell(store: DeskStore, hub: Hub, room_id: str) -> None:
+    """Send a room its current open/closed state after the desk changed it."""
+    room = store.room(room_id)
+    if room is not None:
+        hub.send_soon(room_id, room.message())
 
 
 def unbind(store: DeskStore, hub: Hub, room_id: str) -> None:

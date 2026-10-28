@@ -741,3 +741,36 @@ def test_levels_stay_within_range_and_changes_from_a_phone_show_up(window, qtbot
     qtbot.waitUntil(lambda: main.level_hud.isVisible(), timeout=3000)
     assert main.level_hud.kind == "music_volume" and main.level_hud.value == 40
     main.level_hud.grab()
+
+
+def test_a_closed_room_takes_no_songs_and_times_up_after_the_song(window, qtbot):
+    import time
+
+    import pytest
+
+    from ytktv.core.models import Song
+    from ytktv.rooms.state import RoomState
+
+    main, controller = window
+
+    class Client:
+        state = RoomState(closed=True)
+        on_event = None
+
+    main.room_client = Client()
+    main.apply_room()
+    assert controller.room_closed and main.room_closed_view.isVisible()
+    assert not main.mv_window._closed_cover.isHidden()
+    with pytest.raises(PermissionError):
+        controller.enqueue(Song("v1", "Song"))
+    assert controller.state()["room_closed"]
+
+    Client.state.apply({"type": "open", "ends_at": time.time() + 3600})
+    main.apply_room()
+    assert not controller.room_closed and not main.room_closed_view.isVisible()
+    assert "left" in main.time_left.text()
+
+    Client.state.ends_at = time.time() - 1  # time is up, nothing playing
+    main._tick_room()
+    assert Client.state.closed
+    qtbot.waitUntil(lambda: controller.room_closed, timeout=7000)

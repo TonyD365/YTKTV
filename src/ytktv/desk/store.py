@@ -19,6 +19,15 @@ class Room:
     room_id: str
     name: str
     last_seen: float
+    is_open: bool = False
+    guest: str = ""
+    ends_at: float | None = None
+
+    def message(self) -> dict[str, object]:
+        """What the room is told about itself."""
+        if not self.is_open:
+            return {"type": "close"}
+        return {"type": "open", "guest": self.guest, "ends_at": self.ends_at}
 
 
 class DeskStore:
@@ -32,6 +41,10 @@ class DeskStore:
                 " key TEXT NOT NULL, last_seen REAL NOT NULL DEFAULT 0)"
             )
             self._db.execute("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)")
+            self._db.execute(
+                "CREATE TABLE IF NOT EXISTS sessions (room_id TEXT PRIMARY KEY, guest TEXT,"
+                " ends_at REAL)"
+            )
             row = self._db.execute("SELECT v FROM meta WHERE k='private_key'").fetchone()
             if row is None:
                 row = (crypto.new_private_key(),)
@@ -89,9 +102,43 @@ class DeskStore:
     def remove(self, room_id: str) -> None:
         with self._lock:
             self._db.execute("DELETE FROM rooms WHERE id=?", (room_id,))
+            self._db.execute("DELETE FROM sessions WHERE room_id=?", (room_id,))
             self._db.commit()
 
     def rooms(self) -> list[Room]:
         with self._lock:
-            rows = self._db.execute("SELECT id, name, last_seen FROM rooms ORDER BY rowid")
-            return [Room(*row) for row in rows.fetchall()]
+            rows = self._db.execute(
+                "SELECT r.id, r.name, r.last_seen, s.room_id IS NOT NULL, COALESCE(s.guest, ''),"
+                " s.ends_at FROM rooms r LEFT JOIN sessions s ON s.room_id = r.id ORDER BY r.rowid"
+            )
+            return [Room(a, b, c, bool(d), e, f) for a, b, c, d, e, f in rows.fetchall()]
+
+    def room(self, room_id: str) -> Room | None:
+        return next((r for r in self.rooms() if r.room_id == room_id), None)
+
+    def open_room(
+        self, room_id: str, guest: str, minutes: int | None, now: float | None = None
+    ) -> None:
+        now = time.time() if now is None else now
+        ends_at = None if minutes is None else now + minutes * 60
+        with self._lock:
+            self._db.execute(
+                "INSERT OR REPLACE INTO sessions VALUES (?, ?, ?)", (room_id, guest, ends_at)
+            )
+            self._db.commit()
+
+    def extend(self, room_id: str, minutes: int, now: float | None = None) -> None:
+        now = time.time() if now is None else now
+        with self._lock:
+            # A room whose time already ran out gets the extra time from now.
+            self._db.execute(
+                "UPDATE sessions SET ends_at = MAX(ends_at, ?) + ? WHERE room_id=?"
+                " AND ends_at IS NOT NULL",
+                (now, minutes * 60, room_id),
+            )
+            self._db.commit()
+
+    def close_room(self, room_id: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM sessions WHERE room_id=?", (room_id,))
+            self._db.commit()

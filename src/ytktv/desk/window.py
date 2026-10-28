@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QStackedWidget,
@@ -21,10 +22,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ytktv.desk.server import Hub, unbind
+from ytktv.desk.server import Hub, tell, unbind
 from ytktv.desk.store import CODE_SECONDS, DeskStore, Room
+from ytktv.rooms.state import format_left
 
 COLUMNS = 3
+LENGTHS = {"1 hour": 60, "2 hours": 120, "3 hours": 180, "No time limit": None}
+EXTRA = {"30 minutes": 30, "1 hour": 60}
 STYLE = """
 #deskTop { background: rgba(10, 6, 24, 0.85); border-bottom: 1px solid #3a2a5c; }
 #deskLogo { color: #ff3d9a; font-size: 30px; font-weight: 900; letter-spacing: 4px; }
@@ -48,6 +52,9 @@ QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: 
 """
 STATUS = {  # status: (label, tile colour, dot)
     "free": ("Free", "#2b2f3d", "🟢"),
+    "in_use": ("In use", "#1d7a55", "🎤"),
+    "ending": ("Ending soon", "#a8781a", "⏳"),
+    "over": ("Time's up", "#9c2f45", "⏰"),
     "offline": ("Offline", "#14111f", "⚫"),
 }
 
@@ -197,13 +204,18 @@ class DeskWindow(QMainWindow):
         side.addWidget(self.panel_info)
         side.addStretch()
         self.room_actions: list[QPushButton] = []
-        for text in ("Open Room", "Extend Time", "Close Room"):
+        for text, action in (
+            ("Open Room", self.open_room),
+            ("Extend Time", self.extend_room),
+            ("Close Room", self.close_room),
+        ):
             button = QPushButton(text)
             button.setMinimumHeight(46)
             button.setEnabled(False)
-            button.setToolTip("Coming in the next update")
+            button.clicked.connect(action)
             side.addWidget(button)
             self.room_actions.append(button)
+        self.room_actions[0].setObjectName("accent")
         body.addWidget(panel)
         column.addLayout(body, stretch=1)
         return tab
@@ -286,13 +298,16 @@ class DeskWindow(QMainWindow):
             self.grid.addWidget(empty, 0, 0, 1, COLUMNS)
             return
         for n, room in enumerate(rooms):
-            status = "free" if room.room_id in online else "offline"
-            label, colour, dot = STATUS[status]
+            label, colour, dot = STATUS[self._status(room, online)]
+            left = room.ends_at - time.time() if room.is_open and room.ends_at else None
             tile = QPushButton()
             tile.setObjectName("roomTile")
             tile.setProperty("selected", room.room_id == self.selected)
             tile.setMinimumHeight(170)
-            tile.setText(f"{room.name}\n\n{dot}  {label}")
+            extra = f"\n{room.guest}" if room.is_open and room.guest else ""
+            if left is not None and left > 0:
+                extra += f"\n{format_left(left)} left"
+            tile.setText(f"{room.name}\n\n{dot}  {label}{extra}")
             tile.setStyleSheet(
                 f"#roomTile {{ background: {colour}; color: white; font-size: 20px;"
                 " font-weight: 700; text-align: center; }"
@@ -320,6 +335,8 @@ class DeskWindow(QMainWindow):
             self.panel_head.setText("ROOM")
             self.panel_name.setText("Select a room")
             self.panel_info.setText("Click a room on the left to see it here.")
+            for button in self.room_actions:
+                button.setEnabled(False)
             return
         up = room.room_id in online
         seen = (
@@ -331,9 +348,74 @@ class DeskWindow(QMainWindow):
         )
         self.panel_head.setText("ROOM")
         self.panel_name.setText(room.name)
-        self.panel_info.setText(
-            ("🟢 Online · Free" if up else "⚫ Offline") + f"\nLast seen: {seen}"
-        )
+        label, _, dot = STATUS[self._status(room, online)]
+        lines = [f"{dot} {label}" + ("" if up else " · offline"), f"Last seen: {seen}"]
+        if room.is_open:
+            lines.append(f"Guest: {room.guest or '—'}")
+            lines.append(
+                "No time limit"
+                if room.ends_at is None
+                else f"Ends {time.strftime('%H:%M', time.localtime(room.ends_at))}"
+                f" · {format_left(max(0.0, room.ends_at - time.time()))} left"
+            )
+        self.panel_info.setText("\n".join(lines))
+        self.room_actions[0].setEnabled(not room.is_open)
+        self.room_actions[1].setEnabled(room.is_open and room.ends_at is not None)
+        self.room_actions[2].setEnabled(room.is_open)
+
+    @staticmethod
+    def _status(room: Room, online: set[str]) -> str:
+        if room.is_open:
+            if room.ends_at is not None:
+                left = room.ends_at - time.time()
+                if left <= 0:
+                    return "over"
+                if left <= 10 * 60:
+                    return "ending"
+            return "in_use"
+        return "free" if room.room_id in online else "offline"
+
+    # Each takes optional answers so tests can skip the dialogs.
+    def open_room(
+        self, _checked: bool = False, guest: str | None = None, length: str | None = None
+    ) -> None:
+        if self.selected is None:
+            return
+        if guest is None:
+            guest, ok = QInputDialog.getText(self, "Open room", "Guest name (optional):")
+            if not ok:
+                return
+        if length is None:
+            length, ok = QInputDialog.getItem(
+                self, "Open room", "How long?", list(LENGTHS), 1, False
+            )
+            if not ok:
+                return
+        self.store.open_room(self.selected, guest.strip(), LENGTHS[length])
+        tell(self.store, self.hub, self.selected)
+        self.refresh()
+
+    def extend_room(self, _checked: bool = False, length: str | None = None) -> None:
+        if self.selected is None:
+            return
+        if length is None:
+            length, ok = QInputDialog.getItem(self, "Extend time", "Add:", list(EXTRA), 0, False)
+            if not ok:
+                return
+        self.store.extend(self.selected, EXTRA[length])
+        tell(self.store, self.hub, self.selected)
+        self.refresh()
+
+    def close_room(self, _checked: bool = False, confirm: bool = True) -> None:
+        if self.selected is None:
+            return
+        if confirm:
+            answer = QMessageBox.question(self, "Close room", "Close this room now?")
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+        self.store.close_room(self.selected)
+        tell(self.store, self.hub, self.selected)
+        self.refresh()
 
     def _fill_settings(self, rooms: list[Room]) -> None:
         current = self.room_list.currentRow()

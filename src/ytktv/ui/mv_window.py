@@ -365,6 +365,32 @@ class MvWindow(QWidget):
             fade_in(self.live_score, 300)
         self.live_score.raise_()
 
+    def set_room_closed(self, closed: bool) -> None:
+        """A closed room's TV is plain black."""
+        if not hasattr(self, "_closed_cover"):
+            self._closed_cover = QWidget(self)
+            self._closed_cover.setStyleSheet("background: black;")
+            self._closed_cover.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._closed_cover.setGeometry(self.rect())
+        self._closed_cover.setVisible(closed)
+        if closed:
+            self._closed_cover.raise_()
+
+    def set_time_left(self, text: str | None) -> None:
+        """The room's remaining time, small in the top-left corner."""
+        if not hasattr(self, "_time_left"):
+            self._time_left = QLabel(self)
+            self._time_left.setStyleSheet(
+                "color: #ffc94a; background: rgba(0, 0, 0, 0.55); border-radius: 8px;"
+                " padding: 4px 10px; font-size: 18px; font-weight: 700;"
+            )
+        self._time_left.setVisible(text is not None)
+        if text is not None:
+            self._time_left.setText(f"⏱ {text}")
+            self._time_left.adjustSize()
+            self._time_left.move(16, 16)
+            self._time_left.raise_()
+
     def show_game(self, result: dict[str, str]) -> None:
         """A party game's result, big in the middle of the screen for a few seconds."""
         unit = max(1.0, self.height() / 100.0)

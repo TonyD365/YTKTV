@@ -15,6 +15,7 @@ import websockets
 from ytktv.config import SettingsStore
 from ytktv.rooms import binding, discovery
 from ytktv.rooms.protocol import DeskImpostor, RoomSession
+from ytktv.rooms.state import RoomState
 
 log = logging.getLogger(__name__)
 HEARTBEAT = 5.0
@@ -32,6 +33,8 @@ class RoomClient:
         self.store = store
         self.on_event = on_event
         self.online = False
+        # A bound room stays closed until the desk opens it; a stand-alone one never closes.
+        self.state = RoomState(closed=binding.is_bound(store.settings))
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -111,5 +114,7 @@ class RoomClient:
         if kind == "unbind":
             binding.clear(self.store.settings)
             self.store.save()
+            self.state = RoomState(closed=False)
+        self.state.apply(message)
         if kind != "ack":
             self.on_event(kind, message)
