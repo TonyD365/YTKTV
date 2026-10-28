@@ -1,1 +1,11 @@
 blank_issues_enabled: true
+contact_links:
+  - name: User guide and FAQ
+    url: https://github.com/TonyD365/YTKTV/blob/main/docs/guide/README.md
+    about: Setting up, the mixing console, phones, and fixes for common problems.
+  - name: Report a security problem privately
+    url: https://github.com/TonyD365/YTKTV/blob/main/SECURITY.md
+    about: Please do not report security problems in public issues.
+  - name: YTKTV website
+    url: https://tonyd365.github.io/YTKTV/
+    about: Downloads and an overview of what YTKTV does.

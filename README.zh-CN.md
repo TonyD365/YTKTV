@@ -11,6 +11,8 @@
 
 <p align="center">
   <a href="https://github.com/TonyD365/YTKTV/releases/latest"><b>⬇️ 下载</b></a> ·
+  <a href="https://tonyd365.github.io/YTKTV/">官网</a> ·
+  <a href="docs/guide/README.md">使用指南（英文）</a> ·
   <a href="#快速开始">快速开始</a> ·
   <a href="#功能">功能</a> ·
   <a href="#常见问题">常见问题</a> ·

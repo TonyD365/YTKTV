@@ -1,6 +1,7 @@
 # Contributing to YTKTV
 
-Thanks for helping. Bug reports, ideas and pull requests are all welcome.
+Thanks for helping. Bug reports, ideas and pull requests are all welcome. Please follow the
+[code of conduct](CODE_OF_CONDUCT.md); security problems go to [SECURITY.md](SECURITY.md).
 
 ## Reporting a problem
 

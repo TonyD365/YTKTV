@@ -1,0 +1,43 @@
+name: A song does not work
+description: A particular song will not play, has no lyrics, or its instrumental sounds wrong
+labels: [song]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! With the link we can try the exact same video.
+  - type: input
+    id: link
+    attributes:
+      label: YouTube link
+      placeholder: https://www.youtube.com/watch?v=...
+    validations:
+      required: true
+  - type: dropdown
+    id: problem
+    attributes:
+      label: What goes wrong?
+      multiple: true
+      options:
+        - It does not play ("Could not play")
+        - It plays in low quality
+        - No lyrics, or the wrong lyrics
+        - Lyrics run ahead of or behind the singing
+        - The instrumental still has the singer, or sounds bad
+        - The instrumental never gets ready
+        - Scoring seems wrong for this song
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Anything else you noticed, for example what the screen said.
+  - type: input
+    id: version
+    attributes:
+      label: YTKTV version and system
+      placeholder: 1.5.0 on macOS 26
+    validations:
+      required: true

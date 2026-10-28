@@ -12,6 +12,8 @@
 
 <p align="center">
   <a href="https://github.com/TonyD365/YTKTV/releases/latest"><b>⬇️ Download</b></a> ·
+  <a href="https://tonyd365.github.io/YTKTV/">Website</a> ·
+  <a href="docs/guide/README.md">User guide</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#features">Features</a> ·
   <a href="#faq">FAQ</a> ·
@@ -57,6 +59,10 @@ for macOS, Windows and Linux.
    [FAQ](#faq) on why), and start YTKTV. A short setup asks for the speakers, the screen and a
    microphone.
 3. **Scan the QR code** with a phone, pick a song, and sing.
+
+More in the [user guide](docs/guide/README.md): [getting started](docs/guide/getting-started.md),
+[the mixing console](docs/guide/mixer.md), [phones](docs/guide/phones.md) and
+[troubleshooting](docs/guide/troubleshooting.md).
 
 If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 
@@ -356,7 +362,9 @@ To build the macOS package locally: `pip install -e ".[package]"`, then
 
 ## Contributing
 
-Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports, ideas and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and
+the [code of conduct](CODE_OF_CONDUCT.md). For help, see [SUPPORT.md](SUPPORT.md); for security
+problems, [SECURITY.md](SECURITY.md).
 
 ## Disclaimer
 

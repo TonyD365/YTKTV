@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YTKTV: turn any computer into a karaoke room</title>
+<meta name="description" content="Free karaoke for macOS, Windows and Linux: every YouTube song, AI vocal removal, phone song requests, a real-feeling mixing console, live pitch and scores.">
+<meta name="theme-color" content="#0d0720">
+<meta property="og:title" content="YTKTV: turn any computer into a karaoke room">
+<meta property="og:description" content="Every YouTube song, AI vocal removal, phones as remote and microphone, a mixing console, live scores. Free for macOS, Windows and Linux.">
+<meta property="og:image" content="images/social-preview.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="images/icon.png">
+<style>
+  :root {
+    --bg: #0d0720; --panel: #1a1035; --panel-2: #241650; --line: #3a2a70;
+    --text: #f3eeff; --muted: #a99bd6; --pink: #ff3d9a; --cyan: #2ee6ff;
+    --purple: #8b5cff; --gold: #ffc94d;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  a { color: var(--cyan); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+  /* Top bar */
+  header.bar { position: sticky; top: 0; z-index: 10; background: rgba(13, 7, 32, 0.86);
+    backdrop-filter: blur(10px); border-bottom: 1px solid rgba(58, 42, 112, 0.6); }
+  header.bar .wrap { display: flex; align-items: center; gap: 18px; height: 60px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 900; letter-spacing: 2px;
+    text-decoration: none; color: var(--text); font-size: 18px; }
+  .logo img { width: 30px; height: 30px; }
+  header nav { margin-left: auto; display: flex; gap: 18px; align-items: center; font-size: 15px; }
+  header nav a { color: var(--muted); text-decoration: none; }
+  header nav a:hover { color: var(--text); }
+  .lang { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 999px;
+    padding: 4px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+  @media (max-width: 720px) { header nav a.optional { display: none; } }
+
+  /* Hero */
+  .hero { position: relative; overflow: hidden; padding: 84px 0 40px; text-align: center;
+    background: radial-gradient(900px 420px at 50% -60px, #3a1a7a 0%, transparent 70%); }
+  .hero h1 { font-size: clamp(36px, 6vw, 64px); line-height: 1.08; margin: 0 0 18px; font-weight: 900;
+    letter-spacing: -0.5px; }
+  .hero h1 span { background: linear-gradient(90deg, var(--pink), var(--cyan)); -webkit-background-clip: text;
+    background-clip: text; color: transparent; }
+  .hero p.lead { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); max-width: 760px; margin: 0 auto 30px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 15px 26px; border-radius: 14px;
+    font-weight: 800; text-decoration: none; font-size: 17px; }
+  .btn.primary { color: white; background: linear-gradient(135deg, var(--pink), var(--purple));
+    box-shadow: 0 10px 30px rgba(255, 61, 154, 0.35); }
+  .btn.ghost { color: var(--text); border: 1px solid var(--line); background: var(--panel); }
+  .btn:hover { transform: translateY(-1px); }
+  .small { color: var(--muted); font-size: 14px; margin-top: 14px; }
+  .shot { margin: 48px auto 0; max-width: 1000px; border-radius: 18px; overflow: hidden;
+    border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55); }
+  .shot img { display: block; width: 100%; height: auto; }
+
+  /* Sections */
+  section { padding: 72px 0; }
+  h2 { font-size: clamp(28px, 4vw, 40px); margin: 0 0 12px; font-weight: 900; text-align: center; }
+  .sub { text-align: center; color: var(--muted); max-width: 680px; margin: 0 auto 40px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 600px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 24px; }
+  .card .icon { font-size: 30px; }
+  .card h3 { margin: 10px 0 6px; font-size: 19px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; align-items: center; }
+  .pair + .pair { margin-top: 56px; }
+  @media (max-width: 800px) { .pair { grid-template-columns: minmax(0, 1fr); } .pair.flip .text { order: -1; } }
+  .pair img { width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); display: block; }
+  .pair h3 { font-size: 26px; margin: 0 0 10px; }
+  .pair p { color: var(--muted); margin: 0 0 10px; }
+  .phone img { max-width: 480px; margin: 0 auto; border: 0; }
+
+  .steps { counter-reset: step; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  @media (max-width: 800px) { .steps { grid-template-columns: minmax(0, 1fr); } }
+  .steps .card { position: relative; padding-top: 52px; }
+  .steps .card::before { counter-increment: step; content: counter(step); position: absolute; top: 18px; left: 24px;
+    width: 26px; height: 26px; border-radius: 50%; background: var(--pink); color: white; font-weight: 900;
+    font-size: 14px; display: grid; place-items: center; }
+
+  details { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px;
+    margin: 0 auto 12px; max-width: 820px; }
+  summary { cursor: pointer; font-weight: 700; }
+  details p { color: var(--muted); margin: 10px 0 0; }
+
+  .downloads { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; max-width: 900px; margin: 0 auto; }
+  @media (max-width: 800px) { .downloads { grid-template-columns: minmax(0, 1fr); } }
+  .downloads .card { text-align: center; }
+  .downloads .card.mine { border-color: var(--pink); box-shadow: 0 0 0 1px var(--pink) inset; }
+  .downloads .btn { margin-top: 14px; font-size: 15px; padding: 11px 18px; }
+  code { background: #0a0518; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 13px;
+    word-break: break-all; }
+
+  footer { border-top: 1px solid var(--line); padding: 36px 0 48px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 28px; justify-content: space-between; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="wrap">
+    <a class="logo" href="#top"><img src="images/icon.png" alt="">YTKTV</a>
+    <nav>
+      <a class="optional" href="#features" data-i18n="nav.features">Features</a>
+      <a class="optional" href="#faq" data-i18n="nav.faq">FAQ</a>
+      <a href="https://github.com/TonyD365/YTKTV">GitHub</a>
+      <button class="lang" id="lang" type="button">中文</button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <div class="wrap">
+      <h1 data-i18n="hero.title" data-html>Turn any computer into a <span>karaoke room</span></h1>
+      <p class="lead" data-i18n="hero.lead">Every song on YouTube is in the song book. The TV shows the music video with karaoke lyrics, an AI takes the singer's voice out, guests pick songs from their phones, and a mixing console puts your microphones on top.</p>
+      <div class="cta">
+        <a class="btn primary" id="hero-download" href="https://github.com/TonyD365/YTKTV/releases/latest">
+          <span id="hero-download-text" data-i18n="hero.download">Download for free</span>
+        </a>
+        <a class="btn ghost" href="https://github.com/TonyD365/YTKTV" data-i18n="hero.github">View on GitHub</a>
+      </div>
+      <p class="small" id="hero-version" data-i18n="hero.platforms">macOS · Windows · Linux</p>
+      <div class="shot"><img src="images/mv-screen.png" width="1600" height="900"
+        alt="The music video screen with karaoke lyrics, a pitch lane, a live score and flying messages"></div>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <h2 data-i18n="features.title">Everything a karaoke room needs</h2>
+      <p class="sub" data-i18n="features.sub">No subscriptions, no special hardware: a computer, a TV and a microphone.</p>
+      <div class="grid">
+        <div class="card"><div class="icon">🎵</div><h3 data-i18n="f1.t">Every YouTube video is a song</h3><p data-i18n="f1.d">Search, paste a link or browse hot songs and artists. Plays without ads.</p></div>
+        <div class="card"><div class="icon">🎤</div><h3 data-i18n="f2.t">Original or instrumental</h3><p data-i18n="f2.d">AI vocal removal runs in the background, on your GPU when there is one. Switch without a gap, keep a guide vocal if you like.</p></div>
+        <div class="card"><div class="icon">📱</div><h3 data-i18n="f3.t">Phones as remote and microphone</h3><p data-i18n="f3.d">Scan a QR code to queue songs, see how long until your turn, or sing straight into the mixer from your phone.</p></div>
+        <div class="card"><div class="icon">🎚️</div><h3 data-i18n="f4.t">A mixing console that feels real</h3><p data-i18n="f4.d">Four channels with EQ, compressor, echo, reverb, presets and a feedback guard that catches the squeal.</p></div>
+        <div class="card"><div class="icon">🏆</div><h3 data-i18n="f5.t">Live pitch and scores</h3><p data-i18n="f5.d">See your voice against the tune as you sing, then your place on tonight's leaderboard. Duets score each singer.</p></div>
+        <div class="card"><div class="icon">✨</div><h3 data-i18n="f6.t">The KTV atmosphere</h3><p data-i18n="f6.d">Lyrics that follow the singer word by word, key and tempo, danmaku, applause buttons and lights.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="pair">
+        <img src="images/console.png" width="1600" height="1000" alt="The song console with the queue of selected songs" loading="lazy">
+        <div class="text">
+          <h3 data-i18n="p1.t">A song console like the real thing</h3>
+          <p data-i18n="p1.d">Big buttons, the queue at a glance, drag to reorder, playlists and favourites. The control bar has everything a KTV remote has.</p>
+        </div>
+      </div>
+      <div class="pair flip">
+        <div class="text">
+          <h3 data-i18n="p2.t">Mix like a sound engineer</h3>
+          <p data-i18n="p2.d">Gain, three-band EQ, compressor, echo and reverb on every microphone, with presets for pop, ballads, rock and a big hall sound.</p>
+        </div>
+        <img src="images/mixer.png" width="1600" height="1000" alt="The mixing console with four channel strips" loading="lazy">
+      </div>
+      <div class="pair">
+        <div class="phone"><img src="images/phone.png" width="810" height="844" alt="The phone page with your songs, tonight's best and the remote" loading="lazy"></div>
+        <div class="text">
+          <h3 data-i18n="p3.t">Nothing to install on the phones</h3>
+          <p data-i18n="p3.d">Guests scan the QR code on the TV and pick songs in the browser. Each phone sees its own songs and when it is their turn.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2 data-i18n="steps.title">Singing in three steps</h2>
+      <p class="sub" data-i18n="steps.sub">A first-start guide asks for the speakers, the screen and a microphone.</p>
+      <div class="steps">
+        <div class="card"><h3 data-i18n="s1.t">Install</h3><p data-i18n="s1.d">Download YTKTV for your computer and install it.</p></div>
+        <div class="card"><h3 data-i18n="s2.t">Connect the TV</h3><p data-i18n="s2.d">Plug the TV in as a second screen, with a cable for sound without delay.</p></div>
+        <div class="card"><h3 data-i18n="s3.t">Scan and sing</h3><p data-i18n="s3.d">Scan the QR code with a phone, pick a song and grab the microphone.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <h2 data-i18n="dl.title">Download</h2>
+      <p class="sub" id="dl-version" data-i18n="dl.sub">Free, for macOS, Windows and Linux.</p>
+      <div class="downloads">
+        <div class="card" data-os="mac"><div class="icon">🍎</div><h3>macOS</h3>
+          <p class="small" data-i18n="dl.mac">Apple Silicon and Intel</p>
+          <a class="btn primary" data-asset="macos-universal.pkg" href="https://github.com/TonyD365/YTKTV/releases/latest" data-i18n="dl.button">Download</a></div>
+        <div class="card" data-os="windows"><div class="icon">🪟</div><h3>Windows</h3>
+          <p class="small" data-i18n="dl.win">Windows 10 and 11, 64-bit</p>
+          <a class="btn primary" data-asset="windows-x64-setup.exe" href="https://github.com/TonyD365/YTKTV/releases/latest" data-i18n="dl.button">Download</a></div>
+        <div class="card" data-os="linux"><div class="icon">🐧</div><h3>Linux</h3>
+          <p class="small" data-i18n="dl.linux">x86-64 AppImage</p>
+          <a class="btn primary" data-asset="linux-x86_64.AppImage" href="https://github.com/TonyD365/YTKTV/releases/latest" data-i18n="dl.button">Download</a></div>
+      </div>
+      <p class="small" style="text-align:center;max-width:760px;margin:22px auto 0" data-i18n="dl.note" data-html>
+        The installers are not signed yet. On macOS run <code>xattr -d com.apple.quarantine ~/Downloads/YTKTV-*.pkg</code> before opening the package; on Windows choose <b>More info → Run anyway</b>. The first start downloads mpv, the video player YTKTV uses.
+      </p>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <h2 data-i18n="faq.title">Questions</h2>
+      <p class="sub"></p>
+      <details><summary data-i18n="q1.q">Is it free? Can I use it in my bar?</summary><p data-i18n="q1.a">Yes and yes. YTKTV is free and its license allows using it in a business, such as a karaoke venue. It does not allow selling the software itself. Playing music in public usually also needs licences from the rights holders.</p></details>
+      <details><summary data-i18n="q2.q">My voice comes out of the speakers late.</summary><p data-i18n="q2.a">The speakers are almost certainly wireless: AirPlay adds one to two seconds and Bluetooth a few hundred milliseconds, and no setting can change that. Connect the speakers or TV with a cable and choose them under Mixer → MAIN OUT.</p></details>
+      <details><summary data-i18n="q3.q">Do I need a graphics card?</summary><p data-i18n="q3.a">No. Apple Silicon Macs use their GPU, and on Windows and Linux YTKTV uses an NVIDIA or DirectX 12 card when there is one and the processor otherwise.</p></details>
+      <details><summary data-i18n="q4.q">Does it need the internet?</summary><p data-i18n="q4.a">Yes, the songs come from YouTube. The next songs in the queue are downloaded ahead, so a short drop usually goes unnoticed.</p></details>
+      <details><summary data-i18n="q5.q">Something does not work.</summary><p data-i18n="q5.a" data-html>Please <a href="https://github.com/TonyD365/YTKTV/issues/new/choose">open an issue</a> with the version, your system and what happened.</p></details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 TonyD365 · <a href="https://github.com/TonyD365/YTKTV/blob/main/LICENSE" data-i18n="foot.license">YTKTV License: free to use, not for sale</a></div>
+    <div data-i18n="foot.disclaimer">YTKTV is not affiliated with YouTube or Google.</div>
+    <div><a href="https://github.com/TonyD365/YTKTV/blob/main/CHANGELOG.md" data-i18n="foot.changes">What's new</a> · <a href="https://github.com/TonyD365/YTKTV/blob/main/CONTRIBUTING.md" data-i18n="foot.contribute">Contribute</a></div>
+  </div>
+</footer>
+
+<script>
+"use strict";
+const REPO = "TonyD365/YTKTV";
+const ZH = {
+  "nav.features": "功能", "nav.faq": "常见问题",
+  "hero.title": "把任何电脑变成 <span>KTV 包厢</span>",
+  "hero.lead": "YouTube 上的每首歌都在点歌本里。电视放 MV 和卡拉 OK 歌词，AI 去掉原唱人声，朋友们用手机点歌，调音台把你的麦克风叠加上去。",
+  "hero.download": "免费下载", "hero.github": "在 GitHub 上查看", "hero.platforms": "macOS · Windows · Linux",
+  "features.title": "KTV 包厢需要的，都在这里", "features.sub": "不用订阅，不用专门的硬件：一台电脑、一台电视、一支麦克风。",
+  "f1.t": "YouTube 上的歌都能唱", "f1.d": "搜索、粘贴链接，或者看热门榜和歌手。播放没有广告。",
+  "f2.t": "原唱、伴奏随时切换", "f2.d": "AI 在后台分离人声，有显卡就用显卡。切换无缝，还能保留一点导唱。",
+  "f3.t": "手机是遥控器，也是麦克风", "f3.d": "扫码点歌，看还要等几首；也能直接用手机唱进调音台。",
+  "f4.t": "像真的一样的调音台", "f4.d": "四路麦克风，EQ、压缩、回声、混响、效果预设，还有抓啸叫的防啸叫。",
+  "f5.t": "实时音高和打分", "f5.d": "边唱边看自己的音高线，唱完看本场排名。对唱时各自打分。",
+  "f6.t": "KTV 氛围", "f6.d": "逐字变色的歌词、升降调和变速、弹幕、欢呼音效和氛围灯。",
+  "p1.t": "像真的点歌台一样", "p1.d": "大按钮，已点歌曲一目了然，拖动排序，歌单和收藏。底部控制栏有 KTV 遥控器的所有功能。",
+  "p2.t": "像调音师一样调音", "p2.d": "每路麦克风都有增益、三段 EQ、压缩、回声和混响，还有流行、抒情、摇滚、大厅等预设。",
+  "p3.t": "手机上什么都不用装", "p3.d": "客人扫电视上的二维码，在浏览器里点歌。每部手机都能看到自己点的歌和轮到自己还要多久。",
+  "steps.title": "三步开唱", "steps.sub": "第一次启动会有向导，帮你选音箱、选屏幕、试麦克风。",
+  "s1.t": "安装", "s1.d": "下载对应系统的 YTKTV 并安装。",
+  "s2.t": "接上电视", "s2.d": "把电视作为第二块屏幕接上，用线连接声音才没有延迟。",
+  "s3.t": "扫码开唱", "s3.d": "用手机扫二维码，点歌，拿起麦克风。",
+  "dl.title": "下载", "dl.sub": "免费，支持 macOS、Windows 和 Linux。",
+  "dl.mac": "Apple 芯片和 Intel", "dl.win": "Windows 10 和 11，64 位", "dl.linux": "x86-64 AppImage", "dl.button": "下载",
+  "dl.note": "安装包还没有签名。macOS 上打开安装包前先在终端执行 <code>xattr -d com.apple.quarantine ~/Downloads/YTKTV-*.pkg</code>；Windows 上点 <b>更多信息 → 仍要运行</b>。第一次启动会自动下载视频播放器 mpv。",
+  "faq.title": "常见问题",
+  "q1.q": "免费吗？可以拿来开店吗？", "q1.a": "都可以。YTKTV 免费，许可证允许商用，比如开 KTV；不允许出售这个软件本身。在公开场所放音乐通常还需要向版权方取得许可。",
+  "q2.q": "我的声音从音箱出来有延迟。", "q2.a": "几乎都是因为用了无线音箱：AirPlay 会延迟 1–2 秒，蓝牙几百毫秒，任何设置都改不了。用线连接音箱或电视，并在 Mixer → MAIN OUT 里选它。",
+  "q3.q": "需要显卡吗？", "q3.a": "不需要。Apple 芯片的 Mac 用自带 GPU；Windows 和 Linux 有 NVIDIA 或 DirectX 12 显卡就用显卡，没有就用 CPU。",
+  "q4.q": "需要联网吗？", "q4.a": "需要，歌曲来自 YouTube。队列里接下来的歌会提前下载，网络短暂断一下一般听不出来。",
+  "q5.q": "遇到问题？", "q5.a": "请<a href=\"https://github.com/TonyD365/YTKTV/issues/new/choose\">提交 issue</a>，写上版本、系统和发生了什么，中英文都可以。",
+  "foot.license": "YTKTV License：免费使用，不得出售", "foot.disclaimer": "YTKTV 与 YouTube 和 Google 没有关联。",
+  "foot.changes": "更新记录", "foot.contribute": "参与贡献",
+};
+const original = new Map();
+for (const el of document.querySelectorAll("[data-i18n]")) {
+  original.set(el, el.hasAttribute("data-html") ? el.innerHTML : el.textContent);
+}
+let language = "en";
+function apply(lang) {
+  language = lang;
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+  for (const [el, english] of original) {
+    const text = lang === "zh" ? (ZH[el.dataset.i18n] ?? english) : english;
+    if (el.hasAttribute("data-html") || (lang === "zh" && /<\w/.test(text))) el.innerHTML = text;
+    else el.textContent = text;
+  }
+  document.getElementById("lang").textContent = lang === "zh" ? "English" : "中文";
+  try { localStorage.setItem("lang", lang); } catch (e) { /* private mode */ }
+  showVersion();
+}
+document.getElementById("lang").addEventListener("click", () => apply(language === "zh" ? "en" : "zh"));
+
+// Point the buttons straight at the right installer of the latest release, and lead with
+// the visitor's own system. Without the API (offline, rate limit) they keep linking to the
+// release page, which always works.
+function visitorOS() {
+  const ua = navigator.userAgent;
+  if (/Windows/i.test(ua)) return "windows";
+  if (/Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad/i.test(ua)) return "mac";
+  if (/Linux/i.test(ua) && !/Android/i.test(ua)) return "linux";
+  return null;
+}
+let release = null;
+function showVersion() {
+  if (!release) return;
+  const version = release.tag_name.replace(/^v/, "");
+  const zh = language === "zh";
+  document.getElementById("dl-version").textContent = zh
+    ? `最新版本 ${version}，免费，支持 macOS、Windows 和 Linux。`
+    : `Latest version ${version}. Free, for macOS, Windows and Linux.`;
+  const os = visitorOS();
+  const names = {mac: "macOS", windows: "Windows", linux: "Linux"};
+  if (os) {
+    document.getElementById("hero-download-text").textContent = zh ? `下载 ${names[os]} 版` : `Download for ${names[os]}`;
+    document.getElementById("hero-version").textContent = zh
+      ? `版本 ${version} · 也支持其他系统，见下方` : `Version ${version} · other systems below`;
+  }
+}
+const os = visitorOS();
+if (os) document.querySelector(`.downloads [data-os="${os}"]`).classList.add("mine");
+try { if (localStorage.getItem("lang") === "zh" || (!localStorage.getItem("lang") && /^zh/i.test(navigator.language))) apply("zh"); }
+catch (e) { if (/^zh/i.test(navigator.language)) apply("zh"); }
+fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
+  .then((response) => response.ok ? response.json() : Promise.reject(response.status))
+  .then((data) => {
+    release = data;
+    for (const link of document.querySelectorAll("[data-asset]")) {
+      const asset = data.assets.find((a) => a.name.endsWith(link.dataset.asset));
+      if (asset) link.href = asset.browser_download_url;
+    }
+    const mine = os && document.querySelector(`.downloads [data-os="${os}"] [data-asset]`);
+    if (mine) document.getElementById("hero-download").href = mine.href;
+    showVersion();
+  })
+  .catch(() => {});
+</script>
+</body>
+</html>
