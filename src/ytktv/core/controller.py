@@ -43,6 +43,9 @@ _PRELOAD_AHEAD = 2  # how many upcoming songs to keep downloaded
 _DANMAKU_LENGTH = 60
 _DANMAKU_BURST = 8  # messages allowed per window, across everyone
 _DANMAKU_WINDOW = 4.0
+_REACTION_BURST = 16  # reactions allowed per window, across everyone
+# The emoji anyone in the room can float up the MV screen.
+REACTIONS = ("❤️", "🔥", "👏", "🎉", "🌹", "😂", "💯", "🍻")
 _INSTRUMENTAL_WAIT = 180.0  # longest a song is held back for its instrumental
 
 
@@ -101,6 +104,7 @@ class KTVController:
         self._awaiting_start = False  # play() was called and the first frame is pending
         self.lyrics: list[Any] = []  # timed lines for the current song, if its video has subtitles
         self._danmaku_times: list[float] = []
+        self._reaction_times: list[float] = []
         self._keeper: ScoreKeeper | None = None  # scores the song that is playing
         self.last_score: dict[str, Any] | None = None
         self.scoreboard = Scoreboard()  # tonight's scores; starts empty with the app
@@ -658,6 +662,19 @@ class KTVController:
         self.bus.emit("game", result)
         return result
 
+    def send_reaction(self, emoji: str) -> bool:
+        """Float an emoji up the MV screen. False for an unknown one or when sent too fast."""
+        if emoji not in REACTIONS:
+            return False
+        now = time.monotonic()
+        with self._lock:
+            self._reaction_times = [t for t in self._reaction_times if now - t < _DANMAKU_WINDOW]
+            if len(self._reaction_times) >= _REACTION_BURST:
+                return False
+            self._reaction_times.append(now)
+        self.bus.emit("reaction", {"emoji": emoji})
+        return True
+
     def _load_lyrics(self, item: QueueItem) -> None:
         fetch = getattr(self.resolver, "lyrics", None)
         if fetch is None or not self.settings.show_lyrics:
@@ -1014,6 +1031,7 @@ class KTVController:
             "guide_vocal": settings.guide_vocal,
             "lyrics": bool(self.lyrics),
             "show_lyrics": settings.show_lyrics,
+            "reactions": list(REACTIONS),
             "phone_mic_url": self.phone_mic_url,
             "lyrics_offset": self.lyrics_offset,
             "lights": settings.lights,

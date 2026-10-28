@@ -142,3 +142,13 @@ def test_games_over_http(client):
     http, _ = client
     assert http.post("/api/game/dare").json()["title"].endswith("Dare")
     assert http.post("/api/game/chess").status_code == 404
+
+
+def test_reactions_over_http(client):
+    http, controller = client
+    seen = []
+    controller.bus.subscribe(lambda topic, data: seen.append(data) if topic == "reaction" else None)
+    assert http.get("/api/state").json()["reactions"][0] == "❤️"
+    assert http.post("/api/reaction", json={"emoji": "🎉"}).json() == {"ok": True}
+    assert seen == [{"emoji": "🎉"}]
+    assert http.post("/api/reaction", json={"emoji": "💩"}).status_code == 429

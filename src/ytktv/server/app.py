@@ -111,6 +111,10 @@ class PresetIn(BaseModel):
     name: str = Field(min_length=1, max_length=60)
 
 
+class ReactionIn(BaseModel):
+    emoji: str = Field(min_length=1, max_length=8)
+
+
 class DanmakuIn(BaseModel):
     text: str = Field(min_length=1, max_length=200)
 
@@ -291,6 +295,12 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
     def danmaku(body: DanmakuIn) -> dict[str, bool]:
         if not controller.send_danmaku(body.text):
             raise HTTPException(429, "too many messages, slow down")
+        return {"ok": True}
+
+    @app.post("/api/reaction")
+    def reaction(body: ReactionIn) -> dict[str, bool]:
+        if not controller.send_reaction(body.emoji):
+            raise HTTPException(429, "too many reactions, or not one of the room's emoji")
         return {"ok": True}
 
     @app.get("/api/lyrics")

@@ -73,9 +73,12 @@ def test_control_bar_buttons_drive_the_controller(window, qtbot):
     qtbot.waitUntil(lambda: main.more_modes.text() == "Vocal Cut", timeout=3000)
     assert main.more_modes.isChecked() and main.mode_actions[VocalMode.CENTER_CUT].isChecked()
     assert not main.mode_buttons[VocalMode.INSTRUMENTAL].isChecked()
-    main.music_slider.setValue(33)
-    assert controller.settings.music_volume == 33
+    main.level_keys["music_volume"][0].click()  # one segment quieter: 80 -> 75
+    assert controller.settings.music_volume == 75
     assert controller.settings.mic_volume == 80
+    assert main.level_hud.isVisible() and main.level_hud.kind == "music_volume"
+    assert main.level_hud.value == 75
+    assert main.mv_window.level_hud.value == 75  # shown on the MV screen too
 
 
 def test_mixer_strip_edits_settings(window, qtbot):
@@ -368,13 +371,15 @@ def test_mv_window_shows_lyrics_and_danmaku_and_console_controls_work(window, qt
     qtbot.waitUntil(lambda: mv.lyrics.has_lines() and mv.lyrics.isVisible(), timeout=3000)
     assert mv._animator.isActive()
 
-    main.danmaku_input.setText("nice!")
-    main._send_danmaku()
+    party = main.pages["party"]
+    party.danmaku_input.setText("nice!")
+    party.send()
     qtbot.waitUntil(lambda: mv.danmaku.active(), timeout=3000)
-    assert main.danmaku_input.text() == ""
+    assert party.danmaku_input.text() == ""
 
-    main.guide_slider.setValue(40)
-    assert controller.settings.guide_vocal == 40
+    for _ in range(6):
+        main.level_keys["guide_vocal"][1].click()
+    assert controller.settings.guide_vocal == 38  # six of sixteen segments
     assert main.lights_button.isChecked()
     main.lights_button.click()
     assert controller.settings.lights is False
@@ -687,3 +692,52 @@ def test_party_games_show_on_the_console_and_mv_screen(window, qtbot):
     assert page.play("truth")["text"] in games.TRUTHS
     assert games.spin(["Kim", "Alex"], random.Random(1))["text"] in ("Kim", "Alex")
     assert games.spin([])["text"] == "Add singers first"
+
+
+def test_home_tiles_open_their_pages_and_show_the_room(window, qtbot):
+    main, controller = window
+    home = main.pages["home"]
+    assert main.stack.currentWidget() is home  # the console opens on the tile wall
+    controller.enqueue(make_song(1), singer="Kim")
+    controller.enqueue(make_song(2), singer="Alex")
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    qtbot.waitUntil(lambda: home.now_title.text() == "Song 1", timeout=3000)
+    assert home.now_singer.text() == "Kim"
+    assert home.next_rows[0].text().startswith("Song 2") and "Alex" in home.next_rows[0].text()
+    assert home.tiles["queue"].text().endswith("Selected (1)")
+    for key, tile in home.tiles.items():
+        tile.click()
+        assert main.stack.currentWidget() is main.pages[key]
+        assert main._nav_buttons[key].isChecked()
+
+
+def test_reactions_float_up_the_mv_screen(window, qtbot):
+    from ytktv.core.controller import REACTIONS
+
+    main, controller = window
+    mv = main.mv_window
+    mv.resize(800, 450)
+    assert controller.send_reaction("🔥") is True
+    assert controller.send_reaction("not an emoji") is False
+    qtbot.waitUntil(lambda: mv.reactions.active(), timeout=3000)
+    mv.reactions.advance(1.0)
+    mv.reactions.grab()  # painting works part way up
+    mv.reactions.advance(mv.reactions.RISE_SECONDS + 1)
+    assert not mv.reactions.active()
+    sent = sum(controller.send_reaction(REACTIONS[0]) for _ in range(40))
+    assert 0 < sent < 40  # too many at once are refused
+
+
+def test_levels_stay_within_range_and_changes_from_a_phone_show_up(window, qtbot):
+    main, controller = window
+    for _ in range(30):
+        main.level_keys["mic_volume"][1].click()
+    assert controller.settings.mic_volume == 100
+    for _ in range(30):
+        main.level_keys["mic_volume"][0].click()
+    assert controller.settings.mic_volume == 0
+    main.level_hud.hide()
+    controller.set_volume("music", 40)  # as if from the phone page
+    qtbot.waitUntil(lambda: main.level_hud.isVisible(), timeout=3000)
+    assert main.level_hud.kind == "music_volume" and main.level_hud.value == 40
+    main.level_hud.grab()
