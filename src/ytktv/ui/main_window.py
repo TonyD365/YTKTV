@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from ytktv.core.controller import PITCH_RANGE, SPEEDS, KTVController
 from ytktv.core.models import VocalMode
+from ytktv.rooms.client import RoomClient
 from ytktv.ui.games_page import GamesPage
 from ytktv.ui.home_page import HomePage
 from ytktv.ui.level_hud import LevelHud, from_segments, to_segments
@@ -91,6 +92,7 @@ class MainWindow(QMainWindow):
         mv_window: MvWindow,
         server_url: str,
         force_windowed: bool = False,
+        room_client: RoomClient | None = None,
     ) -> None:
         super().__init__()
         self.force_windowed = force_windowed
@@ -103,7 +105,7 @@ class MainWindow(QMainWindow):
 
         self.bridge = EventBridge(controller.bus, self)
         self.bridge.received.connect(self._on_event)
-        self.ctx = Context(controller, youtube, ThumbnailLoader(self))
+        self.ctx = Context(controller, youtube, ThumbnailLoader(self), room_client=room_client)
         self.ctx.open_search = self.open_search
         self._state: dict[str, Any] = controller.state()
         self._last_current_id: str | None = None

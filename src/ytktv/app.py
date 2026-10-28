@@ -385,7 +385,18 @@ def main(argv: list[str] | None = None) -> int:
     from ytktv.ui.update_manager import UpdateManager
 
     mv_window = MvWindow(player if have_mpv else None)
-    window = MainWindow(controller, youtube, mv_window, server.url, force_windowed=args.windowed)
+    from ytktv.rooms.client import RoomClient
+
+    room_client = RoomClient(store, lambda kind, data: None)
+    room_client.start()
+    window = MainWindow(
+        controller,
+        youtube,
+        mv_window,
+        server.url,
+        force_windowed=args.windowed,
+        room_client=room_client,
+    )
     updates = UpdateManager(controller, window)
     updates.status.connect(window.settings_page.set_update_status)
     window.settings_page.check_updates.connect(lambda: updates.check(manual=True))

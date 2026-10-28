@@ -48,3 +48,36 @@ def test_rooms_pair_connect_and_get_unbound_over_the_network():
         with http.websocket_connect("/ws/room") as ws:
             ws.send_text(json.dumps({"room_id": reply["room_id"], "key": reply["key"]}))
             assert json.loads(ws.receive_text()) == {"type": "unbind"}
+
+
+def test_front_desk_card_and_desk_window(qtbot, tmp_path):
+    from ytktv.config import SettingsStore
+    from ytktv.desk.server import Hub
+    from ytktv.desk.window import DeskWindow
+    from ytktv.ui.front_desk_card import FrontDeskCard
+
+    store = SettingsStore(tmp_path / "settings.json")
+    card = FrontDeskCard(store)
+    qtbot.addWidget(card)
+    assert not card.form.isHidden() and card.bound_row.isHidden()
+    store.settings.desk_url, store.settings.room_id = "http://desk:8770", "r1"
+    store.settings.room_key, store.settings.room_name = "k", "Kids"
+    store.settings.desk_last_seen = __import__("time").time()
+    card.refresh()
+    assert card.form.isHidden() and not card.unbind_button.isEnabled()
+    store.settings.desk_last_seen = 0
+    card.refresh()
+    assert card.unbind_button.isEnabled()
+    card.unbind()
+    assert not binding.is_bound(store.settings)
+
+    desk = DeskStore()
+    desk.pair(desk.new_code(), "Adults")
+    window = DeskWindow(desk, Hub(), "192.168.1.10:8770")
+    qtbot.addWidget(window)
+    window.add_room()
+    assert "Pairing code" in window.code_label.text()
+    assert window.room_list.count() == 1
+    window.room_list.setCurrentRow(0)
+    window.unbind_room()
+    assert desk.rooms() == []
