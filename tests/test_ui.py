@@ -627,3 +627,47 @@ def test_lyrics_nudge_buttons_shift_the_lyrics_on_the_mv_screen(window, qtbot):
     main.lyrics_later.click()
     qtbot.waitUntil(lambda: main.lyrics_button.text() == "Lyrics", timeout=3000)
     assert main.mv_window._lyrics_offset == 0.0
+
+
+def test_lyrics_and_tune_that_arrive_while_a_song_loads_stay_on_screen(window, qtbot):
+    """The first song of an evening streams, so its lyrics come in before it plays."""
+    main, controller = window
+    mv = main.mv_window
+    song = {"id": "a", "singer": "", "owner": "", "song": make_song(1).to_dict()}
+    loading = {**controller.state(), "status": "loading", "current": song}
+    mv.apply_state(loading)
+    mv.set_lyrics([{"start": 0.0, "end": 60.0, "text": "sing"}])
+    mv.set_melody({"hop": 0.05, "notes": [60.0] * 40, "transpose": 0.0})
+    mv.apply_state(loading)  # more state while still loading
+    assert mv.lyrics.has_lines() and mv.pitch_lane.has_melody()
+    mv.apply_state({**loading, "status": "playing"})
+    assert mv.lyrics.has_lines() and mv.pitch_lane.has_melody()
+    mv.apply_state({**loading, "status": "idle", "current": None})
+    assert not mv.lyrics.has_lines() and not mv.pitch_lane.has_melody()
+
+
+def test_first_song_shows_its_lyrics_without_touching_the_button(window, qtbot, monkeypatch):
+    """Like the first song of an evening: the video takes a while, the lyrics do not."""
+    from ytktv.youtube.lyrics import LyricLine
+
+    main, controller = window
+    mv = main.mv_window
+    assert controller.settings.show_lyrics
+    player = controller.player
+    report = player.on_position
+    started = []
+    # The player starts quietly; the test decides when the first position arrives.
+    monkeypatch.setattr(player, "on_position", None)
+    controller.resolver.lyrics = lambda video_id, max_height, allow_auto: [
+        LyricLine(0.0, 60.0, "la")
+    ]
+    controller.enqueue(make_song(1))
+    qtbot.waitUntil(lambda: controller.lyrics != [], timeout=3000)
+    assert controller.status == PlayStatus.LOADING  # lyrics are in, the video is not
+    qtbot.wait(200)  # the console and MV screen take in the loading state and the lyrics
+    report(0.5, 200.0)  # now the video starts
+    started.append(True)
+    wait_for(lambda: controller.status == PlayStatus.PLAYING)
+    qtbot.waitUntil(lambda: main._state["status"] == "playing", timeout=3000)
+    qtbot.wait(100)
+    assert mv.lyrics.has_lines()  # shown without pressing Lyrics off and on
