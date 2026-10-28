@@ -84,6 +84,8 @@ class DeskWindow(QMainWindow):
         bar = QHBoxLayout(top)
         bar.setContentsMargins(24, 12, 24, 0)
         brand = QVBoxLayout()
+        brand.setContentsMargins(0, 0, 0, 14)  # keep the subtitle off the bottom line
+        brand.setSpacing(2)
         logo = QLabel("YTKTV")
         logo.setObjectName("deskLogo")
         sub = QLabel("KARAOKE SYSTEM  ·  FRONT DESK")
