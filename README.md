@@ -1,31 +1,64 @@
-<h1 align="center">YTKTV</h1>
-
 <p align="center">
-  <b>Turn any computer into a karaoke (KTV) machine powered by YouTube.</b>
+  <img src="docs/images/social-preview.png" alt="YTKTV: turn any computer into a KTV machine" width="820">
 </p>
 
 <p align="center">
   <a href="https://github.com/TonyD365/YTKTV/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/TonyD365/YTKTV?color=ff2d95"></a>
   <a href="https://github.com/TonyD365/YTKTV/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/TonyD365/YTKTV/total?color=8a5cff"></a>
   <a href="https://github.com/TonyD365/YTKTV/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TonyD365/YTKTV/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776ab">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-22d3ee">
   <a href="LICENSE"><img alt="License: free to use, not for sale" src="https://img.shields.io/badge/license-free%20to%20use%2C%20not%20for%20sale-ffc94a"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/TonyD365/YTKTV/releases/latest"><b>Download</b></a> ·
+  <a href="https://github.com/TonyD365/YTKTV/releases/latest"><b>⬇️ Download</b></a> ·
+  <a href="#quick-start">Quick start</a> ·
   <a href="#features">Features</a> ·
-  <a href="https://github.com/TonyD365/YTKTV/issues">Report a problem</a>
+  <a href="#faq">FAQ</a> ·
+  <a href="CHANGELOG.md">What's new</a> ·
+  <a href="README.zh-CN.md">中文</a> ·
+  <a href="https://github.com/TonyD365/YTKTV/issues/new/choose">Report a problem</a>
 </p>
 
-The main display becomes a KTV song console, an extended display shows the music video full
-screen, guests pick songs from their phones, and a built-in mixing console blends the
-microphones into the music with reverb and echo.
+**YTKTV turns a computer and a TV into a karaoke room.** Every song on YouTube is in the song
+book. The TV shows the music video with karaoke lyrics, an AI takes the singer's voice out of
+the song, guests queue songs from their phones (no app to install), and a mixing console that
+looks and works like real hardware puts your microphones on top with echo and reverb. Free,
+for macOS, Windows and Linux.
 
-| Song console | Mixing console |
+<p align="center">
+  <img src="docs/images/mv-screen.png" alt="The MV screen: karaoke lyrics filling word by word, the pitch lane with the singer's voice as dots, a running score, messages flying across and lights around the edge" width="860">
+  <br><sub>The MV screen: lyrics that follow the singer, a pitch lane, a live score, danmaku and lights.</sub>
+</p>
+
+## Highlights
+
+| | |
 |---|---|
-| ![The song console showing the Artists page](docs/images/console.png) | ![The mixing console page](docs/images/mixer.png) |
+| 🎵 **Every YouTube video is a song**<br>Search, paste a link or browse hot songs. Plays without ads. | 🎤 **Original or instrumental, any song**<br>AI vocal removal in the background, on your GPU when there is one. Switch without a gap. |
+| 📱 **Phones are the remote, and the microphone**<br>Scan a QR code to queue songs. A phone can even sing into the mixer. | 🎚️ **A mixing console that feels real**<br>Four channels with EQ, compressor, echo, reverb and a feedback guard. |
+| 🏆 **Live pitch and scores**<br>See your voice against the tune as you sing, then tonight's leaderboard. Duets score each singer. | ✨ **The KTV atmosphere**<br>Karaoke lyrics, guide vocal, key and tempo, danmaku, applause buttons and lights. |
+
+| The song console | The mixing console |
+|---|---|
+| ![The song console with the queue of selected songs](docs/images/console.png) | ![The mixing console with four channel strips](docs/images/mixer.png) |
+
+<p align="center">
+  <img src="docs/images/phone.png" alt="The phone page: your songs with waiting times, the queue and tonight's best scores; and the remote with playback, lyrics and vocal controls" width="560">
+  <br><sub>The phone page: your songs and waiting times, tonight's best, and the remote.</sub>
+</p>
+
+## Quick start
+
+1. **Download** the installer for your computer from the
+   [latest release](https://github.com/TonyD365/YTKTV/releases/latest) and install it
+   (macOS needs one `xattr` command first, see [Install](#install)).
+2. **Connect the TV** as a second display, with an HDMI cable if you can (see the
+   [FAQ](#faq) on why), and start YTKTV. A short setup asks for the speakers, the screen and a
+   microphone.
+3. **Scan the QR code** with a phone, pick a song, and sing.
+
+If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 
 ## Features
 
@@ -204,6 +237,52 @@ ytktv [--port PORT] [--no-mic] [--windowed] [--debug]
   disk) that plays them in HD. It adds a few seconds before such a video starts.
 - YouTube changes often. If videos stop playing, update yt-dlp (`pip install -U yt-dlp`) or
   install the newest YTKTV release.
+
+## FAQ
+
+**Is it free? Can I use it in my bar or karaoke room?**
+Yes and yes. YTKTV is free, and its [license](LICENSE) allows using it in a business, for
+example to run a karaoke venue. What it does not allow is selling the software itself or a
+copy of it. Playing music in public is a separate matter: venues normally need licences from
+the rights holders (see the [Disclaimer](#disclaimer)).
+
+**Does it need the internet?**
+Yes: songs come from YouTube. The next songs in the queue are downloaded ahead of time, so a
+short drop in the connection usually goes unnoticed.
+
+**My voice comes out of the speakers late. Why?**
+Almost always the speakers are wireless. AirPlay delays sound by one to two seconds and
+Bluetooth by a few hundred milliseconds; that is how they work, and no setting can change it.
+Connect the speakers or the TV with a cable (HDMI, USB or headphone jack) and choose them under
+**Mixer → MAIN OUT**.
+
+**Do I need a graphics card for the instrumental?**
+No. Apple Silicon Macs use their GPU; on Windows and Linux YTKTV detects an NVIDIA (or, on
+Windows, any DirectX 12) graphics card and otherwise uses the processor, which is slower but
+works. See [Vocal separation and your graphics card](#vocal-separation-and-your-graphics-card).
+
+**macOS says the app "is damaged" or "cannot be opened".**
+The installer is not signed with a paid Apple certificate yet. Run the `xattr` command from
+[Install](#install) once and it opens normally.
+
+**Why does my phone show a certificate warning for the microphone page?**
+Browsers only allow the microphone on secure (HTTPS) pages, and a home network cannot have a
+certificate that phones already trust, so YTKTV makes its own. The page stays on your network;
+choose to continue once.
+
+**Something does not work.**
+Please [open an issue](https://github.com/TonyD365/YTKTV/issues/new/choose) with the version,
+your system and what happened. It really helps.
+
+## Roadmap
+
+Ideas for the next versions; tell us in an issue which you would like first.
+
+- A room PIN, so only the people in the room can skip songs and change the sound
+- An offline song library: keep sung songs, with their instrumentals, for parties without internet
+- Recording: take the song you just sang home as a file
+- A Chinese interface
+- Signed installers, without the `xattr` step or the SmartScreen warning
 
 ## Development
 
