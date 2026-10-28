@@ -29,6 +29,11 @@ looks and works like real hardware puts your microphones on top with echo and re
 for macOS, Windows and Linux.
 
 <p align="center">
+  <a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><img src="docs/images/promo-poster.png" alt="Watch the one-minute video of YTKTV in use" width="720"></a>
+  <br><a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><b>▶ Watch the 1-minute video</b></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/TonyD365/YTKTV/releases/latest"><img alt="Download YTKTV for free" src="https://img.shields.io/badge/⬇%20Download%20YTKTV%20free-ff2d95?style=for-the-badge&logo=github&logoColor=white" height="44"></a>
 </p>
 

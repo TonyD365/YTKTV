@@ -23,6 +23,11 @@
 **YTKTV 把一台电脑和一台电视变成 KTV 包厢。** YouTube 上的每一首歌都在点歌本里。电视上放 MV 和卡拉 OK 歌词，AI 把原唱的人声从歌里去掉，朋友们用手机扫码点歌（不用装 App），一台外观和用法都像真硬件的调音台把你的麦克风叠加上去，带回声和混响。免费，支持 macOS、Windows 和 Linux。
 
 <p align="center">
+  <a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><img src="docs/images/promo-poster.png" alt="一分钟看懂 YTKTV 的视频" width="720"></a>
+  <br><a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><b>▶ 一分钟视频演示</b></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/TonyD365/YTKTV/releases/latest"><img alt="免费下载 YTKTV" src="https://img.shields.io/badge/⬇%20免费下载%20YTKTV-ff2d95?style=for-the-badge&logo=github&logoColor=white" height="44"></a>
 </p>
 

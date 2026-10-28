@@ -36,7 +36,7 @@ jobs:
         run: |
           mkdir -p _site/images
           cp site/* _site/
-          cp docs/images/*.png _site/images/
+          cp docs/images/*.png docs/images/*.mp4 _site/images/
           cp src/ytktv/ui/assets/icon.png _site/images/icon.png
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
