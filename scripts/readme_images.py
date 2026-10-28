@@ -125,10 +125,15 @@ def console(app: QApplication) -> None:
     run_for(
         app,
         [
-            (600, lambda: window.show_page("queue")),
+            (600, lambda: window.show_page("home")),
             (1500, lambda: window.grab().save(str(OUT / "console.png"))),
             (1600, lambda: window.show_page("mixer")),
             (2600, lambda: window.grab().save(str(OUT / "mixer.png"))),
+            (2700, lambda: window.show_page("party")),
+            (3600, lambda: window.grab().save(str(OUT / "party.png"))),
+            (3700, lambda: window.pages["games"].play("spin")),
+            (3800, lambda: window.show_page("games")),
+            (4700, lambda: window.grab().save(str(OUT / "games.png"))),
         ],
     )
 
