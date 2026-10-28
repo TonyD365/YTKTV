@@ -323,3 +323,42 @@ def test_feedback_guard_sensitivity_decides_what_counts_as_feedback():
 
     guard = FeedbackGuard(SR, "nonsense")  # an unknown name is the careful setting
     assert guard._rules == FeedbackGuard.SENSITIVITY["low"]
+
+
+def test_one_broken_sample_from_a_microphone_does_not_silence_the_mixer():
+    from ytktv.audio.engine import Mixer
+    from ytktv.config import Settings
+
+    rng = np.random.default_rng(0)
+
+    def voice():
+        return (0.1 * rng.standard_normal(512)).astype(np.float32)
+
+    for bad in (np.nan, np.inf, -np.inf, 1e30):
+        mixer = Mixer(Settings(), SR)
+        for _ in range(20):
+            mixer.mix([voice(), None, None, None], 512)
+        glitch = voice()
+        glitch[100] = bad
+        blocks = [mixer.mix([glitch, None, None, None], 512)]
+        blocks += [mixer.mix([voice(), None, None, None], 512) for _ in range(200)]
+        # Nothing but real numbers ever leaves the mixer, and the voice is still there.
+        assert all(np.isfinite(block).all() for block in blocks)
+        assert all(np.max(np.abs(block)) <= 1.0 for block in blocks)
+        assert np.max(np.abs(blocks[-1])) > 0.01
+        assert mixer.bad_inputs == 1 and mixer.resets == 0
+
+
+def test_mixer_recovers_if_its_effects_go_bad_anyway():
+    from ytktv.audio.engine import Mixer
+    from ytktv.config import Settings
+
+    mixer = Mixer(Settings(), SR)
+    block = (0.2 * np.sin(2 * np.pi * 440 * np.arange(512) / SR)).astype(np.float32)
+    mixer.mix([block, None, None, None], 512)
+    mixer.chains[0].echo._buf[:] = np.nan  # as if a filter's memory had been corrupted
+    out = mixer.mix([block, None, None, None], 512)
+    assert np.all(out == 0) and mixer.resets == 1  # a silent block instead of broken numbers
+    for _ in range(40):
+        out = mixer.mix([block, None, None, None], 512)
+    assert np.isfinite(out).all() and np.max(np.abs(out)) > 0.01  # and then it plays again
