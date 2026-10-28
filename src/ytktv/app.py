@@ -71,40 +71,73 @@ def free_port(preferred: int) -> int:
 
 
 def _ensure_libmpv(app: Any) -> bool:
-    """Find libmpv, offering to install it when missing. Returns True if usable."""
+    """Find libmpv; when it is missing, offer to install it. Returns True if usable.
+
+    mpv is a separate program under the GPL and is not part of YTKTV or its releases.
+    YTKTV asks before installing it, the usual way for each system: Homebrew on macOS,
+    the Windows build linked from mpv.io, the package manager on Linux.
+    """
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
     from PySide6.QtWidgets import QMessageBox, QProgressDialog
 
-    if bootstrap.find_libmpv():
-        return True
-    plan = bootstrap.install_plan()
-    if plan is None:
-        QMessageBox.warning(
-            None,
-            "mpv is required",
-            "YTKTV plays video with mpv (libmpv), which was not found and cannot be installed "
-            "automatically on this system.\n\nInstall mpv with your package manager "
-            "(macOS: install Homebrew, then 'brew install mpv') and start YTKTV again.",
-        )
-        return False
-    if not bootstrap.is_frozen():
-        # From source this runs a package manager, which is worth asking about first.
-        answer = QMessageBox.question(
-            None,
-            "Install mpv?",
-            "YTKTV plays video with mpv (libmpv), which is not installed yet.\n\n"
-            f"Install it now?\n\n{plan}",
-        )
-        if answer != QMessageBox.StandardButton.Yes:
+    while not bootstrap.find_libmpv():
+        plan = bootstrap.install_plan()
+        box = QMessageBox()
+        box.setWindowTitle("mpv is needed")
+        box.setIcon(QMessageBox.Icon.Information)
+        if plan is not None:
+            box.setText("YTKTV plays video with mpv, a free program that is installed separately.")
+            box.setInformativeText(f"Install mpv now?\n\nYTKTV will run: {plan}")
+            install = box.addButton("Install mpv", QMessageBox.ButtonRole.AcceptRole)
+            box.addButton("Not Now", QMessageBox.ButtonRole.RejectRole)
+            box.setDefaultButton(install)
+            box.exec()
+            if box.clickedButton() is not install:
+                return False
+            if _install_libmpv_with_progress(app, QProgressDialog):
+                return True
+            QMessageBox.warning(
+                None,
+                "mpv was not installed",
+                f"Installing mpv did not work. You can install it yourself:\n\n{plan}\n\n"
+                "Then start YTKTV again.",
+            )
             return False
+        # macOS without Homebrew (or a Linux without a known package manager).
+        if platform.system() == "Darwin":
+            box.setText("YTKTV plays video with mpv, a free program that is installed separately.")
+            box.setInformativeText(
+                "The easiest way on a Mac is Homebrew. Install Homebrew from brew.sh, then press "
+                "Check Again; YTKTV installs mpv for you.\n\n"
+                "Or, in Terminal: brew install mpv"
+            )
+            website = box.addButton("Open brew.sh", QMessageBox.ButtonRole.ActionRole)
+        else:
+            box.setText("YTKTV plays video with mpv, which is not installed.")
+            box.setInformativeText(
+                "Install mpv (libmpv) with your system's package manager, then press Check Again."
+            )
+            website = box.addButton("Open mpv.io", QMessageBox.ButtonRole.ActionRole)
+        again = box.addButton("Check Again", QMessageBox.ButtonRole.AcceptRole)
+        later = box.addButton("Not Now", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(again)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is website:
+            url = (
+                "https://brew.sh"
+                if platform.system() == "Darwin"
+                else "https://mpv.io/installation/"
+            )
+            QDesktopServices.openUrl(QUrl(url))
+        elif clicked is later:
+            return False
+    return True
 
-    # A packaged build fetches the mpv published with its own release without asking:
-    # there is nothing to decide, it cannot play anything without it.
-    label = (
-        "Downloading mpv, which YTKTV uses to play video.\nThis happens once."
-        if bootstrap.is_frozen()
-        else "Installing mpv..."
-    )
-    dialog = QProgressDialog(label, "", 0, 0)
+
+def _install_libmpv_with_progress(app: Any, dialog_class: Any) -> bool:
+    dialog = dialog_class("Installing mpv. This can take a few minutes...", "", 0, 0)
     dialog.setCancelButton(None)
     dialog.setWindowTitle("YTKTV")
     dialog.setMinimumDuration(0)
@@ -119,18 +152,6 @@ def _ensure_libmpv(app: Any) -> bool:
         app.processEvents()
         worker.join(0.05)
     dialog.close()
-    if not result.get("ok"):
-        if bootstrap.is_frozen():
-            QMessageBox.warning(
-                None,
-                "mpv could not be downloaded",
-                "YTKTV could not download mpv, so it cannot play video yet.\n\n"
-                "Check the internet connection and start YTKTV again; it will try once more.",
-            )
-        else:
-            QMessageBox.warning(
-                None, "Installation failed", f"Could not install mpv. Try manually:\n\n{plan}"
-            )
     return bool(result.get("ok"))
 
 
@@ -204,9 +225,9 @@ def main(argv: list[str] | None = None) -> int:
         return mic_app.self_test(lambda line: log.info("%s", line))
 
     if args.mpv_self_test:
-        from ytktv import mpv_pack
+        from ytktv.player import mpv_check
 
-        return mpv_pack.self_test(lambda line: log.info("%s", line))
+        return mpv_check.self_test(lambda line: log.info("%s", line))
 
     if args.separation_self_test:
         from ytktv.separation import runtime as separation_runtime
@@ -241,14 +262,6 @@ def main(argv: list[str] | None = None) -> int:
     collect_garbage_on_gui_thread(app)
 
     children.start([data_dir()])
-    if bootstrap.is_frozen():
-        from ytktv import mpv_pack
-
-        # After an update the mpv libraries are still the previous version's. A newer
-        # set fetched during the last run is switched to now, before anything loads it;
-        # otherwise it is fetched in the background for next time.
-        mpv_pack.apply_pending()
-        threading.Thread(target=mpv_pack.fetch_next, name="ytktv-mpv-pack", daemon=True).start()
     have_mpv = _ensure_libmpv(app)
     ffmpeg = bootstrap.ensure_ffmpeg()
 

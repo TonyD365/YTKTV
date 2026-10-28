@@ -71,11 +71,18 @@ YTKTV_LOG_FILE=~/ytktv.log ./YTKTV-*.AppImage --debug
 
 ## Where YTKTV keeps its files
 
-| | Settings, playlists, mpv | Cache (instrumentals, downloads) |
+| | Settings, playlists | Cache (instrumentals, downloads) |
 |---|---|---|
 | macOS | `~/Library/Application Support/YTKTV` | `~/Library/Caches/YTKTV` |
 | Windows | `%LOCALAPPDATA%\YTKTV` | `%LOCALAPPDATA%\YTKTV\Cache` |
 | Linux | `~/.local/share/YTKTV` | `~/.cache/YTKTV` |
 
-Deleting the cache is safe: instrumentals are made again when needed. Deleting the `mpv` folder
-makes YTKTV download mpv again on the next start.
+Deleting the cache is safe: instrumentals are made again when needed.
+
+## "mpv is needed"
+
+YTKTV plays video with mpv, which is installed separately. Choose **Install mpv** in the message,
+or install it yourself and start YTKTV again: `brew install mpv` on macOS (after installing
+[Homebrew](https://brew.sh)), your package manager on Linux (`libmpv2`, `mpv-libs` or `mpv`).
+On Windows YTKTV downloads the build listed on [mpv.io](https://mpv.io/installation/) into
+`%LOCALAPPDATA%\YTKTV\lib`.

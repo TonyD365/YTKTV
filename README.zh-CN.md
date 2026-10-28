@@ -70,7 +70,7 @@ xattr -d com.apple.quarantine ~/Downloads/YTKTV-<版本>-macos-universal.pkg
 
 装好后如果仍提示"已损坏"或"无法打开"，再执行 `sudo xattr -dr com.apple.quarantine /Applications/YTKTV.app`。**Windows** 上如果 SmartScreen 拦截，点"更多信息 → 仍要运行"。
 
-**第一次启动会自动下载 mpv。** YTKTV 用 [mpv](https://mpv.io) 播放视频，它是另一个以 GPL 发布的免费软件，没有放进安装包里。第一次启动时程序会显示进度并自动下载，需要联网，只有这一次。
+**YTKTV 会提示安装 mpv。** YTKTV 用 [mpv](https://mpv.io) 播放视频，它是另一个以 GPL 发布的免费软件，不属于 YTKTV，也不在 Release 里。启动时如果找不到 mpv，程序会提示用你系统惯用的方式安装：macOS 用 [Homebrew](https://brew.sh) 执行 `brew install mpv`（没有 Homebrew 会告诉你怎么装，装好后点"Check Again"）；Windows 从 [mpv.io](https://mpv.io/installation/) 列出的 Windows 版下载；Linux 用系统的包管理器安装（会要求输入密码）。已经下载过 mpv 的 1.4、1.5 版用户不受影响。
 
 人声分离：Apple 芯片的 Mac 内置，用 GPU；Windows 和 Linux 第一次运行时按显卡自动下载（NVIDIA、Windows 上的其他 DirectX 12 显卡，或者纯 CPU）；Intel Mac 暂不支持 AI 分离，但"消人声"和左右声道模式可用。
 

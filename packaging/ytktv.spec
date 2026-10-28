@@ -9,8 +9,8 @@
 #                                           GPU or CPU runtime on first run (Windows, Linux)
 #                                 none      no separation at all
 #   YTKTV_MPV_MODE              how the build gets mpv:
-#                                 download  leave it out; the app fetches the separate mpv
-#                                           download on first start (default: mpv is under
+#                                 download  leave it out; the app offers to install mpv on
+#                                           first start (default: mpv is under
 #                                           the GPL and must not ship inside YTKTV)
 #                                 bundle    copy libmpv into the app (private builds only)
 #   YTKTV_ICON_DIR=path         folder with icon.icns / icon.ico (optional)
@@ -152,8 +152,7 @@ if SYSTEM == "Darwin":
             "NSMicrophoneUsageDescription": "YTKTV mixes your microphones into the karaoke sound.",
             "NSLocalNetworkUsageDescription": "YTKTV lets phones on your network pick songs.",
             "LSApplicationCategoryType": "public.app-category.music",
-            # The mpv download holds Homebrew libraries, which only run on the macOS
-            # they were built on or newer.
+            # The bundled libraries only run on the macOS they were built on or newer.
             "LSMinimumSystemVersion": platform.mac_ver()[0].split(".")[0] + ".0",
         },
     )

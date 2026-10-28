@@ -42,8 +42,9 @@ SOFTWARE.
 This license covers YTKTV's own code. The installers also contain software
 from other projects (among them Qt, an FFmpeg program and Python packages),
 each of which remains under its own license. mpv, which YTKTV uses to play
-video, is not part of YTKTV: it is a separate download under the GNU General
-Public License, and nothing in this license restricts what you may do with it.
+video, is not part of YTKTV and is installed separately; it is under the GNU
+General Public License, and nothing in this license restricts what you may do
+with it.
 
 Versions of the Software released before this license was adopted (1.3.3 and
 earlier) were released under the MIT License and remain available under it.

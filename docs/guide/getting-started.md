@@ -29,8 +29,10 @@ Then open the package. If the installed app still will not open, run
 
 ## The first start
 
-1. YTKTV downloads **mpv**, the free video player it uses, with a progress window. This
-   happens once and needs the internet.
+1. If **mpv**, the free video player YTKTV uses, is not installed yet, YTKTV offers to install
+   it: with Homebrew on macOS (`brew install mpv`; without Homebrew it shows how to get it),
+   by downloading the Windows build listed on mpv.io on Windows, or with your package manager
+   on Linux. This happens once and needs the internet.
 2. A short **setup** asks three things, each applied as soon as you choose it:
    - **Sound**: the speakers. Press *Play Test Sound* to check.
    - **MV Screen**: the TV. The music video moves there at once.

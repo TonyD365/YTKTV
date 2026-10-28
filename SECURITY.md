@@ -24,8 +24,9 @@ Some behaviour is by design for a karaoke room on a home network, and is documen
   the sound. Run YTKTV on a network you trust. A room PIN is on the roadmap.
 - **The phone-microphone page uses a self-signed certificate**, made on the computer the first
   time it is needed, so browsers warn about it once.
-- **Downloads are checked.** Updates and the separate mpv download are verified against the
-  `SHA256SUMS` published with each release before they are used.
+- **Downloads are checked.** Updates are verified against the `SHA256SUMS` published with each
+  release before they are installed. mpv is not distributed by YTKTV; it is installed from
+  Homebrew, the Windows build linked from mpv.io, or the Linux package manager.
 - **The installers are not code-signed yet**, so macOS and Windows warn before the first start.
 
 Reports that show a way around these, or anything else that lets someone outside the room
