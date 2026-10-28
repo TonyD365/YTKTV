@@ -1,11 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: User guide and FAQ
-    url: https://github.com/TonyD365/YTKTV/blob/main/docs/guide/README.md
+  - name: 💬 Questions and ideas
+    url: https://github.com/TonyD365/YTKTV/discussions
+    about: How do I…? Which microphone works best? Share an idea before it becomes a feature request.
+  - name: 📖 User guide and FAQ
+    url: https://github.com/TonyD365/YTKTV/wiki
     about: Setting up, the mixing console, phones, and fixes for common problems.
-  - name: Report a security problem privately
-    url: https://github.com/TonyD365/YTKTV/blob/main/SECURITY.md
-    about: Please do not report security problems in public issues.
-  - name: YTKTV website
-    url: https://tonyd365.github.io/YTKTV/
-    about: Downloads and an overview of what YTKTV does.
+  - name: 🔒 Security problem
+    url: https://github.com/TonyD365/YTKTV/security/advisories/new
+    about: Please report vulnerabilities privately.

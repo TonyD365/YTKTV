@@ -491,9 +491,14 @@ class MvWindow(QWidget):
         self._speed = float(state.get("speed") or 1.0)
         self._lyrics_offset = float(state.get("lyrics_offset") or 0.0)
         self._lights_enabled = bool(state.get("lights", True))
-        if status not in ("playing", "paused"):
+        if current is None:
+            # Only when nothing is on: lyrics and the tune arrive while a song is still
+            # loading, and clearing them then left the first song of an evening without
+            # lyrics until the Lyrics button was pressed twice. A change of song clears
+            # them anyway, with the controller's own (empty) lyrics and melody events.
             self.lyrics.set_lines([])
             self.pitch_lane.set_melody(None)
+        if status not in ("playing", "paused"):
             self.set_live_score(None)
         self._sync_animator()
         showing_video = current is not None and status in ("playing", "paused")

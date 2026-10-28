@@ -1,0 +1,36 @@
+# Area labels for pull requests, by the files they touch (see workflows/labeler.yml).
+player:
+  - changed-files:
+      - any-glob-to-any-file:
+          ["src/ytktv/player/**", "src/ytktv/ui/mv_window.py", "src/ytktv/ui/mv_overlays.py", "src/ytktv/bootstrap.py", "src/ytktv/core/preload.py"]
+mixer:
+  - changed-files:
+      - any-glob-to-any-file:
+          ["src/ytktv/audio/**", "src/ytktv/ui/mixer_panel.py", "src/ytktv/ui/console_widgets.py"]
+separation:
+  - changed-files:
+      - any-glob-to-any-file: ["src/ytktv/separation/**", "src/ytktv/ui/separation_setup.py"]
+phone:
+  - changed-files:
+      - any-glob-to-any-file: ["src/ytktv/server/**", "src/ytktv/audio/phone_mic.py"]
+lyrics:
+  - changed-files:
+      - any-glob-to-any-file: ["src/ytktv/youtube/lyrics.py"]
+scoring:
+  - changed-files:
+      - any-glob-to-any-file: ["src/ytktv/core/scoring.py", "src/ytktv/separation/pitch_core.py"]
+updater:
+  - changed-files:
+      - any-glob-to-any-file: ["src/ytktv/updater.py", "src/ytktv/ui/update_manager.py", "src/ytktv/mpv_pack.py"]
+packaging:
+  - changed-files:
+      - any-glob-to-any-file: ["packaging/**", ".github/workflows/release.yml"]
+ci:
+  - changed-files:
+      - any-glob-to-any-file: [".github/**"]
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: ["*.md", "docs/**", "site/**"]
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file: ["pyproject.toml"]

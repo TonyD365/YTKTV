@@ -1,6 +1,6 @@
-name: Feature request
+name: ✨ Feature request
 description: Suggest something YTKTV should do
-labels: [enhancement]
+labels: [enhancement, triage]
 body:
   - type: textarea
     id: problem
