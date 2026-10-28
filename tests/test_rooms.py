@@ -76,7 +76,7 @@ def test_front_desk_card_and_desk_window(qtbot, tmp_path):
     window = DeskWindow(desk, Hub(), "192.168.1.10:8770")
     qtbot.addWidget(window)
     window.add_room()
-    assert "Pairing code" in window.code_label.text()
+    assert window.code_label.text().isdigit()
     assert window.room_list.count() == 1
     window.room_list.setCurrentRow(0)
     window.unbind_room()
