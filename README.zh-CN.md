@@ -39,7 +39,8 @@
 
 | 点歌台 | 调音台 |
 |---|---|
-| ![点歌台的已点歌曲页面](docs/images/console.png) | ![四个通道的调音台](docs/images/mixer.png) |
+| ![点歌台首页：正在播放、下一首和功能大瓷砖](docs/images/console.png) | ![四个通道的调音台](docs/images/mixer.png) |
+| ![派对页：弹幕、表情和气氛音效](docs/images/party.png) | ![小游戏：骰子、谁唱下一首、真心话大冒险](docs/images/games.png) |
 
 <p align="center">
   <img src="docs/images/phone.png" alt="手机页面：我点的歌和等待时间、本场最佳；以及播放、歌词和人声控制" width="560">

@@ -43,7 +43,8 @@ for macOS, Windows and Linux.
 
 | The song console | The mixing console |
 |---|---|
-| ![The song console with the queue of selected songs](docs/images/console.png) | ![The mixing console with four channel strips](docs/images/mixer.png) |
+| ![The console home: now playing, up next and big tiles for every feature](docs/images/console.png) | ![The mixing console with four channel strips](docs/images/mixer.png) |
+| ![The Party tab: danmaku, emoji reactions and crowd sounds](docs/images/party.png) | ![The Games tab: dice, who sings next, truth or dare](docs/images/games.png) |
 
 <p align="center">
   <img src="docs/images/phone.png" alt="The phone page: your songs with waiting times, the queue and tonight's best scores; and the remote with playback, lyrics and vocal controls" width="560">
