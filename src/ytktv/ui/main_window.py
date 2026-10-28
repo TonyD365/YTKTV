@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from ytktv.core.controller import PITCH_RANGE, SPEEDS, KTVController
 from ytktv.core.models import VocalMode
+from ytktv.ui.games_page import GamesPage
 from ytktv.ui.mixer_panel import MixerPanel
 from ytktv.ui.mv_window import MvWindow
 from ytktv.ui.pages import (
@@ -58,6 +59,7 @@ NAV = (
     ("playlists", "≡   Playlists"),
     ("queue", "🎤   Selected"),
     ("history", "✓   Sung"),
+    ("games", "🎲   Games"),
     ("mixer", "🎚   Mixer"),
     ("settings", "⚙   Settings"),
 )
@@ -253,6 +255,7 @@ class MainWindow(QMainWindow):
             "playlists": PlaylistsPage(self.ctx),
             "queue": QueuePage(self.ctx),
             "history": HistoryPage(self.ctx),
+            "games": GamesPage(self.ctx),
             "mixer": self.mixer_page,
             "settings": self.settings_page,
         }
@@ -567,6 +570,8 @@ class MainWindow(QMainWindow):
         elif topic == "score":
             self.mv_window.show_score(payload)
             self.show_toast(f"Score: {payload['points']}  ·  {payload['grade']}")
+        elif topic == "game":
+            self.mv_window.show_game(payload)
         elif topic == "mixer":
             self.mixer_page.apply_state()
         elif topic == "phones":

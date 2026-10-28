@@ -173,6 +173,13 @@
     <h3>Microphones</h3>
     <div class="chips" id="presets"></div>
     <div id="mics"></div>
+    <h3>Games</h3>
+    <div class="pad">
+      <button data-game="dice">🎲 Dice</button>
+      <button data-game="spin">🎡 Who sings next</button>
+      <button data-game="truth">💬 Truth</button>
+      <button data-game="dare">🔥 Dare</button>
+    </div>
     <h3>Crowd</h3>
     <div class="pad">
       <button data-sfx="applause">Applause</button>
@@ -423,6 +430,7 @@ for (const b of document.querySelectorAll("nav button")) {
   });
 }
 document.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => api("/api/player/" + b.dataset.act, "POST")));
+document.querySelectorAll("[data-game]").forEach((b) => b.addEventListener("click", () => api("/api/game/" + b.dataset.game, "POST")));
 document.querySelectorAll("[data-sfx]").forEach((b) => b.addEventListener("click", () => api("/api/sfx/" + b.dataset.sfx, "POST")));
 document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => {
   api("/api/sound", "POST", {vocal_mode: b.dataset.mode});

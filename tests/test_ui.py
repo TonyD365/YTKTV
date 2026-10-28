@@ -671,3 +671,19 @@ def test_first_song_shows_its_lyrics_without_touching_the_button(window, qtbot, 
     qtbot.waitUntil(lambda: main._state["status"] == "playing", timeout=3000)
     qtbot.wait(100)
     assert mv.lyrics.has_lines()  # shown without pressing Lyrics off and on
+
+
+def test_party_games_show_on_the_console_and_mv_screen(window, qtbot):
+    import random
+
+    from ytktv.core import games
+
+    main, _ = window
+    page = main.pages["games"]
+    result = page.play("dice")
+    assert result["title"].endswith("Dice") and len(result["text"].split()) == 5
+    qtbot.waitUntil(lambda: "Dice" in main.mv_window.game_card.text(), timeout=3000)
+    assert "Dice" in page.result.text()
+    assert page.play("truth")["text"] in games.TRUTHS
+    assert games.spin(["Kim", "Alex"], random.Random(1))["text"] in ("Kim", "Alex")
+    assert games.spin([])["text"] == "Add singers first"

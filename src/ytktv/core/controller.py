@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from ytktv import __version__
 from ytktv.audio import presets
 from ytktv.config import SettingsStore
+from ytktv.core import games
 from ytktv.core.events import EventBus
 from ytktv.core.library import Library
 from ytktv.core.models import PlayStatus, QueueItem, Song, StemStatus, VocalMode
@@ -640,6 +641,22 @@ class KTVController:
             self._danmaku_times.append(now)
         self.bus.emit("danmaku", {"text": text})
         return True
+
+    def play_game(self, game: str) -> dict[str, str]:
+        """Run a party game and show its result big on the MV screen."""
+        if game == "dice":
+            result = games.roll_dice()
+        elif game == "spin":
+            names = [i.singer for i in self.queue.snapshot()]
+            if self.current is not None:
+                names.append(self.current.singer)
+            result = games.spin(names)
+        elif game in ("truth", "dare"):
+            result = games.truth_or_dare(game)
+        else:
+            raise ValueError(f"unknown game {game!r}")
+        self.bus.emit("game", result)
+        return result
 
     def _load_lyrics(self, item: QueueItem) -> None:
         fetch = getattr(self.resolver, "lyrics", None)
