@@ -9,8 +9,8 @@
 #                                           GPU or CPU runtime on first run (Windows, Linux)
 #                                 none      no separation at all
 #   YTKTV_MPV_MODE              how the build gets mpv:
-#                                 download  leave it out; the app fetches the separate mpv
-#                                           download on first start (default: mpv is under
+#                                 download  leave it out; the app offers to install mpv on
+#                                           first start (default: mpv is under
 #                                           the GPL and must not ship inside YTKTV)
 #                                 bundle    copy libmpv into the app (private builds only)
 #   YTKTV_ICON_DIR=path         folder with icon.icns / icon.ico (optional)
@@ -112,6 +112,16 @@ analysis = Analysis(
     excludes=excludes,
     noarchive=False,
 )
+if MPV_MODE != "bundle":
+    # python-mpv looks libmpv up by name, and PyInstaller follows that to whatever mpv
+    # the build machine has installed. It must not ship: mpv is under the GPL and is
+    # installed separately (see bootstrap.install_libmpv).
+    def _is_mpv(entry):
+        name = Path(entry[0]).name.lower()
+        return name.startswith(("libmpv", "mpv-")) and (".so" in name or name.endswith((".dll", ".dylib")))
+
+    analysis.binaries = [entry for entry in analysis.binaries if not _is_mpv(entry)]
+
 pyz = PYZ(analysis.pure)
 
 icon = None
@@ -152,8 +162,7 @@ if SYSTEM == "Darwin":
             "NSMicrophoneUsageDescription": "YTKTV mixes your microphones into the karaoke sound.",
             "NSLocalNetworkUsageDescription": "YTKTV lets phones on your network pick songs.",
             "LSApplicationCategoryType": "public.app-category.music",
-            # The mpv download holds Homebrew libraries, which only run on the macOS
-            # they were built on or newer.
+            # The bundled libraries only run on the macOS they were built on or newer.
             "LSMinimumSystemVersion": platform.mac_ver()[0].split(".")[0] + ".0",
         },
     )

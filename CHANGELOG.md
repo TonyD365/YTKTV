@@ -3,6 +3,16 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 1.6.0
+
+- **mpv is no longer attached to the releases.** When YTKTV finds no mpv it offers to install it
+  the usual way for each system: Homebrew on macOS, the Windows build listed on mpv.io, the
+  package manager on Linux. Copies that already downloaded mpv keep using it.
+- The first song's lyrics show without pressing Lyrics off and on.
+- One corrupt sample from a microphone no longer silences all sound until a restart.
+- A live roadmap on the website, issue labels and forms, automatic pull request labels,
+  Dependabot, and a more detailed benchmark report on pull requests.
+
 ## 1.5.0
 
 - **Windows: YTKTV starts.** Every Windows build up to 1.4.1 failed to start (the web server

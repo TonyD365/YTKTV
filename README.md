@@ -153,11 +153,17 @@ If macOS still refuses to open the app after installing, run
 `sudo xattr -dr com.apple.quarantine /Applications/YTKTV.app`. On Windows, choose
 **More info → Run anyway** in the SmartScreen prompt.
 
-**mpv is downloaded on first start.** YTKTV plays video with [mpv](https://mpv.io), a separate
-free program under the GPL. It is not inside the installers; the first time YTKTV starts it
-downloads the `YTKTV-mpv-<platform>.zip` published with the same release, showing a progress
-window (you need to be online for that first start). The zip holds mpv, the libraries it needs, their
-license texts and a list of where each came from.
+**YTKTV asks to install mpv.** YTKTV plays video with [mpv](https://mpv.io), a separate free
+program under the GPL, which is not part of YTKTV or its releases. When YTKTV starts and finds
+no mpv, it offers to install it the usual way for your system:
+
+| System | How mpv is installed |
+|---|---|
+| macOS | `brew install mpv` with [Homebrew](https://brew.sh). Without Homebrew, YTKTV explains how to get it and checks again |
+| Windows | The Windows build linked from [mpv.io](https://mpv.io/installation/), downloaded into YTKTV's data folder |
+| Linux | Your package manager (`libmpv2`, `mpv-libs` or `mpv`), after asking for your password |
+
+Copies of YTKTV 1.4 and 1.5 that already downloaded mpv keep using it.
 
 ### Vocal separation and your graphics card
 
@@ -344,8 +350,8 @@ Versions come from git tags; there is no version number in the source.
    publish.
 3. The `Release` workflow builds the universal macOS `.pkg`, the Windows installer and the
    Linux AppImage from that tag and attaches them, together with `SHA256SUMS`, to the release.
-   It also attaches one `YTKTV-mpv-<platform>.zip` per platform: mpv is kept out of the
-   installers and fetched by the app on first start.
+   mpv is neither inside the installers nor attached to the release; each build installs it the
+   way a user would, only to check that the packaged app plays through it.
 
 Installed copies check `releases/latest` at startup and every six hours. Once the installers
 are attached they download the one for their platform, verify its checksum, and offer to
@@ -362,8 +368,7 @@ The pictures in the README and on the website come from `python scripts/readme_i
 (add `--phone` for the phone page, which needs Google Chrome); nothing opens on screen.
 
 To build the macOS package locally: `pip install -e ".[package]"`, then
-`packaging/macos/build_pkg.sh`. With mpv installed (`brew install mpv`),
-`python packaging/build_mpv_pack.py macos-arm64 dist` builds the separate mpv download.
+`packaging/macos/build_pkg.sh`.
 
 ## Contributing
 
@@ -399,6 +404,6 @@ YTKTV is free to use, copy, modify and share under the [YTKTV License](LICENSE).
 
 The [license text](LICENSE) is what counts. It covers YTKTV's own code. The installers also
 contain Qt, an FFmpeg program and Python packages, which stay under their own licenses; mpv
-is a separate download under the GPL and is not covered by YTKTV's license at all. It is not an OSI-approved open-source license,
+is installed separately, under the GPL, and is not covered by YTKTV's license at all. It is not an OSI-approved open-source license,
 because those do not allow a ban on selling. Versions 1.3.3 and earlier were released under
 the MIT License and remain available under it.

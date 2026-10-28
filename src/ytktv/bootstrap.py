@@ -16,7 +16,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from ytktv import mpv_pack
 from ytktv.config import data_dir
 from ytktv.net import urlopen
 
@@ -55,8 +54,9 @@ def _search_dirs() -> list[Path]:
     bundled = bundle_dir()
     if bundled:
         dirs.append(bundled)
-    if mpv_pack.installed():
-        dirs.append(mpv_pack.pack_dir())  # downloaded by a packaged build on first start
+    legacy = data_dir() / "mpv"
+    if (legacy / "INSTALLED").exists():
+        dirs.append(legacy)  # downloaded by YTKTV 1.4 and 1.5, which shipped mpv separately
     dirs.append(lib_dir())
     if platform.system() == "Darwin":
         dirs += [Path("/opt/homebrew/lib"), Path("/usr/local/lib")]
@@ -121,16 +121,23 @@ def _linux_install_command() -> list[str] | None:
     return [elevate, "sh", "-c", script]
 
 
+def homebrew() -> str | None:
+    """Path of Homebrew's ``brew``, if installed.
+
+    An app opened from the Finder has a short PATH without Homebrew's folders, so
+    the usual places are checked as well.
+    """
+    for candidate in (shutil.which("brew"), "/opt/homebrew/bin/brew", "/usr/local/bin/brew"):
+        if candidate and Path(candidate).exists():
+            return candidate
+    return None
+
+
 def install_plan() -> str | None:
     """Human-readable description of what :func:`install_libmpv` would do."""
     system = platform.system()
-    if is_frozen():
-        # Packaged builds leave mpv out (its license does not allow shipping it inside
-        # YTKTV) and fetch the build that was made together with them.
-        asset = mpv_pack.asset_name()
-        return f"Download {asset} from github.com/{mpv_pack.REPO} (one time)" if asset else None
     if system == "Darwin":
-        return "brew install mpv" if shutil.which("brew") else None
+        return "brew install mpv" if homebrew() else None
     if system == "Windows":
         return f"Download libmpv from github.com/{MPV_WINDOWS_REPO} into {lib_dir()}"
     command = _linux_install_command()
@@ -199,14 +206,15 @@ def install_libmpv(report: Callable[[str], None] = lambda _msg: None) -> bool:
     """Install libmpv for this platform. Returns True when it is usable afterwards."""
     system = platform.system()
     try:
-        if is_frozen():
-            mpv_pack.install(report)
-        elif system == "Darwin":
-            brew = shutil.which("brew")
+        if system == "Darwin":
+            brew = homebrew()
             if not brew:
                 return False
             report("Running: brew install mpv (this can take a few minutes)...")
-            subprocess.run([brew, "install", "mpv"], check=True)
+            # Homebrew needs its own folders on PATH, which an app from the Finder lacks.
+            env = dict(os.environ)
+            env["PATH"] = f"{Path(brew).parent}:{env.get('PATH', '/usr/bin:/bin')}"
+            subprocess.run([brew, "install", "mpv"], check=True, env=env)
         elif system == "Windows":
             install_windows_libmpv(report)
         else:
