@@ -29,6 +29,13 @@ looks and works like real hardware puts your microphones on top with echo and re
 for macOS, Windows and Linux.
 
 <p align="center">
+  <a href="https://github.com/TonyD365/YTKTV/releases/latest"><img alt="Download YTKTV for free" src="https://img.shields.io/badge/⬇%20Download%20YTKTV%20free-ff2d95?style=for-the-badge&logo=github&logoColor=white" height="44"></a>
+</p>
+
+**Three steps:** 1. download and install it · 2. plug the computer into the TV and open YTKTV ·
+3. friends scan the QR code on the TV with their phones and start picking songs.
+
+<p align="center">
   <img src="docs/images/demo.gif" alt="The MV screen while someone sings: the lyrics fill with colour word by word, the voice is drawn over the tune in the pitch lane, messages fly across and the lights pulse" width="860">
   <br><sub>The MV screen while someone sings: lyrics that follow the singer, a pitch lane, a live score, danmaku and lights.</sub>
 </p>
