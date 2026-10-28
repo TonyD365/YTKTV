@@ -142,6 +142,8 @@
 
   <section id="tab-remote">
     <a id="mic-link" class="miclink" hidden>Use this phone as a microphone</a>
+    <h3>Cheer the singer</h3>
+    <div class="chips" id="reactions"></div>
     <h3>Playback</h3>
     <div class="pad">
       <button data-act="pause" id="btn-pause">Pause</button>
@@ -342,6 +344,13 @@ function render() {
   $("scoring").textContent = state.scoring ? "Scoring: On" : "Scoring: Off";
   $("mic-link").hidden = !state.phone_mic_url;
   if (state.phone_mic_url) $("mic-link").href = state.phone_mic_url;
+  const reactions = $("reactions");
+  if (!reactions.children.length && state.reactions) {
+    for (const emoji of state.reactions) {
+      reactions.append(el("button", {class: "chip", style: "font-size: 24px",
+        onclick: () => api("/api/reaction", "POST", {emoji}).catch((e) => toast(e.message, true))}, emoji));
+    }
+  }
   $("show-lyrics").classList.toggle("on", state.show_lyrics);
   $("show-lyrics").textContent = state.show_lyrics ? "Lyrics: On" : "Lyrics: Off";
   const shift = state.lyrics_offset || 0;

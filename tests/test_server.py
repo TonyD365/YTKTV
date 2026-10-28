@@ -136,3 +136,13 @@ def test_phones_are_told_apart_and_find_their_own_songs(client):
     state = http.get("/api/state").json()
     assert state["current"]["owner"] == me
     assert [item["owner"] for item in state["queue"]] == [me, me, ""]  # the last from the console
+
+
+def test_reactions_over_http(client):
+    http, controller = client
+    seen = []
+    controller.bus.subscribe(lambda topic, data: seen.append(data) if topic == "reaction" else None)
+    assert http.get("/api/state").json()["reactions"][0] == "❤️"
+    assert http.post("/api/reaction", json={"emoji": "🎉"}).json() == {"ok": True}
+    assert seen == [{"emoji": "🎉"}]
+    assert http.post("/api/reaction", json={"emoji": "💩"}).status_code == 429
