@@ -85,7 +85,7 @@ class Settings:
     auto_update: bool = True
     # The first-run setup has been finished or skipped.
     setup_done: bool = False
-    # Binding to a YTKTV Desk (front desk). Empty desk_url = a stand-alone machine.
+    # Binding to a YTKTV Desk (staff terminal). Empty desk_url = a stand-alone machine.
     desk_url: str = ""
     room_id: str = ""
     room_key: str = ""

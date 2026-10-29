@@ -1,6 +1,6 @@
 # YTKTV Desk: running several rooms
 
-YTKTV Desk is the front desk for a home or a shop with more than one karaoke room. One
+YTKTV Desk is the staff terminal for a home or a shop with more than one karaoke room. One
 computer runs the Desk; every room's computer runs YTKTV and is bound to it. From the Desk
 you open and close rooms, time them, take service calls and orders, bill, book, and keep the
 day's records.
@@ -19,13 +19,13 @@ day's records.
 
 ## Install and pair
 
-1. Install **YTKTV Desk** on the front-desk computer: `YTKTV-Desk-<version>-…` from the
+1. Install **YTKTV Desk** on the staff computer: `YTKTV-Desk-<version>-…` from the
    [latest release](https://github.com/TonyD365/YTKTV/releases/latest) (on macOS, run
    `xattr -d com.apple.quarantine` on the package first, as for YTKTV).
 2. Every room needs YTKTV on the same network (Wi-Fi or cable).
 3. On the Desk, press **＋ Add Room**. It shows a 6-digit code (good for 5 minutes, once) and a
    **security code** of four pictures.
-4. On the room's YTKTV open **Settings → Front Desk**, press **Find Desks** and pick the desk
+4. On the room's YTKTV open **Settings → Staff Terminal**, press **Find Desks** and pick the desk
    (or type the address the Desk shows, such as `192.168.1.10:8770`), enter the code and a room
    name, press **Bind**.
 5. YTKTV shows four pictures. Press **Yes** only if they are the same as on the Desk.

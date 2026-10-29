@@ -1,4 +1,4 @@
-"""Start YTKTV Desk: the front desk server and its window."""
+"""Start YTKTV Desk: the staff terminal server and its window."""
 
 from __future__ import annotations
 

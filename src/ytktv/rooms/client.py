@@ -1,4 +1,4 @@
-"""Keeps a bound room connected to the front desk."""
+"""Keeps a bound room connected to the staff terminal."""
 
 from __future__ import annotations
 
@@ -111,7 +111,7 @@ class RoomClient:
                         await ws.send(session.answer(first))
                         first = session.open(str(await ws.recv()))
             except DeskImpostor:
-                log.warning("ignored a machine pretending to be the front desk")
+                log.warning("ignored a machine pretending to be the staff terminal")
                 return
             if first.get("type") != "ack":
                 self._handle(first)  # a signed unbind: the desk no longer knows this room

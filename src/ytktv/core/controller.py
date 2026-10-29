@@ -72,7 +72,7 @@ class KTVController:
         offline: OfflineSongs | None = None,
     ) -> None:
         self.store = store
-        self.room_closed = False  # set by the front desk; a closed room takes no songs
+        self.room_closed = False  # set by the staff terminal; a closed room takes no songs
         self.pk_mode = False  # two microphones battle on the same song
         self.front_desk: Any = None  # the RoomClient when this machine is a room
         self.settings = store.settings
@@ -220,14 +220,14 @@ class KTVController:
         self._emit_state()
 
     def _service_menu(self) -> dict[str, Any] | None:
-        """The front desk's menu for the phone page, while this room is open."""
+        """The staff terminal's menu for the phone page, while this room is open."""
         desk = self.front_desk
         if desk is None or self.room_closed or not desk.online:
             return None
         return {"currency": desk.currency, "products": desk.products}
 
     def close_room(self) -> None:
-        """The front desk closed this room: stop singing and forget the queue."""
+        """The staff terminal closed this room: stop singing and forget the queue."""
         self.room_closed = True
         self.queue.clear()
         self._sync_preload()

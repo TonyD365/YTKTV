@@ -1,4 +1,4 @@
-"""Binding a room to the front desk, and the rule for undoing it."""
+"""Binding a room to the staff terminal, and the rule for undoing it."""
 
 from __future__ import annotations
 

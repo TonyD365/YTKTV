@@ -23,7 +23,7 @@
 **YTKTV 把一台电脑和一台电视变成 KTV 包厢。** YouTube 上的每一首歌都在点歌本里。电视上放 MV 和卡拉 OK 歌词，AI 把原唱的人声从歌里去掉，朋友们用手机扫码点歌（不用装 App），一台外观和用法都像真硬件的调音台把你的麦克风叠加上去，带回声和混响。免费，支持 macOS、Windows 和 Linux。
 
 <p align="center">
-  <a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><img src="docs/images/promo-poster.png" alt="70 秒看懂 YTKTV 和服务台的视频" width="720"></a>
+  <a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><img src="docs/images/promo-poster.png" alt="70 秒看懂 YTKTV 和管理终端的视频" width="720"></a>
   <br><a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><b>▶ 70 秒视频演示</b></a>
 </p>
 
@@ -58,22 +58,22 @@
   <br><sub>手机页面：我点的歌和要等多久、本场最佳，以及遥控。</sub>
 </p>
 
-## YTKTV Desk：管理多个包厢的服务台
+## YTKTV Desk：管理多个包厢的管理终端
 
 <p align="center">
   <img src="docs/images/desk.png" alt="YTKTV Desk：房间格子墙显示每个房间的状态、客人、剩余时间、消费和正在唱的歌，右边是订单，下面是服务呼叫" width="860">
 </p>
 
-家里不止一个房间？在一台电脑上运行 **YTKTV Desk**，把每台 YTKTV 绑定上去，就像真 KTV 的前台管包厢一样：大人一间、小孩一间。
+家里不止一个房间？在一台电脑上运行 **YTKTV Desk**，把每台 YTKTV 绑定上去，就像真 KTV 的管理终端管包厢一样：大人一间、小孩一间。
 
 - **开房、续时、关房**：1～3 小时或不限时。关着的房间显示「This room is closed」，电视全黑；时间到了等这首歌唱完再关房。
-- **呼叫和点单**：客人在控制台或手机上呼叫服务、从菜单点东西，服务台会「哔」一声，房间格子闪烁。
+- **呼叫和点单**：客人在控制台或手机上呼叫服务、从菜单点东西，管理终端会「哔」一声，房间格子闪烁。
 - **收银**：按小时（可以每间房不同价）、最低消费、打折、抹零，现金、刷卡、微信、支付宝或会员余额付款；账单可以打印或存 PDF，也能用任何已安装的打印机打 58/80mm 小票。
 - **会员**：储值、积分、会员价。
-- **前台管理**：预定（日历和时间轴）、房型和座位数、待清洁和维修、换房、全场广播、远程切歌暂停调音量、交班报表、每日记录。
-- **安全**：用一次性配对码和四个图案的安全码绑定；房间只听服务台签了名的指令；服务台换了 IP 也能按 ID 找到；绑定是永久的，除非服务台连续 7 天不在线；服务台可以设密码。
+- **日常管理**：预定（日历和时间轴）、房型和座位数、待清洁和维修、换房、全场广播、远程切歌暂停调音量、交班报表、每日记录。
+- **安全**：用一次性配对码和四个图案的安全码绑定；房间只听管理终端签了名的指令；管理终端换了 IP 也能按 ID 找到；绑定是永久的，除非管理终端连续 7 天不在线；管理终端可以设密码。
 
-从[最新 Release](https://github.com/TonyD365/YTKTV/releases/latest) 下载 `YTKTV-Desk-<版本>-…`，然后在每个房间的 YTKTV 里打开 **Settings → Front Desk**，点 **Find Desks**，输入服务台上显示的配对码。详细步骤见 [服务台使用指南（英文）](docs/guide/front-desk.md)。
+从[最新 Release](https://github.com/TonyD365/YTKTV/releases/latest) 下载 `YTKTV-Desk-<版本>-…`，然后在每个房间的 YTKTV 里打开 **Settings → Staff Terminal**，点 **Find Desks**，输入管理终端上显示的配对码。详细步骤见 [管理终端使用指南（英文）](docs/guide/front-desk.md)。
 
 ## 快速开始
 
@@ -92,10 +92,10 @@
 | Linux（x86-64） | `YTKTV-<版本>-linux-x86_64.AppImage` |
 | Windows ARM 电脑 | `YTKTV-<版本>-windows-arm64-setup.exe` |
 | Linux ARM（64 位，比如树莓派 4/5） | `YTKTV-<版本>-linux-aarch64.AppImage` |
-| 服务台 YTKTV Desk，macOS（Apple 芯片和 Intel） | `YTKTV-Desk-<版本>-macos-universal.pkg` |
-| 服务台 YTKTV Desk，Windows | `YTKTV-Desk-<版本>-windows-x64-setup.exe` |
-| 服务台 YTKTV Desk，Linux | `YTKTV-Desk-<版本>-linux-x86_64.AppImage` |
-| 服务台 YTKTV Desk，ARM | `YTKTV-Desk-<版本>-windows-arm64-setup.exe` 或 `-linux-aarch64.AppImage` |
+| 管理终端 YTKTV Desk，macOS（Apple 芯片和 Intel） | `YTKTV-Desk-<版本>-macos-universal.pkg` |
+| 管理终端 YTKTV Desk，Windows | `YTKTV-Desk-<版本>-windows-x64-setup.exe` |
+| 管理终端 YTKTV Desk，Linux | `YTKTV-Desk-<版本>-linux-x86_64.AppImage` |
+| 管理终端 YTKTV Desk，ARM | `YTKTV-Desk-<版本>-windows-arm64-setup.exe` 或 `-linux-aarch64.AppImage` |
 
 安装包还没有付费签名。**macOS** 上打开安装包前，先在"终端"里去掉下载隔离标记：
 
@@ -122,7 +122,7 @@ xattr -d com.apple.quarantine ~/Downloads/YTKTV-<版本>-macos-universal.pkg
 - **离线下载**：歌曲上点 ⬇（或者「下载全部收藏」），连同歌词和伴奏存在电脑上，没网也能唱。
 - **PK 对战**：两支麦克风唱同一首歌，电视上两条实时分数条，唱完判输赢。
 - **手机荧光棒**：手机全屏亮起，颜色跟着电视的氛围灯一起变。
-- **包厢系统**：配合服务台 YTKTV Desk 使用，见上面。
+- **包厢系统**：配合管理终端 YTKTV Desk 使用，见上面。
 - **其他**：升降调（±6 个半音）、变速、播放队列拖动排序、自动更新。
 
 ## 常见问题

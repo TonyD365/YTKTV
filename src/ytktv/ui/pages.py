@@ -51,7 +51,7 @@ class Context:
     thumbnails: ThumbnailLoader
     # Jump to the Search page and search for this text (set by the main window).
     open_search: Callable[[str], None] = lambda _query: None
-    room_client: RoomClient | None = None  # set when the app runs with a front desk
+    room_client: RoomClient | None = None  # set when the app runs with a staff terminal
 
 
 # Tags for songs downloaded to keep, by their status.

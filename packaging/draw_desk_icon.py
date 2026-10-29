@@ -1,7 +1,7 @@
 """Redraw the YTKTV Desk icon. Usage: python packaging/draw_desk_icon.py
 
 Writes src/ytktv/desk/assets/icon.png (1024 px): the same rounded tile as the YTKTV
-icon, with a front-desk service bell and the name, so the two apps look related but never get
+icon, with a service bell and the name, so the two apps look related but never get
 mixed up in the Dock or the taskbar.
 """
 

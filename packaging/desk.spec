@@ -1,4 +1,4 @@
-# PyInstaller spec for YTKTV Desk, the front desk that manages YTKTV rooms.
+# PyInstaller spec for YTKTV Desk, the staff terminal that manages YTKTV rooms.
 #
 #   pyinstaller packaging/desk.spec --noconfirm
 #
