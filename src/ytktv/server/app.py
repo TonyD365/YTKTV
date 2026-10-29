@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import hashlib
 import logging
+import random
 import socket
 import threading
 from collections.abc import AsyncIterator
@@ -151,6 +152,11 @@ class _Broadcaster:
         for client in self.clients:
             if client.qsize() < 100:
                 client.put_nowait((topic, payload))
+
+
+class GameIn(BaseModel):
+    value: int | None = Field(default=None, ge=1, le=100)
+    player: str = Field(default="", max_length=30)
 
 
 class OrderItem(BaseModel):
@@ -314,11 +320,24 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/game/{name}")
-    def game(name: str) -> dict[str, str]:
+    def game(name: str, request: Request, body: GameIn | None = None) -> dict[str, str]:
+        player = (body.player if body else "") or f"Phone {client_id(request)[-3:]}"
+        if name == "countdown":
+            controller.countdown(10)
+            return {"title": "⏱ Countdown", "text": "10", "detail": ""}
+        if name == "random":
+            category = random.choice(list(HOT_CATEGORIES))
+            result = controller.random_song(source.hot(category), who=player)
+            if result is None:
+                raise HTTPException(503, "could not load a song list")
+            return result
         try:
-            return controller.play_game(name)
+            result = controller.play_game(name, value=body.value if body else None, player=player)
         except ValueError as exc:
             raise HTTPException(404, "no such game") from exc
+        if name == "liar_roll":  # only this phone sees its dice
+            result = dict(result, mine=controller.liars.hand(player))
+        return result
 
     @app.post("/api/danmaku")
     def danmaku(body: DanmakuIn) -> dict[str, bool]:
