@@ -51,7 +51,7 @@ for macOS, Windows and Linux.
 |---|---|
 | 🎵 **Every YouTube video is a song**<br>Search, paste a link or browse hot songs. Plays without ads. | 🎤 **Original or instrumental, any song**<br>AI vocal removal in the background, on your GPU when there is one. Switch without a gap. |
 | 📱 **Phones are the remote, and the microphone**<br>Scan a QR code to queue songs. A phone can even sing into the mixer. | 🎚️ **A mixing console that feels real**<br>Four channels with EQ, compressor, echo, reverb and a feedback guard. |
-| 🏆 **Live pitch and scores**<br>See your voice against the tune as you sing, then tonight's leaderboard. Duets score each singer. | ✨ **The KTV atmosphere**<br>Karaoke lyrics, guide vocal, key and tempo, danmaku, applause buttons, lights and party games (dice, who sings next, truth or dare). |
+| 🏆 **Live pitch and scores**<br>See your voice against the tune as you sing, then tonight's leaderboard. Duets score each singer. | ✨ **The KTV atmosphere**<br>Karaoke lyrics, guide vocal, key and tempo, danmaku, applause buttons, lights and party games: number bomb, liar's dice, truth or dare, random song and more. |
 
 | The song console | The mixing console |
 |---|---|
@@ -62,6 +62,31 @@ for macOS, Windows and Linux.
   <img src="docs/images/phone.png" alt="The phone page: your songs with waiting times, the queue and tonight's best scores; and the remote with playback, lyrics and vocal controls" width="560">
   <br><sub>The phone page: your songs and waiting times, tonight's best, and the remote.</sub>
 </p>
+
+## YTKTV Desk: a front desk for many rooms
+
+<p align="center">
+  <img src="docs/images/desk.png" alt="YTKTV Desk: a board of rooms with their status, guest, time left, spend and song, the selected room's orders, and the service calls bar" width="860">
+</p>
+
+Got more than one room? Run **YTKTV Desk** on one computer and bind every YTKTV to it, the
+way a real KTV's front desk runs its rooms: the adults in one room, the kids in another.
+
+- **Open, extend and close rooms** for 1–3 hours or without a limit. A closed room shows
+  "This room is closed" and its TV goes black; when time is up the song finishes, then the room closes.
+- **Service and orders**: guests call the desk or order from its menu on the console or their
+  phones. The desk beeps and the room's tile flashes.
+- **Billing**: price per hour (per room if you like), a minimum spend, stock that comes off the
+  menu when it runs out, and a bill to print or save as a PDF.
+- **Run the floor**: bookings with a calendar and timeline, room types and seats, cleaning and
+  maintenance, change room, broadcasts to every room, remote skip, pause and volume, a shift
+  report and the day's records.
+- **Safe by design**: rooms bind with a one-time code and a four-picture security code, obey only
+  what the desk signs, and find it by its ID even when its IP address changes. A binding is
+  permanent unless the desk has been gone for 7 days. The desk can have a password.
+
+Download `YTKTV-Desk-<version>-…` from the [latest release](https://github.com/TonyD365/YTKTV/releases/latest),
+then in each room open **Settings → Front Desk**, press **Find Desks** and enter the code the desk shows.
 
 ## Quick start
 
@@ -154,6 +179,9 @@ Download the installer for your system from the
 | macOS (Apple Silicon and Intel) | `YTKTV-<version>-macos-universal.pkg` |
 | Windows 10/11 (64-bit) | `YTKTV-<version>-windows-x64-setup.exe` |
 | Linux (x86-64) | `YTKTV-<version>-linux-x86_64.AppImage` |
+| YTKTV Desk, macOS | `YTKTV-Desk-<version>-macos-arm64.pkg` (Apple Silicon) or `-macos-x86_64.pkg` (Intel) |
+| YTKTV Desk, Windows | `YTKTV-Desk-<version>-windows-x64-setup.exe` |
+| YTKTV Desk, Linux | `YTKTV-Desk-<version>-linux-x86_64.AppImage` |
 
 The installers are not code-signed yet. On macOS, remove the download quarantine with `xattr`
 before opening the package:
@@ -213,6 +241,8 @@ package manager on Linux (`libmpv2` / `mpv-libs` / `mpv`). ffmpeg is bundled.
 Linux also needs PortAudio for the mixer: `sudo apt-get install libportaudio2`.
 
 NVIDIA users can install `".[separation-cuda]"` instead for CUDA-accelerated separation.
+
+The same install gives you YTKTV Desk too: run `ytktv-desk`.
 
 ## Using it
 
