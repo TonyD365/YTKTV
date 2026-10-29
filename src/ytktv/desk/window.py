@@ -29,7 +29,14 @@ from PySide6.QtWidgets import (
 from ytktv.desk import lock
 from ytktv.desk.billing import bill
 from ytktv.desk.pages import BookingsPage, RecordsPage, ShiftDialog
-from ytktv.desk.panels import BillDialog, BroadcastDialog, OrdersBox, SecuritySettings, ShopSettings
+from ytktv.desk.panels import (
+    MAX_PRICE,
+    BillDialog,
+    BroadcastDialog,
+    OrdersBox,
+    SecuritySettings,
+    ShopSettings,
+)
 from ytktv.desk.server import Hub, tell, tell_all_products, unbind
 from ytktv.desk.store import CODE_SECONDS, Booking, DeskStore, Room
 from ytktv.rooms.state import format_left
@@ -85,6 +92,8 @@ QCalendarWidget QAbstractItemView:enabled { color: white; selection-background-c
   selection-color: white; }
 QCalendarWidget QAbstractItemView:disabled { color: #4a4466; }
 QCheckBox { color: white; }
+QAbstractSpinBox QLineEdit { padding: 0; margin: 0; border: 0; border-radius: 0;
+  background: transparent; font-size: 16px; }
 """
 STATUS = {  # status: (label, tile colour, dot)
     "free": ("Free", "#24506b", "🟢"),
@@ -483,7 +492,7 @@ class DeskWindow(QMainWindow):
                 "This room's price per hour (0 = desk default):",
                 0,
                 0,
-                100000,
+                MAX_PRICE,
                 2,
             )
             if ok:

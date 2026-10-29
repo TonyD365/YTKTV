@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QTextDocument
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -159,6 +161,50 @@ class BillDialog(QDialog):
             self._document().print_(printer)
 
 
+MAX_PRICE = 99_999_999  # room for currencies like yen, won or dong
+
+
+class _IgnoreWheel(QObject):
+    """Scrolling the settings page must not change the number or choice under the mouse."""
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt's name
+        if (
+            event.type() == QEvent.Type.Wheel
+            and isinstance(watched, QWidget)
+            and not watched.hasFocus()
+        ):
+            parent = watched.parentWidget()
+            if parent is not None:  # hand the scroll to the page instead of the value
+                QApplication.sendEvent(parent, event)
+            return True
+        return False
+
+
+_IGNORE_WHEEL = _IgnoreWheel()
+
+
+def steady(widget: QWidget) -> QWidget:
+    """Only take the mouse wheel once clicked into."""
+    widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    widget.installEventFilter(_IGNORE_WHEEL)
+    if isinstance(widget, QAbstractSpinBox):
+        widget.setMinimumWidth(140)
+    return widget
+
+
+class OnMenu(QCheckBox):
+    """The On menu switch in the menu table: says what it means, not just a colour."""
+
+    def __init__(self, on: bool) -> None:
+        super().__init__()
+        self.toggled.connect(self._label)
+        self.setChecked(on)
+        self._label(on)
+
+    def _label(self, on: bool) -> None:
+        self.setText("On menu" if on else "Hidden")
+
+
 class ShopSettings(QFrame):
     """The menu rooms can order from, and how rooms are charged."""
 
@@ -178,6 +224,13 @@ class ShopSettings(QFrame):
         self.table.setHorizontalHeaderLabels(self.COLUMNS)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(44)
+        # The console's big text fields do not fit in a table cell: edit in a plain one.
+        self.table.setStyleSheet(
+            "QTableWidget QLineEdit { padding: 0 8px; margin: 0; border: 1px solid #2ee6ff;"
+            " border-radius: 4px; min-height: 0; font-size: 14px; background: #1a1430; }"
+            " QCheckBox { padding-left: 10px; }"
+        )
         column.addWidget(self.table, stretch=1)
         buttons = QHBoxLayout()
         for text, action in (
@@ -195,10 +248,12 @@ class ShopSettings(QFrame):
         self.currency = QLineEdit(store.setting("currency", "$"))
         self.currency.setMaxLength(4)
         self.rate = QDoubleSpinBox()
-        self.rate.setRange(0, 100000)
+        self.rate.setGroupSeparatorShown(True)
+        self.rate.setRange(0, MAX_PRICE)
         self.rate.setValue(float(store.setting("rate", DEFAULT_RATE)))
         self.minimum = QDoubleSpinBox()
-        self.minimum.setRange(0, 100000)
+        self.minimum.setGroupSeparatorShown(True)
+        self.minimum.setRange(0, MAX_PRICE)
         self.minimum.setValue(float(store.setting("minimum", "0")))
         self.rounding = QComboBox()
         for key, text in ROUNDING.items():
@@ -207,6 +262,8 @@ class ShopSettings(QFrame):
         self.block = QSpinBox()
         self.block.setRange(5, 120)
         self.block.setValue(int(store.setting("block", "15")))
+        for field in (self.rate, self.minimum, self.rounding, self.block):
+            steady(field)
         form.addRow("Currency", self.currency)
         form.addRow("Price per hour", self.rate)
         form.addRow("Minimum spend", self.minimum)
@@ -232,9 +289,7 @@ class ShopSettings(QFrame):
         stock = QTableWidgetItem("" if product.stock is None else str(product.stock))
         stock.setToolTip("Leave empty if it never runs out")
         self.table.setItem(row, 3, stock)
-        active = QCheckBox()
-        active.setChecked(product.active)
-        self.table.setCellWidget(row, 4, active)
+        self.table.setCellWidget(row, 4, OnMenu(product.active))
 
     def add_row(self) -> None:
         self._row(Product(0, "New item", "Drinks", 0.0))
@@ -385,6 +440,7 @@ class SecuritySettings(QFrame):
         self.lock_after = QComboBox()
         self.lock_after.addItems(list(lock.LOCK_AFTER))
         self.lock_after.setCurrentText(store.setting("lock_after", "Never"))
+        steady(self.lock_after)
         self.lock_after.currentTextChanged.connect(lambda v: store.set_setting("lock_after", v))
         form.addRow("Lock when idle for", self.lock_after)
         column.addLayout(form)
