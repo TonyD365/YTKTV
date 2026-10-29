@@ -248,3 +248,20 @@ def test_desk_panels(qtbot, tmp_path):
     qtbot.addWidget(dialog)
     dialog.save_pdf(str(tmp_path / "bill.pdf"))
     assert (tmp_path / "bill.pdf").stat().st_size > 0
+
+
+def test_rooms_from_the_first_test_version_are_dropped(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "desk.sqlite3"
+    old = sqlite3.connect(path)
+    old.execute(
+        "CREATE TABLE rooms (id TEXT PRIMARY KEY, name TEXT, key_hash TEXT, last_seen REAL)"
+    )
+    old.execute("INSERT INTO rooms VALUES ('r', 'Old', 'hash', 0)")
+    old.commit()
+    old.close()
+    store = DeskStore(path)
+    assert store.rooms() == []
+    room, key = store.pair(store.new_code(), "New")
+    assert store.key(room.room_id) == key

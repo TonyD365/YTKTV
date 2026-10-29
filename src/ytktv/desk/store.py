@@ -68,6 +68,11 @@ class DeskStore:
         self._lock = threading.Lock()
         self._codes: dict[str, float] = {}
         with self._lock:
+            columns = {row[1] for row in self._db.execute("PRAGMA table_info(rooms)")}
+            if columns and "key" not in columns:
+                # Rooms paired by the first test version kept only a hash of their key,
+                # which the signed handshake cannot use: they have to pair again.
+                self._db.execute("DROP TABLE rooms")
             self._db.execute(
                 "CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL,"
                 " key TEXT NOT NULL, last_seen REAL NOT NULL DEFAULT 0)"
