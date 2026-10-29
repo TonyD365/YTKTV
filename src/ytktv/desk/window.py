@@ -12,9 +12,11 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QStackedWidget,
@@ -22,8 +24,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ytktv.desk import lock
 from ytktv.desk.billing import bill
-from ytktv.desk.panels import BillDialog, OrdersBox, ShopSettings
+from ytktv.desk.panels import BillDialog, BroadcastDialog, OrdersBox, SecuritySettings, ShopSettings
 from ytktv.desk.server import Hub, tell, tell_all_products, unbind
 from ytktv.desk.store import CODE_SECONDS, DeskStore, Room
 from ytktv.rooms.state import format_left
@@ -81,6 +84,7 @@ class DeskWindow(QMainWindow):
         self.store, self.hub, self.address = store, hub, address
         self.selected: str | None = None
         self._call_count = 0
+        self._locked: set[str] = set()
         self._calls_shown: list[int] = []
         self._code_until = 0.0
         self.setWindowTitle("YTKTV Desk")
@@ -120,6 +124,10 @@ class DeskWindow(QMainWindow):
         self.clock.setObjectName("deskClock")
         bar.addWidget(self.clock)
         bar.addSpacing(20)
+        broadcast = QPushButton("📢  Broadcast")
+        broadcast.setMinimumHeight(44)
+        broadcast.clicked.connect(self.broadcast)
+        bar.addWidget(broadcast)
         add = QPushButton("＋  Add Room")
         add.setObjectName("accent")
         add.setMinimumHeight(44)
@@ -156,6 +164,9 @@ class DeskWindow(QMainWindow):
         self._timer.timeout.connect(self.refresh)
         self._timer.start(1000)
         self.refresh()
+        self.lock_screen = lock.LockScreen(root, self.store)
+        self.lock_screen.lock()  # asks for the password at start when one is set
+        self.lock_screen.activity()
 
     # ----- layout
 
@@ -225,6 +236,21 @@ class DeskWindow(QMainWindow):
             side.addWidget(button)
             self.room_actions.append(button)
         self.room_actions[0].setObjectName("accent")
+        remote = QHBoxLayout()
+        self.remote_buttons: list[QPushButton] = []
+        for text, handler in (
+            ("⏭ Skip", lambda: self._control("skip")),
+            ("⏯ Pause", lambda: self._control("pause")),
+            ("🔊 Volume", self._volume),
+            ("💬 Message", self._message_room),
+            ("🔒 Lock", self._toggle_lock),
+        ):
+            button = QPushButton(text)
+            button.clicked.connect(handler)
+            button.setEnabled(False)
+            remote.addWidget(button)
+            self.remote_buttons.append(button)
+        side.addLayout(remote)
         body.addWidget(panel)
         column.addLayout(body, stretch=1)
         return tab
@@ -262,6 +288,8 @@ class DeskWindow(QMainWindow):
         column.addWidget(panel, stretch=1)
         self.shop = ShopSettings(self.store, lambda: tell_all_products(self.store, self.hub))
         column.addWidget(self.shop, stretch=2)
+        self.security = SecuritySettings(self.store)
+        column.addWidget(self.security)
         return tab
 
     def show_tab(self, index: int) -> None:
@@ -319,6 +347,33 @@ class DeskWindow(QMainWindow):
             chip.setStyleSheet("background: #9c2f45; color: white; border-radius: 14px;")
             chip.clicked.connect(lambda _c=False, c=call.call_id: self.finish_call(c))
             self.call_chips.addWidget(chip)
+
+    # -- remote control -------------------------------------------------------
+
+    def _control(self, action: str, value: int | None = None) -> None:
+        if self.selected:
+            self.hub.send_soon(self.selected, {"type": "control", "action": action, "value": value})
+
+    def _volume(self) -> None:
+        value, ok = QInputDialog.getInt(self, "Music volume", "Volume (0–100):", 60, 0, 100)
+        if ok:
+            self._control("volume", value)
+
+    def _message_room(self) -> None:
+        if self.selected:
+            self.broadcast(rooms=[self.selected])
+
+    def _toggle_lock(self) -> None:
+        if not self.selected:
+            return
+        locking = self.selected not in self._locked
+        (self._locked.add if locking else self._locked.discard)(self.selected)
+        self.hub.send_soon(self.selected, {"type": "lock" if locking else "unlock"})
+        self.refresh()
+
+    def broadcast(self, _checked: bool = False, rooms: list[str] | None = None) -> None:
+        dialog = BroadcastDialog(self.store, self.hub, rooms, self)
+        dialog.exec()
 
     def finish_call(self, call_id: int) -> None:
         room_id = self.store.finish_call(call_id)
@@ -425,6 +480,9 @@ class DeskWindow(QMainWindow):
         self.room_actions[1].setEnabled(room.is_open and room.ends_at is not None)
         self.room_actions[2].setEnabled(room.is_open)
         self.orders.show_room(room.room_id if room.is_open else None)
+        for button in self.remote_buttons:
+            button.setEnabled(room.is_open and up)
+        self.remote_buttons[4].setText("🔓 Unlock" if room.room_id in self._locked else "🔒 Lock")
 
     def _status(self, room: Room, online: set[str]) -> str:
         if room.is_open and any(c.room_id == room.room_id for c in self.store.calls()):
@@ -500,8 +558,18 @@ class DeskWindow(QMainWindow):
                 self.store.rename(room_id, name.strip())
                 self.refresh()
 
-    def unbind_room(self) -> None:
+    def unbind_room(self, _checked: bool = False, password: str | None = None) -> None:
         room_id = self._selected_setting()
+        if room_id and lock.has_password(self.store):
+            if password is None:
+                password, ok = QInputDialog.getText(
+                    self, "Unbind room", "Desk password:", QLineEdit.EchoMode.Password
+                )
+                if not ok:
+                    return
+            if not lock.check(self.store, password):
+                QMessageBox.warning(self, "Unbind room", "Wrong password.")
+                return
         if room_id:
             unbind(self.store, self.hub, room_id)
             self.refresh()

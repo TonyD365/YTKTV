@@ -26,7 +26,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ytktv.desk import lock
 from ytktv.desk.billing import DEFAULT_RATE, ROUNDING, Bill
+from ytktv.desk.server import Hub
 from ytktv.desk.store import DeskStore, Product
 
 
@@ -271,3 +273,139 @@ class ShopSettings(QFrame):
         self.store.set_setting("block", str(self.block.value()))
         if callable(self.changed):
             self.changed()
+
+
+class BroadcastDialog(QDialog):
+    """Send a message to every open room, or to some of them."""
+
+    def __init__(
+        self,
+        store: DeskStore,
+        hub: Hub,
+        rooms: list[str] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.store, self.hub = store, hub
+        self.setWindowTitle("Broadcast" if rooms is None else "Message")
+        self.resize(460, 480)
+        column = QVBoxLayout(self)
+        self.text = QLineEdit()
+        self.text.setPlaceholderText("e.g. Dinner is ready!")
+        self.text.setMaxLength(300)
+        column.addWidget(QLabel("Message"))
+        column.addWidget(self.text)
+        column.addWidget(QLabel("Rooms"))
+        self.checks: dict[str, QCheckBox] = {}
+        for room in store.rooms():
+            if room.is_open:
+                box = QCheckBox(room.name)
+                box.setChecked(rooms is None or room.room_id in rooms)
+                column.addWidget(box)
+                self.checks[room.room_id] = box
+        if not self.checks:
+            column.addWidget(QLabel("No room is open."))
+        self.length = QComboBox()
+        for label, seconds in (
+            ("10 seconds", 10),
+            ("30 seconds", 30),
+            ("Until they press Got it", None),
+        ):
+            self.length.addItem(label, seconds)
+        self.pause = QCheckBox("Pause the music")
+        self.sound = QCheckBox("Play a sound")
+        self.sound.setChecked(True)
+        form = QFormLayout()
+        form.addRow("Show for", self.length)
+        column.addLayout(form)
+        column.addWidget(self.pause)
+        column.addWidget(self.sound)
+        column.addStretch()
+        send = QPushButton("Send")
+        send.setObjectName("accent")
+        send.clicked.connect(self.send)
+        column.addWidget(send)
+
+    def send(self) -> int:
+        """Send to the ticked rooms; returns how many."""
+        text = self.text.text().strip()
+        targets = [room_id for room_id, box in self.checks.items() if box.isChecked()]
+        if not text or not targets:
+            return 0
+        message = {
+            "type": "message",
+            "text": text,
+            "seconds": self.length.currentData(),
+            "pause": self.pause.isChecked(),
+            "sound": self.sound.isChecked(),
+        }
+        for room_id in targets:
+            self.hub.send_soon(room_id, message)
+        self.accept()
+        return len(targets)
+
+
+class SecuritySettings(QFrame):
+    """The desk password, and when the desk locks itself."""
+
+    def __init__(self, store: DeskStore) -> None:
+        super().__init__()
+        self.store = store
+        self.setObjectName("panel")
+        column = QVBoxLayout(self)
+        column.setContentsMargins(24, 20, 24, 20)
+        head = QLabel("DESK PASSWORD")
+        head.setObjectName("panelHead")
+        column.addWidget(head)
+        self.status = QLabel()
+        self.status.setObjectName("muted")
+        column.addWidget(self.status)
+        row = QHBoxLayout()
+        self.password = QLineEdit()
+        self.password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password.setPlaceholderText("New password")
+        set_button = QPushButton("Set Password")
+        set_button.clicked.connect(self.set_password)
+        off = QPushButton("Turn Off")
+        off.clicked.connect(lambda: self.turn_off())
+        row.addWidget(self.password, stretch=1)
+        row.addWidget(set_button)
+        row.addWidget(off)
+        column.addLayout(row)
+        form = QFormLayout()
+        self.lock_after = QComboBox()
+        self.lock_after.addItems(list(lock.LOCK_AFTER))
+        self.lock_after.setCurrentText(store.setting("lock_after", "Never"))
+        self.lock_after.currentTextChanged.connect(lambda v: store.set_setting("lock_after", v))
+        form.addRow("Lock when idle for", self.lock_after)
+        column.addLayout(form)
+        self.refresh()
+
+    def refresh(self) -> None:
+        on = lock.has_password(self.store)
+        self.status.setText(
+            "On: the desk asks for the password when it starts, after being idle, and"
+            " before unbinding a room."
+            if on
+            else "Off: anyone at this computer can use the desk."
+        )
+        self.lock_after.setEnabled(on)
+
+    def set_password(self) -> None:
+        if len(self.password.text()) >= 4:
+            lock.set_password(self.store, self.password.text())
+            self.password.clear()
+        self.refresh()
+
+    def turn_off(self, password: str | None = None) -> None:
+        if lock.has_password(self.store):
+            if password is None:
+                password, ok = QInputDialog.getText(
+                    self, "Turn off password", "Current password:", QLineEdit.EchoMode.Password
+                )
+                if not ok:
+                    return
+            if not lock.check(self.store, password):
+                return
+        lock.set_password(self.store, None)
+        self.refresh()

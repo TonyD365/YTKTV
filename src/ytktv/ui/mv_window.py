@@ -391,7 +391,7 @@ class MvWindow(QWidget):
             self._time_left.move(16, 16)
             self._time_left.raise_()
 
-    def show_game(self, result: dict[str, str]) -> None:
+    def show_game(self, result: dict[str, str], seconds: float | None = 7.0) -> None:
         """A party game's result, big in the middle of the screen for a few seconds."""
         unit = max(1.0, self.height() / 100.0)
         border, radius = max(2, int(unit * 0.3)), int(unit * 3)
@@ -412,7 +412,14 @@ class MvWindow(QWidget):
         self.game_card.move((w - self.game_card.width()) // 2, (h - self.game_card.height()) // 2)
         fade_in(self.game_card, 250)
         self.game_card.raise_()
-        self._game_timer.start(7000)
+        if seconds is None:  # stays until someone dismisses it
+            self._game_timer.stop()
+        else:
+            self._game_timer.start(int(seconds * 1000))
+
+    def hide_game(self) -> None:
+        self._game_timer.stop()
+        fade_out(self.game_card, 400)
 
     def show_score(self, score: dict[str, Any]) -> None:
         """The end-of-song result: stays up a few seconds over whatever comes next."""

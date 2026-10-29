@@ -14,6 +14,7 @@ class RoomState:
     closed: bool = True
     guest: str = ""
     ends_at: float | None = None  # desk clock; None = no time limit
+    locked: bool = False  # the desk paused the room for a while; the session goes on
 
     def apply(self, message: dict[str, Any]) -> bool:
         """Take a (verified) desk message; True when it changed the room."""
@@ -25,7 +26,10 @@ class RoomState:
             self.ends_at = float(ends) if ends is not None else None
             return True
         if kind == "close":
-            self.closed, self.guest, self.ends_at = True, "", None
+            self.closed, self.guest, self.ends_at, self.locked = True, "", None, False
+            return True
+        if kind in ("lock", "unlock"):
+            self.locked = kind == "lock"
             return True
         return False
 

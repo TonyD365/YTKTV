@@ -265,3 +265,69 @@ def test_rooms_from_the_first_test_version_are_dropped(tmp_path):
     assert store.rooms() == []
     room, key = store.pair(store.new_code(), "New")
     assert store.key(room.room_id) == key
+
+
+def test_desk_password_and_lock_screen(qtbot):
+    from ytktv.desk import lock
+    from ytktv.desk.server import Hub
+    from ytktv.desk.window import DeskWindow
+
+    store = DeskStore()
+    assert lock.check(store, "anything")  # no password set
+    lock.set_password(store, "1234")
+    assert lock.check(store, "1234") and not lock.check(store, "4321")
+    assert "1234" not in store.setting("password")  # only a salted hash is kept
+
+    store.pair(store.new_code(), "Kids")
+    window = DeskWindow(store, Hub(), "192.168.1.10:8770")
+    qtbot.addWidget(window)
+    assert not window.lock_screen.isHidden()  # asks at start
+    window.lock_screen.password.setText("nope")
+    window.lock_screen.try_unlock()
+    assert not window.lock_screen.isHidden() and window.lock_screen.error.text()
+    window.lock_screen.password.setText("1234")
+    window.lock_screen.try_unlock()
+    assert window.lock_screen.isHidden()
+
+    window.room_list.setCurrentRow(0)
+    window.unbind_room(password="1234")
+    assert store.rooms() == []
+    window.security.turn_off(password="1234")
+    assert not lock.has_password(store)
+
+
+def test_broadcast_reaches_the_ticked_open_rooms(qtbot):
+    from ytktv.desk.panels import BroadcastDialog
+
+    class Hub:
+        sent: list = []
+
+        def send_soon(self, room_id, message):
+            self.sent.append((room_id, message))
+
+    store = DeskStore()
+    adults, _ = store.pair(store.new_code(), "Adults")
+    kids, _ = store.pair(store.new_code(), "Kids")
+    shut, _ = store.pair(store.new_code(), "Shut")
+    store.open_room(adults.room_id, "", None)
+    store.open_room(kids.room_id, "", None)
+    hub = Hub()
+    dialog = BroadcastDialog(store, hub)
+    qtbot.addWidget(dialog)
+    assert set(dialog.checks) == {adults.room_id, kids.room_id}  # closed rooms are not listed
+    dialog.text.setText("Dinner is ready!")
+    dialog.checks[kids.room_id].setChecked(False)
+    assert dialog.send() == 1
+    assert hub.sent[0][0] == adults.room_id and hub.sent[0][1]["text"] == "Dinner is ready!"
+
+
+def test_room_lock_state():
+    from ytktv.rooms.state import RoomState
+
+    state = RoomState()
+    state.apply({"type": "open", "ends_at": None})
+    assert state.apply({"type": "lock"}) and state.locked
+    assert state.apply({"type": "unlock"}) and not state.locked
+    state.apply({"type": "lock"})
+    state.apply({"type": "close"})
+    assert not state.locked

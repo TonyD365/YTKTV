@@ -818,3 +818,29 @@ def test_service_from_the_console_and_the_phone(window, qtbot):
             == 200
         )
         assert sent[-1] == ("order", [(1, 2)])
+
+
+def test_desk_messages_and_controls_reach_the_room(window, qtbot):
+    from ytktv.rooms.state import RoomState
+
+    main, controller = window
+
+    class Client:
+        state = RoomState(closed=False)
+        on_event = None
+        products: list = []
+        currency = "$"
+        online = True
+
+    main.room_client = Client()
+    main._on_desk({"type": "message", "text": "Dinner is ready!", "seconds": 10})
+    assert "Dinner is ready!" in main.mv_window.game_card.text()
+    main._on_desk({"type": "control", "action": "volume", "value": 33})
+    assert controller.settings.music_volume == 33
+    Client.state.apply({"type": "lock"})
+    main._on_desk({"type": "lock"})
+    assert main.room_closed_view.isVisible() and "paused" in main.room_closed_view.message.text()
+    assert not controller.room_closed  # locked, not closed: the queue is kept
+    Client.state.apply({"type": "unlock"})
+    main._on_desk({"type": "unlock"})
+    assert not main.room_closed_view.isVisible()

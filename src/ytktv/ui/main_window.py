@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMenu,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QStackedWidget,
@@ -22,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv.core.controller import PITCH_RANGE, SPEEDS, KTVController
-from ytktv.core.models import VocalMode
+from ytktv.core.models import PlayStatus, VocalMode
 from ytktv.rooms import binding
 from ytktv.rooms.client import RoomClient
 from ytktv.rooms.state import WARN_AT, format_left
@@ -565,7 +566,9 @@ class MainWindow(QMainWindow):
         self.room_closed_view.open_settings.connect(self._settings_while_closed)
         self.controller.front_desk = room_client
         if room_client is not None:
-            room_client.on_event = lambda kind, data: self.controller.bus.emit("room", kind)
+            room_client.on_event = lambda kind, data: self.controller.bus.emit(
+                "room", data if isinstance(data, dict) else {"type": kind}
+            )
             self.apply_room()
 
     def open_service(self) -> None:
@@ -574,6 +577,54 @@ class MainWindow(QMainWindow):
         dialog = ServiceDialog(self.room_client, self)
         if dialog.exec() and dialog.sent:
             self.show_toast(dialog.sent)
+
+    def _on_desk(self, message: dict[str, Any]) -> None:
+        """Everything the desk sends has been verified by the room client already."""
+        kind = message.get("type")
+        if kind == "unbind":
+            self.room_closed_view.hide()
+        elif kind == "call_done":
+            self.show_toast("Staff is on the way")
+        elif kind in ("products", "online"):
+            self.controller.notify()  # the phone page's menu
+        elif kind == "control":
+            self._desk_control(str(message.get("action", "")), message.get("value"))
+        elif kind == "message":
+            self._desk_message(message)
+        elif kind == "lock" and self.controller.status == PlayStatus.PLAYING:
+            self.controller.toggle_pause()
+        self.apply_room()
+
+    def _desk_control(self, action: str, value: Any) -> None:
+        if action == "skip":
+            self.controller.skip()
+        elif action == "pause":
+            self.controller.toggle_pause()
+        elif action == "volume" and isinstance(value, int):
+            self.controller.set_volume("music", max(0, min(100, value)))
+            self._show_level("music_volume", max(0, min(100, value)))
+
+    def _desk_message(self, message: dict[str, Any]) -> None:
+        """A message or broadcast from the desk, big on the TV and the console."""
+        text = str(message.get("text", ""))[:300]
+        if not text:
+            return
+        if message.get("pause") and self.controller.status == PlayStatus.PLAYING:
+            self.controller.toggle_pause()
+        if message.get("sound"):
+            self.controller.play_sfx("drumroll")
+        seconds = message.get("seconds")
+        self.mv_window.show_game(
+            {"title": "📢 From the front desk", "text": text, "detail": ""},
+            seconds=float(seconds) if isinstance(seconds, (int, float)) else None,
+        )
+        if isinstance(seconds, (int, float)):
+            self.show_toast(f"Front desk: {text}")
+            return
+        box = QMessageBox(QMessageBox.Icon.Information, "Front desk", text, parent=self)
+        box.addButton("Got it", QMessageBox.ButtonRole.AcceptRole)
+        box.finished.connect(lambda _r: self.mv_window.hide_game())
+        box.open()
 
     def _settings_while_closed(self) -> None:
         self.room_closed_view.hide()
@@ -591,9 +642,13 @@ class MainWindow(QMainWindow):
             self.controller.open_room()
             self._warned = False
             self._times_up_song = None
-        if closed and self.stack.currentWidget() is not self.settings_page:
+        locked = client.state.locked and not closed
+        self.room_closed_view.message.setText(
+            "This room is paused by the front desk" if locked else "This room is closed"
+        )
+        if (closed or locked) and self.stack.currentWidget() is not self.settings_page:
             self.room_closed_view.cover()
-        elif not closed:
+        elif not closed and not locked:
             self.room_closed_view.hide()
         self.mv_window.set_room_closed(closed)
         self.service_button.setVisible(not closed and binding.is_bound(self.controller.settings))
@@ -633,13 +688,7 @@ class MainWindow(QMainWindow):
             self._state = self.controller.state()
             self._apply_state()
         elif topic == "room":
-            if payload == "unbind":
-                self.room_closed_view.hide()
-            elif payload == "call_done":
-                self.show_toast("Staff is on the way")
-            elif payload in ("products", "online"):
-                self.controller.notify()  # the phone page's menu
-            self.apply_room()
+            self._on_desk(payload)
         elif topic == "position":
             self._apply_position(payload["position"], payload["duration"])
             self.mv_window.set_live_score(payload.get("score"))
