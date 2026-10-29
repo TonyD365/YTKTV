@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from ytktv.core.controller import PITCH_RANGE, SPEEDS, KTVController
 from ytktv.core.models import VocalMode
+from ytktv.rooms import binding
 from ytktv.rooms.client import RoomClient
 from ytktv.rooms.state import WARN_AT, format_left
 from ytktv.ui.games_page import GamesPage
@@ -44,6 +45,7 @@ from ytktv.ui.pages import (
 )
 from ytktv.ui.party_page import PartyPage
 from ytktv.ui.room_closed import RoomClosed
+from ytktv.ui.service_dialog import ServiceDialog
 from ytktv.ui.support import (
     EventBridge,
     ThumbnailLoader,
@@ -213,6 +215,11 @@ class MainWindow(QMainWindow):
         self.time_left.setStyleSheet("color: #ffc94a;")
         self.time_left.hide()
         layout.addWidget(self.time_left)
+        self.service_button = QPushButton("🛎  Service")
+        self.service_button.setObjectName("accent")
+        self.service_button.clicked.connect(self.open_service)
+        self.service_button.hide()
+        layout.addWidget(self.service_button)
         layout.addSpacing(12)
         self.clock = QLabel()
         self.clock.setObjectName("clock")
@@ -556,9 +563,17 @@ class MainWindow(QMainWindow):
         self._times_up_song: str | None = None
         self.room_closed_view = RoomClosed(self)
         self.room_closed_view.open_settings.connect(self._settings_while_closed)
+        self.controller.front_desk = room_client
         if room_client is not None:
             room_client.on_event = lambda kind, data: self.controller.bus.emit("room", kind)
             self.apply_room()
+
+    def open_service(self) -> None:
+        if self.room_client is None:
+            return
+        dialog = ServiceDialog(self.room_client, self)
+        if dialog.exec() and dialog.sent:
+            self.show_toast(dialog.sent)
 
     def _settings_while_closed(self) -> None:
         self.room_closed_view.hide()
@@ -581,6 +596,7 @@ class MainWindow(QMainWindow):
         elif not closed:
             self.room_closed_view.hide()
         self.mv_window.set_room_closed(closed)
+        self.service_button.setVisible(not closed and binding.is_bound(self.controller.settings))
         self._tick_room()
 
     def _tick_room(self) -> None:
@@ -619,6 +635,10 @@ class MainWindow(QMainWindow):
         elif topic == "room":
             if payload == "unbind":
                 self.room_closed_view.hide()
+            elif payload == "call_done":
+                self.show_toast("Staff is on the way")
+            elif payload in ("products", "online"):
+                self.controller.notify()  # the phone page's menu
             self.apply_room()
         elif topic == "position":
             self._apply_position(payload["position"], payload["duration"])

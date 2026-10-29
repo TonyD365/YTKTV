@@ -166,3 +166,85 @@ def test_the_desk_opens_extends_and_closes_rooms(qtbot):
     assert not store.room(room.room_id).is_open
     store.open_room(room.room_id, "", None)
     assert store.room(room.room_id).message() == {"type": "open", "guest": "", "ends_at": None}
+
+
+def test_calls_orders_and_the_bill():
+    from ytktv.desk.billing import bill
+    from ytktv.desk.server import receive
+    from ytktv.desk.store import Product
+
+    store = DeskStore()
+    room, _ = store.pair(store.new_code(), "Kids")
+    cola = store.save_product(Product(0, "Cola", "Drinks", 3.5))
+    hidden = store.save_product(Product(0, "Secret", "Drinks", 9, active=False))
+    receive(store, room.room_id, {"type": "call", "kind": "Drinks"})
+    assert store.calls() == []  # a closed room cannot call or order
+
+    store.set_setting("rate", "20")
+    store.open_room(room.room_id, "Kim", 90, now=1000)
+    receive(store, room.room_id, {"type": "call", "kind": "Equipment problem", "note": "mic"})
+    receive(
+        store,
+        room.room_id,
+        {
+            "type": "order",
+            "items": [{"product_id": cola, "qty": 2}, {"product_id": hidden, "qty": 1}],
+        },
+    )
+    orders = store.orders(room.room_id)
+    assert [(o.name, o.qty) for o in orders] == [("Cola", 2)]  # hidden items are refused
+    assert [c.kind for c in store.calls()] == ["Equipment problem", "Order"]
+    assert store.finish_call(store.calls()[0].call_id) == room.room_id
+
+    result = bill(store, room.room_id, now=2000)
+    assert result.subtotal == 30 + 7  # 90 booked minutes at 20/h, two colas
+    store.set_setting("minimum", "50")
+    assert bill(store, room.room_id).total == 50
+    store.set_order_status(orders[0].order_id, "cancelled")
+    assert bill(store, room.room_id).subtotal == 30
+    assert "Kids" in result.html()
+
+    store.close_room(room.room_id)
+    assert store.orders(room.room_id) == [] and store.calls() == []
+
+
+def test_open_ended_rooms_are_charged_as_set():
+    from ytktv.desk.billing import billed_minutes
+    from ytktv.desk.store import Room
+
+    room = Room("r", "Kids", 0, True, "", None, opened_at=0)
+    assert billed_minutes(room, "minute", 15, now=61 * 60 + 1) == 62
+    assert billed_minutes(room, "hour", 15, now=61 * 60) == 120
+    assert billed_minutes(room, "unit", 15, now=61 * 60) == 75
+
+
+def test_desk_panels(qtbot, tmp_path):
+    from ytktv.desk.billing import bill
+    from ytktv.desk.panels import BillDialog, ShopSettings
+    from ytktv.desk.server import Hub
+    from ytktv.desk.window import DeskWindow
+
+    store = DeskStore()
+    room, _ = store.pair(store.new_code(), "Kids")
+    shop = ShopSettings(store)
+    qtbot.addWidget(shop)
+    shop.add_row()
+    shop.table.item(0, 0).setText("Chips")
+    shop.table.item(0, 2).setText("2.5")
+    shop.save()
+    assert [(p.name, p.price) for p in store.products()] == [("Chips", 2.5)]
+
+    store.open_room(room.room_id, "Kim", 60)
+    store.add_order(room.room_id, [(store.products()[0].product_id, 1)])
+    store.add_call(room.room_id, "Drinks", "")
+    window = DeskWindow(store, Hub(), "192.168.1.10:8770")
+    qtbot.addWidget(window)
+    window.select(room.room_id)
+    assert window.stat_calls.text() == "1" and window.call_chips.count() == 1
+    window.finish_call(store.calls()[0].call_id)
+    assert window.stat_calls.text() == "0"
+
+    dialog = BillDialog(bill(store, room.room_id))
+    qtbot.addWidget(dialog)
+    dialog.save_pdf(str(tmp_path / "bill.pdf"))
+    assert (tmp_path / "bill.pdf").stat().st_size > 0

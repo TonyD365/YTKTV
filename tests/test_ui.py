@@ -774,3 +774,47 @@ def test_a_closed_room_takes_no_songs_and_times_up_after_the_song(window, qtbot)
     main._tick_room()
     assert Client.state.closed
     qtbot.waitUntil(lambda: controller.room_closed, timeout=7000)
+
+
+def test_service_from_the_console_and_the_phone(window, qtbot):
+    from fastapi.testclient import TestClient
+
+    from tests.helpers import FakeSource
+    from ytktv.rooms.state import RoomState
+    from ytktv.server.app import create_app
+    from ytktv.ui.service_dialog import ServiceDialog
+
+    main, controller = window
+    sent = []
+
+    class Client:
+        state = RoomState(closed=False)
+        products = [{"product_id": 1, "name": "Cola", "category": "Drinks", "price": 3.5}]
+        currency = "$"
+        online = True
+        on_event = None
+
+        def call(self, kind, note=""):
+            sent.append(("call", kind, note))
+            return True
+
+        def order(self, items):
+            sent.append(("order", items))
+            return True
+
+    client = Client()
+    dialog = ServiceDialog(client)
+    qtbot.addWidget(dialog)
+    dialog.note.setText("two straws")
+    dialog.call("Drinks")
+    assert sent[-1] == ("call", "Drinks", "two straws")
+
+    controller.front_desk = client
+    assert controller.state()["service"]["products"][0]["name"] == "Cola"
+    with TestClient(create_app(controller, FakeSource())) as http:
+        assert http.post("/api/service", json={"kind": "Snacks"}).json() == {"ok": True}
+        assert (
+            http.post("/api/service", json={"items": [{"product_id": 1, "qty": 2}]}).status_code
+            == 200
+        )
+        assert sent[-1] == ("order", [(1, 2)])

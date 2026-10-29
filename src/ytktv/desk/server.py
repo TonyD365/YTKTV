@@ -117,10 +117,13 @@ def create_desk_app(store: DeskStore, hub: Hub | None = None) -> FastAPI:
         room = store.room(room_id)
         if room is not None:  # a room that restarted learns whether it is open
             await channel.send(room.message())
+        await channel.send(products_message(store))
         try:
             while True:
-                json.loads(await ws.receive_text())
+                message = json.loads(await ws.receive_text())
                 store.seen(room_id)
+                if isinstance(message, dict):
+                    receive(store, room_id, message)
         except WebSocketDisconnect:
             pass
         finally:
@@ -128,6 +131,53 @@ def create_desk_app(store: DeskStore, hub: Hub | None = None) -> FastAPI:
                 del hub.channels[room_id]
 
     return app
+
+
+def receive(store: DeskStore, room_id: str, message: dict[str, Any]) -> None:
+    """A service call or an order from a room. Rooms only order while they are open."""
+    kind = message.get("type")
+    room = store.room(room_id)
+    if room is None or not room.is_open:
+        return
+    if kind == "call":
+        store.add_call(room_id, str(message.get("kind", "Other")), str(message.get("note", "")))
+    elif kind == "order":
+        items = message.get("items")
+        if isinstance(items, list):
+            pairs = [
+                (int(i["product_id"]), int(i["qty"]))
+                for i in items
+                if isinstance(i, dict)
+                and str(i.get("product_id", "")).isdigit()
+                and str(i.get("qty", "")).isdigit()
+            ]
+            if store.add_order(room_id, pairs):
+                store.add_call(
+                    room_id,
+                    "Order",
+                    ", ".join(
+                        f"{p.name} × {q}"
+                        for p in store.products(True)
+                        for pid, q in pairs
+                        if p.product_id == pid
+                    ),
+                )
+
+
+def products_message(store: DeskStore) -> dict[str, Any]:
+    return {
+        "type": "products",
+        "currency": store.setting("currency", "$"),
+        "items": [
+            {"product_id": p.product_id, "name": p.name, "category": p.category, "price": p.price}
+            for p in store.products(active_only=True)
+        ],
+    }
+
+
+def tell_all_products(store: DeskStore, hub: Hub) -> None:
+    for room_id in hub.online():
+        hub.send_soon(room_id, products_message(store))
 
 
 def tell(store: DeskStore, hub: Hub, room_id: str) -> None:

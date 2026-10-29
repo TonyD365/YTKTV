@@ -19,6 +19,7 @@ from ytktv.rooms.state import RoomState
 
 log = logging.getLogger(__name__)
 HEARTBEAT = 5.0
+POLL = 0.5  # how quickly calls and orders go out
 RETRY = 5.0
 
 
@@ -35,8 +36,28 @@ class RoomClient:
         self.online = False
         # A bound room stays closed until the desk opens it; a stand-alone one never closes.
         self.state = RoomState(closed=binding.is_bound(store.settings))
+        self.products: list[dict[str, Any]] = []
+        self.currency = "$"
+        # Calls and orders wait here until the desk is reachable.
+        self._outbox: list[dict[str, Any]] = []
+        self._outbox_lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+
+    def call(self, kind: str, note: str = "") -> bool:
+        """Ask for the staff. False when this room is not open."""
+        return self._post({"type": "call", "kind": kind[:40], "note": note[:200]})
+
+    def order(self, items: list[tuple[int, int]]) -> bool:
+        wanted = [{"product_id": p, "qty": q} for p, q in items if q > 0]
+        return bool(wanted) and self._post({"type": "order", "items": wanted})
+
+    def _post(self, message: dict[str, Any]) -> bool:
+        if self.state.closed or not binding.is_bound(self.store.settings):
+            return False
+        with self._outbox_lock:
+            self._outbox.append(message)
+        return True
 
     def start(self) -> None:
         if self._thread is None:
@@ -96,11 +117,17 @@ class RoomClient:
                 return
             self._set_online(True)
             while not self._stop.is_set() and binding.is_bound(self.store.settings):
-                self.store.settings.desk_last_seen = time.time()
-                self.store.save()
-                await ws.send(json.dumps({"type": "heartbeat"}))
+                now = time.time()
+                if now - self.store.settings.desk_last_seen >= HEARTBEAT:
+                    self.store.settings.desk_last_seen = now
+                    self.store.save()
+                    await ws.send(json.dumps({"type": "heartbeat"}))
+                with self._outbox_lock:
+                    outbox, self._outbox = self._outbox, []
+                for message in outbox:
+                    await ws.send(json.dumps(message))
                 try:
-                    async with asyncio.timeout(HEARTBEAT):
+                    async with asyncio.timeout(POLL):
                         raw = await ws.recv()
                 except TimeoutError:
                     continue
@@ -115,6 +142,9 @@ class RoomClient:
             binding.clear(self.store.settings)
             self.store.save()
             self.state = RoomState(closed=False)
+        if kind == "products":
+            self.products = [i for i in message.get("items", []) if isinstance(i, dict)]
+            self.currency = str(message.get("currency", "$"))
         self.state.apply(message)
         if kind != "ack":
             self.on_event(kind, message)

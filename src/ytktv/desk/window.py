@@ -6,6 +6,7 @@ import time
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -14,7 +15,6 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
-    QMessageBox,
     QPushButton,
     QScrollArea,
     QStackedWidget,
@@ -22,7 +22,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ytktv.desk.server import Hub, tell, unbind
+from ytktv.desk.billing import bill
+from ytktv.desk.panels import BillDialog, OrdersBox, ShopSettings
+from ytktv.desk.server import Hub, tell, tell_all_products, unbind
 from ytktv.desk.store import CODE_SECONDS, DeskStore, Room
 from ytktv.rooms.state import format_left
 
@@ -55,6 +57,7 @@ STATUS = {  # status: (label, tile colour, dot)
     "in_use": ("In use", "#1d7a55", "🎤"),
     "ending": ("Ending soon", "#a8781a", "⏳"),
     "over": ("Time's up", "#9c2f45", "⏰"),
+    "calling": ("Calling", "#c2185b", "🛎"),
     "offline": ("Offline", "#14111f", "⚫"),
 }
 
@@ -77,6 +80,8 @@ class DeskWindow(QMainWindow):
         super().__init__()
         self.store, self.hub, self.address = store, hub, address
         self.selected: str | None = None
+        self._call_count = 0
+        self._calls_shown: list[int] = []
         self._code_until = 0.0
         self.setWindowTitle("YTKTV Desk")
         self.setStyleSheet(STYLE)
@@ -139,6 +144,8 @@ class DeskWindow(QMainWindow):
         call_row.addWidget(head)
         call_row.addSpacing(16)
         call_row.addWidget(self.calls_label)
+        self.call_chips = QHBoxLayout()
+        call_row.addLayout(self.call_chips)
         call_row.addStretch()
         call_row.addWidget(hint)
         page.addWidget(calls)
@@ -202,6 +209,8 @@ class DeskWindow(QMainWindow):
         side.addWidget(self.panel_name)
         side.addWidget(self.code_label)
         side.addWidget(self.panel_info)
+        self.orders = OrdersBox(self.store)
+        side.addWidget(self.orders)
         side.addStretch()
         self.room_actions: list[QPushButton] = []
         for text, action in (
@@ -240,14 +249,19 @@ class DeskWindow(QMainWindow):
         rename.clicked.connect(self.rename_room)
         self.unbind_button = QPushButton("Unbind")
         self.unbind_button.clicked.connect(self.unbind_room)
+        price = QPushButton("Set Price")
+        price.clicked.connect(self.set_room_rate)
         buttons.addWidget(rename)
+        buttons.addWidget(price)
         buttons.addWidget(self.unbind_button)
         buttons.addStretch()
         box.addWidget(head)
         box.addWidget(note)
         box.addWidget(self.room_list, stretch=1)
         box.addLayout(buttons)
-        column.addWidget(panel)
+        column.addWidget(panel, stretch=1)
+        self.shop = ShopSettings(self.store, lambda: tell_all_products(self.store, self.hub))
+        column.addWidget(self.shop, stretch=2)
         return tab
 
     def show_tab(self, index: int) -> None:
@@ -279,6 +293,53 @@ class DeskWindow(QMainWindow):
         self._fill_wall(rooms, online)
         self._fill_panel(rooms, online)
         self._fill_settings(rooms)
+        self._fill_calls(rooms)
+
+    def _fill_calls(self, rooms: list[Room]) -> None:
+        calls = self.store.calls()
+        if len(calls) > self._call_count:
+            QApplication.beep()
+        self._call_count = len(calls)
+        self.stat_calls.setText(str(len(calls)))
+        shown = [c.call_id for c in calls]
+        if shown == self._calls_shown:
+            return
+        self._calls_shown = shown
+        while self.call_chips.count():
+            item = self.call_chips.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.deleteLater()
+        names = {r.room_id: r.name for r in rooms}
+        self.calls_label.setVisible(not calls)
+        for call in calls[:6]:
+            note = f": {call.note}" if call.note else ""
+            chip = QPushButton(f"🛎 {names.get(call.room_id, '?')} · {call.kind}{note}  ✓")
+            chip.setToolTip("Mark as handled; the room is told staff is on the way")
+            chip.setStyleSheet("background: #9c2f45; color: white; border-radius: 14px;")
+            chip.clicked.connect(lambda _c=False, c=call.call_id: self.finish_call(c))
+            self.call_chips.addWidget(chip)
+
+    def finish_call(self, call_id: int) -> None:
+        room_id = self.store.finish_call(call_id)
+        if room_id:
+            self.hub.send_soon(room_id, {"type": "call_done"})
+        self.refresh()
+
+    def set_room_rate(self) -> None:
+        room_id = self._selected_setting()
+        if room_id:
+            rate, ok = QInputDialog.getDouble(
+                self,
+                "Price per hour",
+                "This room's price per hour (0 = desk default):",
+                0,
+                0,
+                100000,
+                2,
+            )
+            if ok:
+                self.store.set_rate(room_id, rate or None)
 
     def _fill_wall(self, rooms: list[Room], online: set[str]) -> None:
         while self.grid.count():
@@ -337,6 +398,7 @@ class DeskWindow(QMainWindow):
             self.panel_info.setText("Click a room on the left to see it here.")
             for button in self.room_actions:
                 button.setEnabled(False)
+            self.orders.show_room(None)
             return
         up = room.room_id in online
         seen = (
@@ -362,9 +424,11 @@ class DeskWindow(QMainWindow):
         self.room_actions[0].setEnabled(not room.is_open)
         self.room_actions[1].setEnabled(room.is_open and room.ends_at is not None)
         self.room_actions[2].setEnabled(room.is_open)
+        self.orders.show_room(room.room_id if room.is_open else None)
 
-    @staticmethod
-    def _status(room: Room, online: set[str]) -> str:
+    def _status(self, room: Room, online: set[str]) -> str:
+        if room.is_open and any(c.room_id == room.room_id for c in self.store.calls()):
+            return "calling"
         if room.is_open:
             if room.ends_at is not None:
                 left = room.ends_at - time.time()
@@ -409,10 +473,8 @@ class DeskWindow(QMainWindow):
     def close_room(self, _checked: bool = False, confirm: bool = True) -> None:
         if self.selected is None:
             return
-        if confirm:
-            answer = QMessageBox.question(self, "Close room", "Close this room now?")
-            if answer != QMessageBox.StandardButton.Yes:
-                return
+        if confirm and not BillDialog(bill(self.store, self.selected), self).exec():
+            return
         self.store.close_room(self.selected)
         tell(self.store, self.hub, self.selected)
         self.refresh()
