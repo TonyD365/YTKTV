@@ -50,10 +50,10 @@ jobs:
     env:
       YTKTV_SEPARATION_MODE: ${{ matrix.separation }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the version comes from the git tag
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -240,7 +240,7 @@ jobs:
             fi
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer-${{ matrix.name }}
           path: |
@@ -263,10 +263,10 @@ jobs:
           - { name: windows-x64, os: windows-latest }
           - { name: linux-x86_64, os: ubuntu-24.04 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the version comes from the git tag
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -311,7 +311,7 @@ jobs:
           $version = python -c "import ytktv; print(ytktv.__version__)"; Check
           choco install innosetup --no-progress -y; Check
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\windows\desk_installer.iss; Check
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           # Not "installer-macos-*": the universal YTKTV package must not pick these up.
           name: installer-desk-${{ matrix.name }}
@@ -327,8 +327,8 @@ jobs:
     needs: build
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: parts
           pattern: installer-macos-*
@@ -349,7 +349,7 @@ jobs:
           intel="$(ls parts/*-macos-x86_64.pkg)"
           version="$(basename "$arm" | sed -E 's/^YTKTV-(.*)-macos-arm64\.pkg$/\1/')"
           packaging/macos/build_universal_pkg.sh "$arm" "$intel" "$version" dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer-macos-universal
           path: dist/*.pkg
@@ -364,7 +364,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: installers
           pattern: installer-*
