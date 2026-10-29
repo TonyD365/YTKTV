@@ -1,4 +1,4 @@
-"""The YTKTV Desk window: a front desk that shows every room."""
+"""The YTKTV Desk window: a staff terminal that shows every room."""
 
 from __future__ import annotations
 
@@ -154,7 +154,7 @@ class DeskWindow(QMainWindow):
         brand.setSpacing(2)
         logo = QLabel("YTKTV")
         logo.setObjectName("deskLogo")
-        sub = QLabel("KARAOKE SYSTEM  ·  FRONT DESK")
+        sub = QLabel("KARAOKE SYSTEM  ·  STAFF TERMINAL")
         sub.setObjectName("deskSub")
         brand.addWidget(logo)
         brand.addWidget(sub)
@@ -416,7 +416,7 @@ class DeskWindow(QMainWindow):
             "cleaned": button("🧹  Cleaned", self.mark_cleaned, "The room is ready again"),
             "repair": button("🔧  Maintenance", self.toggle_maintenance),
         }
-        head("FRONT DESK")
+        head("STAFF TERMINAL")
         button("📢  Broadcast", self.broadcast)
         button("＋  Add Room", self.add_room)
         button("📋  Shift Report", self.shift_report)
@@ -548,7 +548,7 @@ class DeskWindow(QMainWindow):
             empty = QLabel(
                 "<div style='font-size:64px'>🎤</div>"
                 "<div style='font-size:22px;font-weight:700;color:white'>No rooms yet</div>"
-                "<div style='color:#9a93b8'>Press “Add Room”, then open Settings → Front Desk"
+                "<div style='color:#9a93b8'>Press “Add Room”, then open Settings → Staff Terminal"
                 " on a YTKTV and enter the code.</div>"
             )
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -597,7 +597,7 @@ class DeskWindow(QMainWindow):
             self.panel_head.setText("PAIR A NEW ROOM")
             self.panel_name.setText("Enter this code on the room")
             self.panel_info.setText(
-                f"On the YTKTV in that room: Settings → Front Desk.\n"
+                f"On the YTKTV in that room: Settings → Staff Terminal.\n"
                 f"Desk address: {self.address}\n\n"
                 f"Security code: {self.store.fingerprint}\n"
                 "The room must show the same four pictures; if not, do not confirm.\n\n"

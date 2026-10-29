@@ -49,7 +49,7 @@ class LockScreen(QWidget):
         self.setStyleSheet("LockScreen { background: #07040f; }")
         column = QVBoxLayout(self)
         column.addStretch()
-        title = QLabel("🔒  YTKTV Front Desk is locked")
+        title = QLabel("🔒  YTKTV Desk is locked")
         title.setStyleSheet("color: white; font-size: 28px; font-weight: 800;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.password = QLineEdit()

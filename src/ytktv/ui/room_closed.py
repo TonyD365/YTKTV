@@ -1,4 +1,4 @@
-"""What a room's console shows while the front desk has it closed."""
+"""What a room's console shows while the staff terminal has it closed."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ class RoomClosed(QWidget):
         self.message = QLabel("This room is closed")
         self.message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.message.setStyleSheet("color: white; font-size: 30px; font-weight: 700;")
-        self.detail = QLabel("Please ask at the front desk.")
+        self.detail = QLabel("Please ask the staff.")
         self.detail.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.detail.setStyleSheet("color: #9a93b8; font-size: 16px;")
         layout.addWidget(icon)

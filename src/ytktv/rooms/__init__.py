@@ -1,1 +1,1 @@
-"""Rooms bound to a YTKTV Desk (the front desk)."""
+"""Rooms bound to a YTKTV Desk (the staff terminal)."""

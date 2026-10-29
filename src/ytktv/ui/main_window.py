@@ -559,7 +559,7 @@ class MainWindow(QMainWindow):
         self.clock.setText(QDateTime.currentDateTime().toString("HH:mm"))
         self._tick_room()
 
-    # -- front desk -------------------------------------------------------
+    # -- staff terminal -------------------------------------------------------
 
     def _room_setup(self, room_client: RoomClient | None) -> None:
         self.room_client = room_client
@@ -621,13 +621,13 @@ class MainWindow(QMainWindow):
             self.controller.play_sfx("drumroll")
         seconds = message.get("seconds")
         self.mv_window.show_game(
-            {"title": "📢 From the front desk", "text": text, "detail": ""},
+            {"title": "📢 From the staff", "text": text, "detail": ""},
             seconds=float(seconds) if isinstance(seconds, (int, float)) else None,
         )
         if isinstance(seconds, (int, float)):
-            self.show_toast(f"Front desk: {text}")
+            self.show_toast(f"Staff: {text}")
             return
-        box = QMessageBox(QMessageBox.Icon.Information, "Front desk", text, parent=self)
+        box = QMessageBox(QMessageBox.Icon.Information, "Staff", text, parent=self)
         box.addButton("Got it", QMessageBox.ButtonRole.AcceptRole)
         box.finished.connect(lambda _r: self.mv_window.hide_game())
         box.open()
@@ -650,7 +650,7 @@ class MainWindow(QMainWindow):
             self._times_up_song = None
         locked = client.state.locked and not closed
         self.room_closed_view.message.setText(
-            "This room is paused by the front desk" if locked else "This room is closed"
+            "This room is paused by the staff" if locked else "This room is closed"
         )
         if (closed or locked) and self.stack.currentWidget() is not self.settings_page:
             self.room_closed_view.cover()

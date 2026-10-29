@@ -1,4 +1,4 @@
-"""The Front Desk card in Settings: bind this machine to a YTKTV Desk as a room."""
+"""The Staff Terminal card in Settings: bind this machine to a YTKTV Desk as a room."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class FrontDeskCard(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
-        head = QLabel("FRONT DESK")
+        head = QLabel("STAFF TERMINAL")
         head.setObjectName("settingsHead")
         layout.addWidget(head)
         self.status = QLabel()
@@ -104,7 +104,7 @@ class FrontDeskCard(QFrame):
         else:
             days = max(0.0, (time.time() - settings.desk_last_seen) / 86400)
             self.unbind_note.setText(
-                "Bound to the front desk. Unbind it from the desk, or here after the desk"
+                "Bound to the staff terminal. Unbind it from the desk, or here after the desk"
                 f" has been offline for 7 days ({days:.0f} so far)."
             )
 
@@ -132,7 +132,7 @@ class FrontDeskCard(QFrame):
         answer = QMessageBox.question(
             self,
             "Check the security code",
-            f"Does the front desk show these four pictures?\n\n{pairing.fingerprint}\n\n"
+            f"Does the staff terminal show these four pictures?\n\n{pairing.fingerprint}\n\n"
             "Only press Yes if they match exactly.",
         )
         if answer != QMessageBox.StandardButton.Yes:

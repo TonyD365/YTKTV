@@ -63,14 +63,14 @@ for macOS, Windows and Linux.
   <br><sub>The phone page: your songs and waiting times, tonight's best, and the remote.</sub>
 </p>
 
-## YTKTV Desk: a front desk for many rooms
+## YTKTV Desk: a staff terminal for many rooms
 
 <p align="center">
   <img src="docs/images/desk.png" alt="YTKTV Desk: a board of rooms with their status, guest, time left, spend and song, the selected room's orders, and the service calls bar" width="860">
 </p>
 
 Got more than one room? Run **YTKTV Desk** on one computer and bind every YTKTV to it, the
-way a real KTV's front desk runs its rooms: the adults in one room, the kids in another.
+way a real KTV's staff terminal runs its rooms: the adults in one room, the kids in another.
 
 - **Open, extend and close rooms** for 1–3 hours or without a limit. A closed room shows
   "This room is closed" and its TV goes black; when time is up the song finishes, then the room closes.
@@ -88,7 +88,7 @@ way a real KTV's front desk runs its rooms: the adults in one room, the kids in 
   permanent unless the desk has been gone for 7 days. The desk can have a password.
 
 Download `YTKTV-Desk-<version>-…` from the [latest release](https://github.com/TonyD365/YTKTV/releases/latest),
-then in each room open **Settings → Front Desk**, press **Find Desks** and enter the code the desk shows.
+then in each room open **Settings → Staff Terminal**, press **Find Desks** and enter the code the desk shows.
 The [YTKTV Desk guide](docs/guide/front-desk.md) walks through all of it.
 
 ## Quick start

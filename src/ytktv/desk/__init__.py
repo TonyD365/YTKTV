@@ -1,1 +1,1 @@
-"""YTKTV Desk: the front desk that manages the rooms."""
+"""YTKTV Desk: the staff terminal that manages the rooms."""
