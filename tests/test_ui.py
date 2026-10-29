@@ -785,3 +785,106 @@ def test_more_party_games(window, qtbot):
     if controller.current is not None:  # nothing was playing, so it started right away
         queued.append(controller.current.singer)
     assert "Kim" in queued
+
+
+def test_a_closed_room_takes_no_songs_and_times_up_after_the_song(window, qtbot):
+    import time
+
+    import pytest
+
+    from ytktv.core.models import Song
+    from ytktv.rooms.state import RoomState
+
+    main, controller = window
+
+    class Client:
+        state = RoomState(closed=True)
+        on_event = None
+
+    main.room_client = Client()
+    main.apply_room()
+    assert controller.room_closed and main.room_closed_view.isVisible()
+    assert not main.mv_window._closed_cover.isHidden()
+    with pytest.raises(PermissionError):
+        controller.enqueue(Song("v1", "Song"))
+    assert controller.state()["room_closed"]
+
+    Client.state.apply({"type": "open", "ends_at": time.time() + 3600})
+    main.apply_room()
+    assert not controller.room_closed and not main.room_closed_view.isVisible()
+    assert "left" in main.time_left.text()
+
+    Client.state.ends_at = time.time() - 1  # time is up, nothing playing
+    main._tick_room()
+    assert Client.state.closed
+    qtbot.waitUntil(lambda: controller.room_closed, timeout=7000)
+
+
+def test_service_from_the_console_and_the_phone(window, qtbot):
+    from fastapi.testclient import TestClient
+
+    from tests.helpers import FakeSource
+    from ytktv.rooms.state import RoomState
+    from ytktv.server.app import create_app
+    from ytktv.ui.service_dialog import ServiceDialog
+
+    main, controller = window
+    sent = []
+
+    class Client:
+        state = RoomState(closed=False)
+        products = [{"product_id": 1, "name": "Cola", "category": "Drinks", "price": 3.5}]
+        currency = "$"
+        online = True
+        on_event = None
+
+        def call(self, kind, note=""):
+            sent.append(("call", kind, note))
+            return True
+
+        def order(self, items):
+            sent.append(("order", items))
+            return True
+
+    client = Client()
+    dialog = ServiceDialog(client)
+    qtbot.addWidget(dialog)
+    dialog.note.setText("two straws")
+    dialog.call("Drinks")
+    assert sent[-1] == ("call", "Drinks", "two straws")
+
+    controller.front_desk = client
+    assert controller.state()["service"]["products"][0]["name"] == "Cola"
+    with TestClient(create_app(controller, FakeSource())) as http:
+        assert http.post("/api/service", json={"kind": "Snacks"}).json() == {"ok": True}
+        assert (
+            http.post("/api/service", json={"items": [{"product_id": 1, "qty": 2}]}).status_code
+            == 200
+        )
+        assert sent[-1] == ("order", [(1, 2)])
+
+
+def test_desk_messages_and_controls_reach_the_room(window, qtbot):
+    from ytktv.rooms.state import RoomState
+
+    main, controller = window
+
+    class Client:
+        state = RoomState(closed=False)
+        on_event = None
+        products: list = []
+        currency = "$"
+        online = True
+
+    main.room_client = Client()
+    main._on_desk({"type": "message", "text": "Dinner is ready!", "seconds": 10})
+    assert "Dinner is ready!" in main.mv_window.game_card.text()
+    main._on_desk({"type": "control", "action": "volume", "value": 33})
+    assert controller.settings.music_volume == 33
+    Client.state.apply({"type": "lock"})
+    main._on_desk({"type": "lock"})
+    assert main.room_closed_view.isVisible() and "paused" in main.room_closed_view.message.text()
+    assert not controller.room_closed  # locked, not closed: the queue is kept
+    Client.state.apply({"type": "unlock"})
+    main._on_desk({"type": "unlock"})
+    assert not main.room_closed_view.isVisible()

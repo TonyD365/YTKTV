@@ -90,6 +90,7 @@
 </style>
 </head>
 <body>
+<div id="room-closed" style="display:none;position:fixed;inset:0;z-index:99;background:#07040f;color:#fff;align-items:center;justify-content:center;flex-direction:column;font-size:22px;font-weight:700">🎤<div>This room is closed</div></div>
 <header>
   <div class="brand">YTKTV</div>
   <div class="now">
@@ -142,6 +143,17 @@
 
   <section id="tab-remote">
     <a id="mic-link" class="miclink" hidden>Use this phone as a microphone</a>
+    <div id="service" style="display:none">
+      <h3>🛎 Service</h3>
+      <div class="pad">
+        <button data-call="Drinks">Drinks</button>
+        <button data-call="Snacks">Snacks</button>
+        <button data-call="Equipment problem">Equipment</button>
+        <button data-call="Other">Other</button>
+      </div>
+      <div id="menu"></div>
+      <button id="send-order" class="wide" style="display:none">Send Order</button>
+    </div>
     <h3>Cheer the singer</h3>
     <div class="chips" id="reactions"></div>
     <h3>Playback</h3>
@@ -347,8 +359,37 @@ $("search-form").addEventListener("submit", (e) => {
   if (q) { $("q").blur(); searchFor(q); }
 });
 
+const orderQty = {};
+function renderService() {
+  const service = state.service;
+  $("service").style.display = service ? "" : "none";
+  if (!service) return;
+  const menu = $("menu");
+  menu.replaceChildren(...service.products.map((p) => {
+    const row = document.createElement("div");
+    row.className = "menu-row";
+    row.style.cssText = "display:flex;align-items:center;gap:8px;margin:6px 0";
+    const name = document.createElement("span");
+    name.style.flex = "1";
+    name.textContent = `${p.name} · ${service.currency}${p.price}`;
+    const count = document.createElement("span");
+    count.textContent = orderQty[p.product_id] || 0;
+    const step = (d) => () => {
+      orderQty[p.product_id] = Math.max(0, Math.min(20, (orderQty[p.product_id] || 0) + d));
+      renderService();
+    };
+    const minus = document.createElement("button"); minus.textContent = "−"; minus.onclick = step(-1);
+    const plus = document.createElement("button"); plus.textContent = "+"; plus.onclick = step(1);
+    row.append(name, minus, count, plus);
+    return row;
+  }));
+  $("send-order").style.display = Object.values(orderQty).some((q) => q > 0) ? "" : "none";
+}
+
 function render() {
   if (!state) return;
+  renderService();
+  $("room-closed").style.display = state.room_closed ? "flex" : "none";
   const cur = state.current;
   $("now-label").textContent = state.loading || {idle: "Now Playing", loading: "Loading", playing: "Now Playing", paused: "Paused"}[state.status];
   $("now-title").textContent = cur ? cur.song.title + (cur.singer ? `  ·  ${cur.singer}` : "") : "Nothing yet. Pick a song!";
@@ -454,6 +495,18 @@ for (const b of document.querySelectorAll("nav button")) {
   });
 }
 document.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => api("/api/player/" + b.dataset.act, "POST")));
+document.querySelectorAll("[data-call]").forEach((b) => b.addEventListener("click", async () => {
+  await api("/api/service", "POST", {kind: b.dataset.call}).catch(() => {});
+  b.textContent = "✓ Sent";
+}));
+$("send-order").addEventListener("click", async () => {
+  const items = Object.entries(orderQty).filter(([, q]) => q > 0)
+    .map(([id, q]) => ({product_id: Number(id), qty: q}));
+  await api("/api/service", "POST", {items}).catch(() => {});
+  for (const id of Object.keys(orderQty)) delete orderQty[id];
+  renderService();
+  $("send-order").style.display = "none";
+});
 document.querySelectorAll("[data-game]").forEach((b) => b.addEventListener("click", () => api("/api/game/" + b.dataset.game, "POST")));
 $("bomb-go").addEventListener("click", () => {
   const value = Number($("bomb-guess").value);

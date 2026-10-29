@@ -31,6 +31,8 @@ from PySide6.QtWidgets import (
 from ytktv import __version__
 from ytktv.core.controller import KTVController
 from ytktv.core.models import Song, StemStatus
+from ytktv.rooms.client import RoomClient
+from ytktv.ui.front_desk_card import FrontDeskCard
 from ytktv.ui.song_list import STEM_TAGS, Action, SongList, SongRow, tag
 from ytktv.ui.support import ThumbnailLoader, run_async
 from ytktv.youtube.search import ARTISTS, HOT_CATEGORIES, YouTube
@@ -49,6 +51,7 @@ class Context:
     thumbnails: ThumbnailLoader
     # Jump to the Search page and search for this text (set by the main window).
     open_search: Callable[[str], None] = lambda _query: None
+    room_client: RoomClient | None = None  # set when the app runs with a front desk
 
 
 class Page(QWidget):
@@ -678,6 +681,8 @@ class SettingsPage(Page):
         url.setWordWrap(True)
         url.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         phone.addWidget(url)
+
+        column.addWidget(FrontDeskCard(ctx.controller.store, ctx.room_client))
 
         setup = card("Setup")
         again = QPushButton("Run Setup Again")
