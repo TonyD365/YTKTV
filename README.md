@@ -82,7 +82,9 @@ way a real KTV's staff terminal runs its rooms: the adults in one room, the kids
 - **Members**: stored balance, points and a members' discount.
 - **Run the floor**: bookings with a calendar and timeline, room types and seats, cleaning and
   maintenance, change room, broadcasts to every room, remote skip, pause and volume, a shift
-  report and the day's records.
+  report, and records by day, week or month with a chart and a CSV export for Excel.
+- **Stock alerts**: a product running low shows in the service bar ("Cola: 2 left").
+- **Updates**: Settings → Updates checks for a new Desk on its own or when you ask.
 - **Safe by design**: rooms bind with a one-time code and a four-picture security code, obey only
   what the desk signs, and find it by its ID even when its IP address changes. A binding is
   permanent unless the desk has been gone for 7 days. The desk can have a password.
