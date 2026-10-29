@@ -35,6 +35,7 @@ from ytktv.ui.mv_window import MvWindow
 from ytktv.ui.pages import (
     ArtistsPage,
     Context,
+    DownloadsPage,
     FavoritesPage,
     HistoryPage,
     HotPage,
@@ -64,6 +65,7 @@ NAV = (
     ("hot", "Hot Songs"),
     ("artists", "Artists"),
     ("favorites", "Favorites"),
+    ("downloads", "Downloads"),
     ("playlists", "Playlists"),
     ("queue", "Selected"),
     ("history", "Sung"),
@@ -265,6 +267,7 @@ class MainWindow(QMainWindow):
             "hot": HotPage(self.ctx),
             "artists": ArtistsPage(self.ctx),
             "favorites": FavoritesPage(self.ctx),
+            "downloads": DownloadsPage(self.ctx),
             "playlists": PlaylistsPage(self.ctx),
             "queue": QueuePage(self.ctx),
             "history": HistoryPage(self.ctx),
@@ -705,6 +708,10 @@ class MainWindow(QMainWindow):
             for page in self.pages.values():
                 if isinstance(page, Page):
                     page.on_favorites()
+        elif topic == "offline":
+            downloads = self.pages["downloads"]
+            if isinstance(downloads, DownloadsPage):
+                downloads.on_offline()
         elif topic == "searches":
             for page in self.pages.values():
                 if isinstance(page, Page):

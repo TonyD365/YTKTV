@@ -23,10 +23,12 @@ from ytktv.core.models import PlayStatus, QueueItem, Song, StemStatus, VocalMode
 from ytktv.core.queue import SongQueue
 from ytktv.core.scoring import Melody, Scoreboard, ScoreKeeper, ScoringLoop
 from ytktv.player.base import PlayerBackend
+from ytktv.youtube.lyrics import LyricLine
 from ytktv.youtube.parse import MediaSource
 
 if TYPE_CHECKING:
     from ytktv.audio.engine import AudioEngine
+    from ytktv.core.offline import OfflineSongs
     from ytktv.core.preload import MediaPreloader
     from ytktv.separation.worker import StemManager
 
@@ -67,6 +69,7 @@ class KTVController:
         audio: AudioEngine | None = None,
         accelerator: str = "",
         preloader: MediaPreloader | None = None,
+        offline: OfflineSongs | None = None,
     ) -> None:
         self.store = store
         self.room_closed = False  # set by the staff terminal; a closed room takes no songs
@@ -86,6 +89,7 @@ class KTVController:
         self.phone_mic_url = ""  # the HTTPS page where a phone becomes a microphone
         self.accelerator = accelerator
         self.preloader = preloader
+        self.offline = offline
 
         self.queue = SongQueue()
         self.queue.load_history(self.library.history)
@@ -127,6 +131,10 @@ class KTVController:
             stems.order = self._stem_order
         if preloader is not None:
             preloader.on_change = lambda _video_id: self._emit_state()
+        if offline is not None:
+            offline.on_change = self._on_offline_change
+            if stems is not None:
+                stems.pinned = offline.ids  # their instrumentals are never evicted
         if stems is not None:
             stems.want_pitch = self.settings.scoring
         if audio is not None:
@@ -326,7 +334,9 @@ class KTVController:
                 continue
             try:
                 video_id = item.song.video_id
-                local = self.preloader.path(video_id) if self.preloader else None
+                local = self.offline.path(video_id) if self.offline else None
+                if local is None and self.preloader:
+                    local = self.preloader.path(video_id)
                 if local is not None:
                     source = MediaSource(video_url=str(local))
                 else:
@@ -795,13 +805,19 @@ class KTVController:
 
     def _load_lyrics(self, item: QueueItem) -> None:
         fetch = getattr(self.resolver, "lyrics", None)
-        if fetch is None or not self.settings.show_lyrics:
+        kept = self.offline.lyrics(item.song.video_id) if self.offline else None
+        if (fetch is None and kept is None) or not self.settings.show_lyrics:
             return
 
         def work() -> None:
             try:
-                # The video's own subtitles when it has them, automatic captions otherwise.
-                lines = fetch(item.song.video_id, self.settings.max_height, True)
+                if (
+                    kept is not None or fetch is None
+                ):  # downloaded with the song: no internet needed
+                    lines = [LyricLine.from_dict(line) for line in kept or []]
+                else:
+                    # The video's own subtitles when they exist, automatic captions otherwise.
+                    lines = fetch(item.song.video_id, self.settings.max_height, True)
             except Exception:
                 log.info("no lyrics for %s", item.song.video_id, exc_info=True)
                 return
@@ -995,6 +1011,31 @@ class KTVController:
 
     def stem_status(self, video_id: str) -> StemStatus:
         return self.stems.status(video_id) if self.stems else StemStatus.NONE
+
+    # -- songs kept offline -----------------------------------------------
+
+    def _on_offline_change(self) -> None:
+        self.bus.emit("offline", None)
+        self._emit_state()  # the tags on song cards
+
+    def offline_status(self, video_id: str) -> str:
+        return self.offline.status(video_id) if self.offline else "none"
+
+    def offline_songs(self) -> list[Song]:
+        return self.offline.songs() if self.offline else []
+
+    def download_song(self, song: Song) -> bool:
+        """Keep *song* on this computer, with its instrumental, to sing without internet."""
+        if self.offline is None or not self.offline.add(song):
+            return False
+        if self.stems is not None:
+            self.stems.request(song.video_id)
+        self.toast(f"Downloading to keep: {song.title}")
+        return True
+
+    def remove_download(self, video_id: str) -> None:
+        if self.offline is not None:
+            self.offline.remove(video_id)
 
     # -- favourites -------------------------------------------------------
 
@@ -1198,6 +1239,8 @@ class KTVController:
             self.stems.stop()
         if self.preloader is not None:
             self.preloader.stop()
+        if self.offline is not None:
+            self.offline.stop()
         if self.audio is not None:
             self.audio.stop()
         self.player.close()

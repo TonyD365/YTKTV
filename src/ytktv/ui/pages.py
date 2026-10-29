@@ -54,6 +54,15 @@ class Context:
     room_client: RoomClient | None = None  # set when the app runs with a staff terminal
 
 
+# Tags for songs downloaded to keep, by their status.
+KEPT_TAGS = {
+    "ready": ("Downloaded", "ready"),
+    "downloading": ("Downloading", "busy"),
+    "waiting": ("Waiting to download", "busy"),
+    "failed": ("Download failed", ""),
+}
+
+
 class Page(QWidget):
     def __init__(self, title: str, ctx: Context) -> None:
         super().__init__()
@@ -78,8 +87,10 @@ class Page(QWidget):
         queued = controller.queued_ids()
         for song in songs:
             favorite = controller.library.is_favorite(song.video_id)
+            kept = controller.offline_status(song.video_id)
             actions: list[Action] = [
                 ("＋ List", "", partial(self.choose_playlist, song)),
+                *self.keep_actions(song, kept),
                 ("♥" if favorite else "♡", "", partial(controller.toggle_favorite, song)),
                 ("Priority", "", partial(controller.enqueue, song, priority=True)),
                 ("Select", "accent", partial(controller.enqueue, song)),
@@ -89,15 +100,24 @@ class Page(QWidget):
                 tags.append(tag("Selected", "singer"))
             if controller.stem_status(song.video_id) == StemStatus.READY:
                 tags.append(tag("Instrumental ready", "ready"))
+            if kept in KEPT_TAGS:
+                tags.append(tag(*KEPT_TAGS[kept]))
             rows.append(SongRow(song, actions, self.ctx.thumbnails, tags))
         return rows
 
-    def _marks(self, songs: list[Song]) -> tuple[frozenset[str], frozenset[str]]:
+    def keep_actions(self, song: Song, kept: str) -> list[Action]:
+        """The download button, while the song is not kept yet."""
+        if kept in ("none", "failed"):
+            return [("⬇", "", partial(self.ctx.controller.download_song, song))]
+        return []
+
+    def _marks(self, songs: list[Song]) -> tuple[frozenset[Any], ...]:
         """What the tags on these cards depend on; a change means they must be redrawn."""
         controller = self.ctx.controller
         ids = {song.video_id for song in songs}
         ready = {v for v in ids if controller.stem_status(v) == StemStatus.READY}
-        return frozenset(ids & controller.queued_ids()), frozenset(ready)
+        kept = {(v, controller.offline_status(v)) for v in ids}
+        return frozenset(ids & controller.queued_ids()), frozenset(ready), frozenset(kept)
 
     def show_songs(self, songs: list[Song], empty: str = "") -> None:
         """Show *songs* in this page's list and keep their tags current from now on."""
@@ -408,6 +428,40 @@ class FavoritesPage(Page):
 
     def on_favorites(self) -> None:
         self.show_songs(self.ctx.controller.library.favorites())
+
+
+class DownloadsPage(Page):
+    """Songs kept on this computer: they play, with lyrics and instrumental, offline."""
+
+    def __init__(self, ctx: Context) -> None:
+        super().__init__("Downloads", ctx)
+        favorites = QPushButton("Download All Favorites")
+        favorites.clicked.connect(self.download_favorites)
+        self.header.addWidget(favorites)
+        self.size_label = QLabel()
+        self.size_label.setObjectName("muted")
+        self.body.addWidget(self.size_label)
+        self.browse_list = SongList(
+            "Nothing downloaded yet. Press ⬇ on a song to keep it for singing without internet."
+        )
+        self.body.addWidget(self.browse_list, stretch=1)
+        self.on_offline()
+
+    def keep_actions(self, song: Song, kept: str) -> list[Action]:
+        return [("Remove", "", partial(self.ctx.controller.remove_download, song.video_id))]
+
+    def download_favorites(self) -> None:
+        controller = self.ctx.controller
+        added = sum(controller.download_song(song) for song in controller.library.favorites())
+        if not added:
+            controller.toast("Every favorite is already downloaded")
+
+    def on_offline(self) -> None:
+        offline = self.ctx.controller.offline
+        songs = offline.songs() if offline else []
+        size = offline.size() / 1e9 if offline else 0.0
+        self.size_label.setText(f"{len(songs)} songs · {size:.1f} GB" if songs else "")
+        self.show_songs(songs)
 
 
 class QueuePage(Page):

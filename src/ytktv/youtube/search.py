@@ -18,7 +18,15 @@ from ytktv import catalog
 from ytktv.core.models import Song
 from ytktv.net import urlopen
 from ytktv.youtube.hd_unlock import HdUnlock
-from ytktv.youtube.lyrics import LyricLine, borrow_word_timing, parse_json3, pick_tracks
+from ytktv.youtube.lyrics import (
+    LyricLine,
+    borrow_word_timing,
+    parse_json3,
+    parse_lrc,
+    pick_lrc,
+    pick_tracks,
+    search_terms,
+)
 from ytktv.youtube.parse import (
     MediaSource,
     entry_to_song,
@@ -49,6 +57,7 @@ HOT_CATEGORIES: dict[str, str] = {
 ARTISTS: dict[str, tuple[str, ...]] = {
     language: tuple(catalog.artists(language)) for language in catalog.LANGUAGES
 }
+LRCLIB_AGENT = "YTKTV (https://github.com/TonyD365/YTKTV)"  # LRCLIB asks apps to name themselves
 _SUGGEST_URL = "https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q="
 
 _SEARCH_TTL = 600.0
@@ -297,8 +306,28 @@ class YouTube:
                     log.info("no word timing for %s", video_id, exc_info=True)
         elif automatic and allow_auto:
             lines = fetch(automatic)
+        if not lines:
+            try:
+                lines = self.lrclib_lyrics(info)
+            except Exception:
+                log.info("no LRCLIB lyrics for %s", video_id, exc_info=True)
         self._lyrics_cache.put(key, lines)
         return lines
+
+    @staticmethod
+    def lrclib_lyrics(info: dict[str, Any]) -> list[LyricLine]:
+        """Synced lyrics from LRCLIB (lrclib.net) for a video without subtitles."""
+        if info.get("track"):
+            terms = f"{info['track']} {info.get('artist') or ''}".strip()
+        else:
+            terms = search_terms(str(info.get("title") or ""), str(info.get("channel") or ""))
+        if not terms:
+            return []
+        url = "https://lrclib.net/api/search?" + urllib.parse.urlencode({"q": terms})
+        request = urllib.request.Request(url, headers={"User-Agent": LRCLIB_AGENT})
+        with urlopen(request, timeout=15) as response:
+            results = json.loads(response.read())
+        return parse_lrc(pick_lrc(results, float(info.get("duration") or 0)))
 
     def download_media(
         self,
