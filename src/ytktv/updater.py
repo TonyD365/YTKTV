@@ -71,9 +71,14 @@ def platform_suffixes(system: str | None = None, machine: str | None = None) -> 
         arch = "arm64" if machine in ("arm64", "aarch64") else "x86_64"
         return ["macos-universal.pkg", f"macos-{arch}.pkg"]
     if system == "Windows":
+        if machine in ("arm64", "aarch64"):
+            # The x64 build still runs on Windows on ARM, emulated, if there is no ARM one.
+            return ["windows-arm64-setup.exe", "windows-x64-setup.exe"]
         return ["windows-x64-setup.exe"]
     if system == "Linux" and machine in ("x86_64", "amd64"):
         return ["linux-x86_64.AppImage"]
+    if system == "Linux" and machine in ("aarch64", "arm64"):
+        return ["linux-aarch64.AppImage"]
     return []
 
 

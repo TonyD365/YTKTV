@@ -467,6 +467,30 @@ def test_shift_report_and_hand_over(qtbot):
     assert "Sessions closed</td><td align='right'>0" in shift_report(store, now=time.time() + 5)
 
 
+def test_arm_machines_get_arm_builds(monkeypatch):
+    from ytktv import bootstrap, updater
+
+    assert updater.platform_suffixes("Windows", "ARM64")[0] == "windows-arm64-setup.exe"
+    assert updater.platform_suffixes("Windows", "AMD64") == ["windows-x64-setup.exe"]
+    assert updater.platform_suffixes("Linux", "aarch64") == ["linux-aarch64.AppImage"]
+    monkeypatch.setattr(bootstrap.platform, "machine", lambda: "ARM64")
+    assert bootstrap._windows_mpv_asset().match("mpv-dev-aarch64-20261021-git-e471496c56.7z")
+    monkeypatch.setattr(bootstrap.platform, "machine", lambda: "AMD64")
+    pattern = bootstrap._windows_mpv_asset()
+    assert pattern.match("mpv-dev-x86_64-20261021-git-e471496c56.7z")
+    assert not pattern.match("mpv-dev-x86_64-v3-20261021-git-e471496c56.7z")
+
+
+def test_arm_gets_the_cpu_separation_runtime():
+    from ytktv.separation.runtime import Gpu, choose_variant
+
+    nvidia = Gpu("nvidia", "RTX", cuda=True)
+    assert choose_variant("Windows", nvidia, "AMD64") == "cuda"
+    assert choose_variant("Windows", Gpu("intel", "Arc"), "AMD64") == "directml"
+    assert choose_variant("Windows", Gpu("qualcomm", "Adreno"), "ARM64") == "cpu"
+    assert choose_variant("Linux", nvidia, "aarch64") == "cpu"
+
+
 def test_scrolling_past_the_price_fields_leaves_them_alone(qtbot):
     from PySide6.QtCore import QPoint, QPointF, Qt
     from PySide6.QtGui import QWheelEvent
@@ -610,3 +634,11 @@ def test_receipts(qtbot, tmp_path):
 
     width_mm = printer.pageLayout().fullRect(QPageLayout.Unit.Millimeter).width()
     assert abs(width_mm - 80) < 1
+
+
+def test_windows_on_arm_does_not_offer_the_separation_download():
+    from ytktv.separation.runtime import supported
+
+    assert supported("Windows", frozen=True, machine="AMD64")
+    assert supported("Linux", frozen=True, machine="aarch64")
+    assert not supported("Windows", frozen=True, machine="ARM64")

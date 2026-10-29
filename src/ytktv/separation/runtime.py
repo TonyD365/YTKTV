@@ -87,12 +87,19 @@ def _run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, **kwargs)
 
 
-def supported(system: str | None = None, frozen: bool | None = None) -> bool:
+def supported(
+    system: str | None = None, frozen: bool | None = None, machine: str | None = None
+) -> bool:
     """Whether this build gets its separation runtime by download."""
     if os.environ.get("YTKTV_SEPARATION_RUNTIME") == "1":
         return True
     system = system or platform.system()
+    machine = (machine if machine is not None else platform.machine()).lower()
     frozen = bootstrap.is_frozen() if frozen is None else frozen
+    if system == "Windows" and machine in ("arm64", "aarch64"):
+        # Some of the separation libraries have no Windows on ARM builds yet and would
+        # be compiled from source for a very long time; Vocal Cut and L / R still work.
+        return False
     return frozen and system in ("Windows", "Linux")
 
 
@@ -148,8 +155,11 @@ def detect_gpu(system: str | None = None, run: Runner = _run) -> Gpu | None:
     return None
 
 
-def choose_variant(system: str, gpu: Gpu | None) -> str:
-    if gpu is None:
+def choose_variant(system: str, gpu: Gpu | None, machine: str = "") -> str:
+    """The runtime to install; *machine* is platform.machine() of the PC it is for."""
+    if gpu is None or machine.lower() in ("arm64", "aarch64"):
+        # ARM (Windows on ARM laptops, Raspberry Pi-class boxes): no CUDA or DirectML
+        # builds there, but the CPU runtime works.
         return "cpu"
     if gpu.cuda:
         return "cuda"
@@ -276,7 +286,9 @@ def self_test(report: Report = print) -> int:
     override = os.environ.get("YTKTV_SEPARATION_ROOT")
     runtime = Runtime(Path(override) if override else None)
     system = platform.system()
-    wanted = os.environ.get("YTKTV_SEPARATION_VARIANT") or choose_variant(system, detect_gpu())
+    wanted = os.environ.get("YTKTV_SEPARATION_VARIANT") or choose_variant(
+        system, detect_gpu(), platform.machine()
+    )
     report(f"python: {sys.version.split()[0]}  variant: {wanted}")
     installed = runtime.install_with_fallback(wanted, report)
     with tempfile.TemporaryDirectory() as folder:

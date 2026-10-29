@@ -190,9 +190,12 @@ Download the installer for your system from the
 | macOS (Apple Silicon and Intel) | `YTKTV-<version>-macos-universal.pkg` |
 | Windows 10/11 (64-bit) | `YTKTV-<version>-windows-x64-setup.exe` |
 | Linux (x86-64) | `YTKTV-<version>-linux-x86_64.AppImage` |
+| Windows on ARM | `YTKTV-<version>-windows-arm64-setup.exe` |
+| Linux ARM (64-bit, e.g. Raspberry Pi 4/5) | `YTKTV-<version>-linux-aarch64.AppImage` |
 | YTKTV Desk, macOS (Apple Silicon and Intel) | `YTKTV-Desk-<version>-macos-universal.pkg` |
 | YTKTV Desk, Windows | `YTKTV-Desk-<version>-windows-x64-setup.exe` |
 | YTKTV Desk, Linux | `YTKTV-Desk-<version>-linux-x86_64.AppImage` |
+| YTKTV Desk, ARM | `YTKTV-Desk-<version>-windows-arm64-setup.exe` or `-linux-aarch64.AppImage` |
 
 The installers are not code-signed yet. On macOS, remove the download quarantine with `xattr`
 before opening the package:
@@ -224,6 +227,8 @@ Copies of YTKTV 1.4 and 1.5 that already downloaded mpv keep using it.
 | macOS, Apple Silicon | Built in | GPU (Metal) |
 | Windows | Downloaded on first run | NVIDIA GPU (CUDA), other GPUs (DirectML), or CPU |
 | Linux | Downloaded on first run | NVIDIA GPU (CUDA) or CPU |
+| Linux ARM | Downloaded on first run | CPU (a few minutes a song on a Raspberry Pi) |
+| Windows on ARM | Not available yet | Vocal Cut and L / R still work |
 | macOS, Intel | Not available | Vocal Cut and L / R still work |
 
 On Windows and Linux, YTKTV checks the graphics card the first time it starts and offers to

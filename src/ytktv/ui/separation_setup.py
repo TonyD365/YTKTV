@@ -48,7 +48,7 @@ class SeparationSetup(QObject):
 
     def _detected(self, gpu: Gpu | None) -> None:
         self._gpu = gpu
-        self._recommended = choose_variant(platform.system(), gpu)
+        self._recommended = choose_variant(platform.system(), gpu, platform.machine())
         self._publish()
         installed = self.runtime.installed_variant()
         declined = self.controller.settings.separation_declined
