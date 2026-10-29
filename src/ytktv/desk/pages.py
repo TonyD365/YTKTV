@@ -298,3 +298,84 @@ class RecordsPage(QWidget):
         self.top_songs.setText(
             "Most sung: " + ", ".join(f"{s} ({n})" for s, n in songs) if songs else ""
         )
+
+
+def shift_report(store: DeskStore, now: float | None = None) -> str:
+    """Everything since the last hand-over, as HTML for the screen or the printer."""
+    now = time.time() if now is None else now
+    started = float(store.setting("shift_started", "0") or 0) or day_bounds(QDate.currentDate())[0]
+    visits = store.history(started, now + 1)
+    currency = store.setting("currency", "$")
+    rooms_fee = sum(a for v in visits for t, a in v.lines if t.startswith("Room ·"))
+    sold: Counter[str] = Counter()
+    for v in visits:
+        for text, _amount in v.lines:
+            if not text.startswith("Room ·") and " × " in text:
+                name, qty = text.rsplit(" × ", 1)
+                sold[name] += int(qty) if qty.isdigit() else 1
+    open_now = [r.name for r in store.rooms() if r.is_open]
+    rows = "".join(
+        f"<tr><td>{n}</td><td align='right'>{q}</td></tr>" for n, q in sold.most_common()
+    )
+    return (
+        "<div style='color:#111'>"
+        "<h2>YTKTV · Shift report</h2>"
+        f"<p>{time.strftime('%Y-%m-%d %H:%M', time.localtime(started))} – "
+        f"{time.strftime('%H:%M', time.localtime(now))}</p>"
+        "<table width='100%' cellpadding='4'>"
+        f"<tr><td>Sessions closed</td><td align='right'>{len(visits)}</td></tr>"
+        f"<tr><td>Room fees</td><td align='right'>{currency}{rooms_fee:.2f}</td></tr>"
+        f"<tr><td>Items</td><td align='right'>"
+        f"{currency}{sum(v.total for v in visits) - rooms_fee:.2f}</td></tr>"
+        f"<tr><td><b>Takings</b></td><td align='right'><b>{currency}"
+        f"{sum(v.total for v in visits):.2f}</b></td></tr>"
+        f"<tr><td>Rooms still open</td><td align='right'>{', '.join(open_now) or 'none'}</td></tr>"
+        "</table>"
+        + (f"<h3>Items sold</h3><table width='100%' cellpadding='4'>{rows}</table>" if rows else "")
+        + "</div>"
+    )
+
+
+class ShiftDialog(QDialog):
+    """The shift report, with printing and the hand-over that starts a new shift."""
+
+    def __init__(self, store: DeskStore, parent: QWidget | None = None) -> None:
+        from PySide6.QtWidgets import QTextBrowser
+
+        super().__init__(parent)
+        self.store = store
+        self.setWindowTitle("Shift report")
+        self.resize(480, 600)
+        column = QVBoxLayout(self)
+        self.view = QTextBrowser()
+        self.view.setStyleSheet("background: white; color: black; border-radius: 10px;")
+        self.view.setHtml(shift_report(store))
+        column.addWidget(self.view, stretch=1)
+        buttons = QHBoxLayout()
+        print_button = QPushButton("Print…")
+        print_button.clicked.connect(self.print_report)
+        hand_over = QPushButton("Hand Over")
+        hand_over.setObjectName("accent")
+        hand_over.setToolTip("End this shift: the next report starts from now")
+        hand_over.clicked.connect(self.hand_over)
+        close = QPushButton("Close")
+        close.clicked.connect(self.reject)
+        buttons.addWidget(print_button)
+        buttons.addStretch()
+        buttons.addWidget(close)
+        buttons.addWidget(hand_over)
+        column.addLayout(buttons)
+
+    def print_report(self) -> None:
+        from PySide6.QtGui import QTextDocument
+        from PySide6.QtPrintSupport import QPrintDialog, QPrinter
+
+        printer = QPrinter()
+        if QPrintDialog(printer, self).exec():
+            document = QTextDocument()
+            document.setHtml(shift_report(self.store))
+            document.print_(printer)
+
+    def hand_over(self) -> None:
+        self.store.set_setting("shift_started", repr(time.time()))
+        self.accept()

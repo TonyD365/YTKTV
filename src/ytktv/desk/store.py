@@ -24,6 +24,7 @@ class Product:
     category: str
     price: float
     active: bool = True
+    stock: int | None = None  # None = never runs out
 
 
 @dataclass
@@ -82,6 +83,9 @@ class Room:
     ends_at: float | None = None
     opened_at: float = 0.0
     rate: float | None = None  # this room's price per hour; None = the desk's default
+    room_type: str = "Medium"
+    capacity: int = 6
+    state: str = "ready"  # ready, cleaning or maintenance (while closed)
 
     def message(self) -> dict[str, object]:
         """What the room is told about itself."""
@@ -114,13 +118,17 @@ class DeskStore:
                 ("sessions", "opened_at REAL NOT NULL DEFAULT 0"),
                 ("rooms", "rate REAL"),
                 ("sessions", "songs TEXT NOT NULL DEFAULT '[]'"),
+                ("rooms", "room_type TEXT NOT NULL DEFAULT 'Medium'"),
+                ("rooms", "capacity INTEGER NOT NULL DEFAULT 6"),
+                ("rooms", "state TEXT NOT NULL DEFAULT 'ready'"),
+                ("products", "stock INTEGER"),
             ):
                 with contextlib.suppress(sqlite3.OperationalError):  # added later
                     self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
             self._db.executescript(
                 "CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, name TEXT NOT NULL,"
                 " category TEXT NOT NULL DEFAULT '', price REAL NOT NULL, active INTEGER NOT NULL"
-                " DEFAULT 1);"
+                " DEFAULT 1, stock INTEGER);"
                 "CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL,"
                 " name TEXT NOT NULL, price REAL NOT NULL, qty INTEGER NOT NULL, status TEXT NOT"
                 " NULL DEFAULT 'pending', created REAL NOT NULL);"
@@ -204,10 +212,13 @@ class DeskStore:
         with self._lock:
             rows = self._db.execute(
                 "SELECT r.id, r.name, r.last_seen, s.room_id IS NOT NULL, COALESCE(s.guest, ''),"
-                " s.ends_at, COALESCE(s.opened_at, 0), r.rate FROM rooms r"
-                " LEFT JOIN sessions s ON s.room_id = r.id ORDER BY r.rowid"
+                " s.ends_at, COALESCE(s.opened_at, 0), r.rate, r.room_type, r.capacity, r.state"
+                " FROM rooms r LEFT JOIN sessions s ON s.room_id = r.id ORDER BY r.rowid"
             )
-            return [Room(a, b, c, bool(d), e, f, g, h) for a, b, c, d, e, f, g, h in rows]
+            return [
+                Room(a, b, c, bool(d), e, f, g, h, i, j, k)
+                for a, b, c, d, e, f, g, h, i, j, k in rows
+            ]
 
     def room(self, room_id: str) -> Room | None:
         return next((r for r in self.rooms() if r.room_id == room_id), None)
@@ -263,6 +274,7 @@ class DeskStore:
                 )
             self._db.execute("DELETE FROM sessions WHERE room_id=?", (room_id,))
             self._db.execute("DELETE FROM orders WHERE room_id=?", (room_id,))
+            self._db.execute("UPDATE rooms SET state='cleaning' WHERE id=?", (room_id,))
             self._db.execute("UPDATE calls SET done=1 WHERE room_id=?", (room_id,))
             self._db.commit()
 
@@ -355,6 +367,32 @@ class DeskStore:
                 found.append(booking)
         return found
 
+    def set_state(self, room_id: str, state: str) -> None:
+        """ready, cleaning or maintenance."""
+        with self._lock:
+            self._db.execute("UPDATE rooms SET state=? WHERE id=?", (state, room_id))
+            self._db.commit()
+
+    def set_type(self, room_id: str, room_type: str, capacity: int) -> None:
+        with self._lock:
+            self._db.execute(
+                "UPDATE rooms SET room_type=?, capacity=? WHERE id=?",
+                (room_type, capacity, room_id),
+            )
+            self._db.commit()
+
+    def change_room(self, from_id: str, to_id: str) -> None:
+        """Move a party, with its time, orders, calls and songs, to another room."""
+        with self._lock:
+            busy = self._db.execute("SELECT 1 FROM sessions WHERE room_id=?", (to_id,)).fetchone()
+            if busy is not None:
+                raise ValueError("that room is in use")
+            for table in ("sessions", "orders", "calls"):
+                self._db.execute(f"UPDATE {table} SET room_id=? WHERE room_id=?", (to_id, from_id))
+            self._db.execute("UPDATE rooms SET state='cleaning' WHERE id=?", (from_id,))
+            self._db.execute("UPDATE rooms SET state='ready' WHERE id=?", (to_id,))
+            self._db.commit()
+
     def set_rate(self, room_id: str, rate: float | None) -> None:
         with self._lock:
             self._db.execute("UPDATE rooms SET rate=? WHERE id=?", (rate, room_id))
@@ -377,22 +415,24 @@ class DeskStore:
     def products(self, active_only: bool = False) -> list[Product]:
         with self._lock:
             rows = self._db.execute(
-                "SELECT id, name, category, price, active FROM products"
+                "SELECT id, name, category, price, active, stock FROM products"
                 + (" WHERE active=1" if active_only else "")
                 + " ORDER BY category, name"
             ).fetchall()
-        return [Product(a, b, c, d, bool(e)) for a, b, c, d, e in rows]
+        return [Product(a, b, c, d, bool(e), f) for a, b, c, d, e, f in rows]
 
     def save_product(self, product: Product) -> int:
         with self._lock:
             cursor = self._db.execute(
-                "INSERT OR REPLACE INTO products VALUES (?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO products (id, name, category, price, active, stock)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     product.product_id or None,
                     product.name,
                     product.category,
                     product.price,
                     int(product.active),
+                    product.stock,
                 ),
             )
             self._db.commit()
@@ -415,6 +455,15 @@ class DeskStore:
                 product = known.get(product_id)
                 if product is None or not 0 < qty <= 99:
                     continue
+                if product.stock is not None:
+                    if product.stock < qty:
+                        continue  # not enough left
+                    product.stock -= qty
+                    # Sold out: take it off the menu until it is restocked.
+                    self._db.execute(
+                        "UPDATE products SET stock=?, active=? WHERE id=?",
+                        (product.stock, int(product.stock > 0), product_id),
+                    )
                 self._db.execute(
                     "INSERT INTO orders (room_id, name, price, qty, created)"
                     " VALUES (?, ?, ?, ?, ?)",
@@ -436,6 +485,16 @@ class DeskStore:
 
     def set_order_status(self, order_id: int, status: str) -> None:
         with self._lock:
+            if status == "cancelled":  # put cancelled items back on the shelf
+                row = self._db.execute(
+                    "SELECT name, qty, status FROM orders WHERE id=?", (order_id,)
+                ).fetchone()
+                if row is not None and row[2] != "cancelled":
+                    self._db.execute(
+                        "UPDATE products SET stock = stock + ?, active = 1"
+                        " WHERE name=? AND stock IS NOT NULL",
+                        (row[1], row[0]),
+                    )
             self._db.execute("UPDATE orders SET status=? WHERE id=?", (status, order_id))
             self._db.commit()
 

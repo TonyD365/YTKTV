@@ -18,6 +18,11 @@ def main() -> int:
 
     app = QApplication(sys.argv[:1])
     app.setApplicationName("YTKTV Desk")
+    from PySide6.QtGui import QIcon
+
+    from ytktv.desk.window import ICON
+
+    app.setWindowIcon(QIcon(str(ICON)))
     app.setStyleSheet(theme.STYLESHEET)
     store = DeskStore(data_dir() / "desk.sqlite3")
     hub = Hub()

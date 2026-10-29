@@ -393,3 +393,75 @@ def test_closed_sessions_are_kept_in_the_records(qtbot):
     window.records.refresh()
     assert window.records.table.rowCount() == 1 and "1 sessions" in window.records.summary.text()
     assert "Alexander" in window.records.top_songs.text()
+
+
+def test_room_types_cleaning_maintenance_and_change_room(qtbot):
+    from ytktv.desk.server import Hub
+    from ytktv.desk.store import Product
+    from ytktv.desk.window import DeskWindow
+
+    store = DeskStore()
+    small, _ = store.pair(store.new_code(), "101")
+    big, _ = store.pair(store.new_code(), "201")
+    store.set_type(big.room_id, "VIP", 12)
+    assert (store.room(big.room_id).room_type, store.room(big.room_id).capacity) == ("VIP", 12)
+    window = DeskWindow(store, Hub(), "192.168.1.10:8770")
+    qtbot.addWidget(window)
+    window.select(small.room_id)
+    window.open_room(guest="Kim", length="1 hour")
+    cola = store.save_product(Product(0, "Cola", "Drinks", 3, stock=5))
+    store.add_order(small.room_id, [(cola, 2)])
+    store.note_song(small.room_id, "A Perfect Day")
+
+    window.change_room(target=big.room_id)  # the party moves with its time, orders and songs
+    moved = store.room(big.room_id)
+    assert moved.is_open and moved.guest == "Kim" and window.selected == big.room_id
+    assert [o.name for o in store.orders(big.room_id)] == ["Cola"]
+    assert store.now_singing(big.room_id) == "A Perfect Day"
+    assert store.room(small.room_id).state == "cleaning" and not store.room(small.room_id).is_open
+
+    window.close_room(confirm=False)
+    assert store.room(big.room_id).state == "cleaning"
+    window.mark_cleaned()
+    assert store.room(big.room_id).state == "ready"
+    window.toggle_maintenance()
+    assert store.room(big.room_id).state == "maintenance"
+    assert not window.room_actions["open"].isEnabled()
+    window.toggle_maintenance()
+    assert store.room(big.room_id).state == "ready"
+
+
+def test_stock_runs_out_and_comes_back():
+    from ytktv.desk.store import Product
+
+    store = DeskStore()
+    room, _ = store.pair(store.new_code(), "101")
+    store.open_room(room.room_id, "", None)
+    chips = store.save_product(Product(0, "Chips", "Snacks", 2, stock=3))
+    assert store.add_order(room.room_id, [(chips, 5)]) == 0  # not enough left
+    assert store.add_order(room.room_id, [(chips, 3)]) == 1
+    assert store.products(active_only=True) == []  # sold out: off the menu
+    store.set_order_status(store.orders(room.room_id)[0].order_id, "cancelled")
+    restocked = store.products(active_only=True)[0]
+    assert restocked.stock == 3
+
+
+def test_shift_report_and_hand_over(qtbot):
+    from ytktv.desk.billing import bill
+    from ytktv.desk.pages import ShiftDialog, shift_report
+    from ytktv.desk.store import Product
+
+    store = DeskStore()
+    room, _ = store.pair(store.new_code(), "101")
+    store.set_setting("rate", "10")
+    store.open_room(room.room_id, "Kim", 60)
+    cola = store.save_product(Product(0, "Cola", "Drinks", 3))
+    store.add_order(room.room_id, [(cola, 2)])
+    store.close_room(room.room_id, bill(store, room.room_id))
+    report = shift_report(store)
+    assert "Sessions closed</td><td align='right'>1" in report and "Cola" in report
+    assert "$16.00" in report  # one hour at 10 plus two colas
+    dialog = ShiftDialog(store)
+    qtbot.addWidget(dialog)
+    dialog.hand_over()
+    assert "Sessions closed</td><td align='right'>0" in shift_report(store, now=time.time() + 5)
