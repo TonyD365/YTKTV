@@ -222,3 +222,52 @@ def line_at(lines: list[LyricLine], position: float) -> int:
         else:
             high = mid
     return low if low < len(lines) else -1
+
+
+# Duets: who sings each line. Lyrics written for duets often start a part with a marker
+# like "男：", "(女)" or "F:", which holds until the next one.
+PART_A, PART_B, PART_BOTH = 0, 1, 2
+_PART_NAMES = {
+    "男": PART_A, "m": PART_A, "male": PART_A, "man": PART_A, "him": PART_A,
+    "女": PART_B, "f": PART_B, "female": PART_B, "woman": PART_B, "her": PART_B,
+    "合": PART_BOTH, "合唱": PART_BOTH, "男女": PART_BOTH, "男女合": PART_BOTH,
+    "both": PART_BOTH, "all": PART_BOTH, "together": PART_BOTH,
+}  # fmt: skip
+_PART_MARK = re.compile(
+    r"^\s*(?:[\[\(（【<]\s*(?P<a>[^\]\)）】>]{1,6}?)\s*[\]\)）】>]\s*[:：]?"
+    r"|(?P<b>[^\s:：]{1,6}?)\s*[:：])\s*"
+)
+# Without markers, a gap this long between lines starts the other singer's turn.
+DUET_BREAK_SECONDS = 3.0
+
+
+def duet_parts(lines: list[LyricLine]) -> tuple[list[LyricLine], list[int]]:
+    """Each line's part, and the lines without their part markers.
+
+    Lyrics without any markers alternate between the two singers verse by verse.
+    """
+    marked: list[int | None] = []
+    cleaned: list[LyricLine] = []
+    for line in lines:
+        match = _PART_MARK.match(line.text)
+        name = (match.group("a") or match.group("b")).strip().lower() if match else ""
+        if name not in _PART_NAMES or match is None or match.end() >= len(line.text):
+            marked.append(None)
+            cleaned.append(line)
+            continue
+        marked.append(_PART_NAMES[name])
+        cut = match.end()
+        words = tuple((t, max(0, i - cut)) for t, i in line.words)
+        cleaned.append(LyricLine(line.start, line.end, line.text[cut:], words))
+    if any(part is not None for part in marked):
+        parts, current = [], PART_BOTH  # before the first marker both sing
+        for part in marked:
+            current = current if part is None else part
+            parts.append(current)
+        return cleaned, parts
+    parts, current = [], PART_A
+    for i, line in enumerate(lines):
+        if i and line.start - lines[i - 1].end >= DUET_BREAK_SECONDS:
+            current = PART_B if current == PART_A else PART_A
+        parts.append(current)
+    return cleaned, parts

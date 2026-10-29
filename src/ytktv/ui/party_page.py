@@ -42,6 +42,14 @@ class PartyPage(Page):
         self.pk_button.setMinimumHeight(52)
         self.pk_button.toggled.connect(self._pk)
         self.body.addWidget(self.pk_button)
+        self.body.addWidget(
+            self._caption("DUET: BLUE LINES FOR ONE, PINK FOR THE OTHER, GOLD TOGETHER")
+        )
+        self.duet_button = QPushButton("🎭  Duet: Off")
+        self.duet_button.setCheckable(True)
+        self.duet_button.setMinimumHeight(52)
+        self.duet_button.toggled.connect(self._duet)
+        self.body.addWidget(self.duet_button)
         self.body.addWidget(self._caption("CHEER THE SINGER"))
         grid = QGridLayout()
         grid.setSpacing(10)
@@ -75,6 +83,10 @@ class PartyPage(Page):
     def send(self) -> None:
         if self._send(self.danmaku_input.text()):
             self.danmaku_input.clear()
+
+    def _duet(self, on: bool) -> None:
+        self.ctx.controller.set_duet_mode(on)
+        self.duet_button.setText(f"🎭  Duet: {'On' if on else 'Off'}")
 
     def _pk(self, on: bool) -> None:
         self.ctx.controller.set_pk_mode(on)

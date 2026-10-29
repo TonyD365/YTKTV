@@ -968,3 +968,30 @@ def test_live_pk_bars(window, qtbot):
     main.mv_window.set_pk(None)
     assert bars.isHidden()
     assert controller.live_pk() is None  # nothing is being scored
+
+
+def test_duet_colours_the_lyrics_by_singer(qtbot):
+    from ytktv.ui.mv_overlays import DUET_COLOURS, LyricsOverlay
+
+    overlay = LyricsOverlay()
+    qtbot.addWidget(overlay)
+    overlay.set_lines(
+        [{"start": 0, "end": 2, "text": "男：one"}, {"start": 2, "end": 4, "text": "女：two"}]
+    )
+    assert overlay._colours(0)[0].name() == "#ffffff"
+    overlay.set_duet(True)
+    assert overlay._lines[0].text == "one"
+    assert overlay._colours(1)[0].name() == DUET_COLOURS[1][0]
+    overlay.set_duet(False)
+    assert overlay._lines[0].text == "男：one"
+
+
+def test_duet_toggle_reaches_the_state(tmp_path):
+    from tests.helpers import make_controller
+
+    controller, _, _ = make_controller(tmp_path)
+    try:
+        controller.set_duet_mode(True)
+        assert controller.state()["duet"] is True
+    finally:
+        controller.close()

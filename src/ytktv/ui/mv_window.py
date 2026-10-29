@@ -609,6 +609,7 @@ class MvWindow(QWidget):
         self._speed = float(state.get("speed") or 1.0)
         self._lyrics_offset = float(state.get("lyrics_offset") or 0.0)
         self._lights_enabled = bool(state.get("lights", True))
+        self.lyrics.set_duet(bool(state.get("duet")))
         if current is None:
             # Only when nothing is on: lyrics and the tune arrive while a song is still
             # loading, and clearing them then left the first song of an evening without
