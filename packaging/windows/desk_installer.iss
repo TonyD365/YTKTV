@@ -3,6 +3,10 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
+; /DArch=arm64 for Windows on ARM; x64 otherwise.
+#ifndef Arch
+  #define Arch "x64"
+#endif
 
 [Setup]
 AppId={{C2E7A1D4-3F6B-4E58-9A21-7D0B5E4C8F13}
@@ -15,10 +19,15 @@ DefaultGroupName=YTKTV Desk
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+#if Arch == "arm64"
+ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
+#else
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+#endif
 OutputDir=..\..\dist
-OutputBaseFilename=YTKTV-Desk-{#AppVersion}-windows-x64-setup
+OutputBaseFilename=YTKTV-Desk-{#AppVersion}-windows-{#Arch}-setup
 SetupIconFile=..\..\build\desk-icon\icon.ico
 UninstallDisplayIcon={app}\YTKTV Desk.exe
 Compression=lzma2

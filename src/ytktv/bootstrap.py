@@ -22,7 +22,12 @@ from ytktv.net import urlopen
 log = logging.getLogger(__name__)
 
 MPV_WINDOWS_REPO = "shinchiro/mpv-winbuild-cmake"
-_WIN_ASSET_RE = re.compile(r"^mpv-dev-x86_64-\d.*\.7z$")
+
+
+def _windows_mpv_asset() -> re.Pattern[str]:
+    """The libmpv build for this PC: x86_64, or aarch64 on Windows on ARM."""
+    arch = "aarch64" if platform.machine().lower() in ("arm64", "aarch64") else "x86_64"
+    return re.compile(rf"^mpv-dev-{arch}-\d.*\.7z$")
 
 
 def is_frozen() -> bool:
@@ -173,7 +178,8 @@ def install_windows_libmpv(report: Callable[[str], None]) -> None:
     request = urllib.request.Request(api, headers={"Accept": "application/vnd.github+json"})
     with urlopen(request, timeout=30) as response:
         release = json.load(response)
-    asset = next((a for a in release.get("assets", []) if _WIN_ASSET_RE.match(a["name"])), None)
+    pattern = _windows_mpv_asset()
+    asset = next((a for a in release.get("assets", []) if pattern.match(a["name"])), None)
     if asset is None:
         raise RuntimeError("no libmpv build found in the latest mpv release")
     target = lib_dir() / "libmpv-2.dll"

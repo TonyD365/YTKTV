@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build the YTKTV Desk installer for this machine into dist/:
 #   macOS  YTKTV-Desk-<version>-macos-<arch>.pkg   (installs to /Applications)
-#   Linux  YTKTV-Desk-<version>-linux-x86_64.AppImage   (needs appimagetool on PATH)
+#   Linux  YTKTV-Desk-<version>-linux-<x86_64 or aarch64>.AppImage   (needs appimagetool)
 # Windows uses packaging/windows/desk_installer.iss after PyInstaller instead.
 #
 # Optional on macOS: CODESIGN_IDENTITY, INSTALLER_IDENTITY (see packaging/macos/build_pkg.sh).
@@ -9,6 +9,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 PYTHON="${PYTHON:-python3}"
+ARCH="$(uname -m)"  # x86_64 or aarch64
 VERSION="$("$PYTHON" -c 'import ytktv; print(ytktv.__version__)')"
 "$PYTHON" packaging/make_icon.py build/desk-icon src/ytktv/desk/assets/icon.png
 
@@ -46,7 +47,7 @@ if [ "$(uname)" = "Darwin" ]; then
     --version "$VERSION" ${SIGN_ARGS[@]+"${SIGN_ARGS[@]}"} "$OUT"
 else
   APPDIR=build/YTKTV-Desk.AppDir
-  OUT="dist/YTKTV-Desk-${VERSION}-linux-x86_64.AppImage"
+  OUT="dist/YTKTV-Desk-${VERSION}-linux-${ARCH}.AppImage"
   rm -rf "$APPDIR" && mkdir -p "$APPDIR/usr/lib"
   cp -a "dist/YTKTV Desk" "$APPDIR/usr/lib/ytktv-desk"
   cp build/desk-icon/icon.png "$APPDIR/ytktv-desk.png"
@@ -66,6 +67,6 @@ HERE="$(dirname "$(readlink -f "$0")")"
 exec "$HERE/usr/lib/ytktv-desk/YTKTV Desk" "$@"
 APPRUN
   chmod +x "$APPDIR/AppRun"
-  ARCH=x86_64 appimagetool --no-appstream "$APPDIR" "$OUT"
+  ARCH="$ARCH" appimagetool --no-appstream "$APPDIR" "$OUT"
 fi
 echo "==> Built $OUT"

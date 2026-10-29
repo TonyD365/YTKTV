@@ -465,3 +465,17 @@ def test_shift_report_and_hand_over(qtbot):
     qtbot.addWidget(dialog)
     dialog.hand_over()
     assert "Sessions closed</td><td align='right'>0" in shift_report(store, now=time.time() + 5)
+
+
+def test_arm_machines_get_arm_builds(monkeypatch):
+    from ytktv import bootstrap, updater
+
+    assert updater.platform_suffixes("Windows", "ARM64")[0] == "windows-arm64-setup.exe"
+    assert updater.platform_suffixes("Windows", "AMD64") == ["windows-x64-setup.exe"]
+    assert updater.platform_suffixes("Linux", "aarch64") == ["linux-aarch64.AppImage"]
+    monkeypatch.setattr(bootstrap.platform, "machine", lambda: "ARM64")
+    assert bootstrap._windows_mpv_asset().match("mpv-dev-aarch64-20261021-git-e471496c56.7z")
+    monkeypatch.setattr(bootstrap.platform, "machine", lambda: "AMD64")
+    pattern = bootstrap._windows_mpv_asset()
+    assert pattern.match("mpv-dev-x86_64-20261021-git-e471496c56.7z")
+    assert not pattern.match("mpv-dev-x86_64-v3-20261021-git-e471496c56.7z")
