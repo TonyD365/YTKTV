@@ -37,6 +37,7 @@ from ytktv.desk.panels import (
     ReceiptSettings,
     SecuritySettings,
     ShopSettings,
+    UpdateSettings,
 )
 from ytktv.desk.server import Hub, tell, tell_all_products, unbind
 from ytktv.desk.store import CODE_SECONDS, Booking, DeskStore, Room
@@ -347,6 +348,8 @@ class DeskWindow(QMainWindow):
         column.addWidget(self.receipts)
         self.security = SecuritySettings(self.store)
         column.addWidget(self.security)
+        self.updates = UpdateSettings(self.store)
+        column.addWidget(self.updates)
         return tab
 
     def watch_updates(self, updates: DeskUpdater) -> None:
@@ -371,6 +374,8 @@ class DeskWindow(QMainWindow):
         updates.ready.connect(ready)
         updates.available.connect(available)
         self.update_button.clicked.connect(install)
+        updates.status.connect(self.updates.state.setText)
+        self.updates.check_now = updates.check
 
     def _side_bar(self) -> QWidget:
         bar = QFrame()
