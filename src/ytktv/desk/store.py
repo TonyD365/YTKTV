@@ -15,6 +15,7 @@ from typing import Any
 from ytktv.rooms import crypto
 
 CODE_SECONDS = 300  # a pairing code works for five minutes, once
+LOW_STOCK = 5  # warn when a product is down to this many, unless the shop sets otherwise
 
 
 @dataclass
@@ -490,6 +491,16 @@ class DeskStore:
             self._db.commit()
 
     # -- products, orders and service calls -----------------------------------
+
+    def low_stock(self) -> list[Product]:
+        """Products on the menu that are running out, fewest left first."""
+        limit = int(self.setting("low_stock", str(LOW_STOCK)))
+        if limit <= 0:
+            return []
+        running_out = [
+            p for p in self.products(active_only=True) if p.stock is not None and p.stock <= limit
+        ]
+        return sorted(running_out, key=lambda p: (p.stock, p.name))
 
     def products(self, active_only: bool = False) -> list[Product]:
         with self._lock:

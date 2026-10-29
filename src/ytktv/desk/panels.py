@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 from ytktv.desk import lock, receipt
 from ytktv.desk.billing import DEFAULT_RATE, PAYMENTS, ROUNDING, Bill
 from ytktv.desk.server import Hub
-from ytktv.desk.store import DeskStore, Member, Product
+from ytktv.desk.store import LOW_STOCK, DeskStore, Member, Product
 
 
 class OrdersBox(QWidget):
@@ -395,6 +395,13 @@ class ShopSettings(QFrame):
         steady(self.points_per_unit)
         form.addRow("Members save", self.member_discount)
         form.addRow("Member points per 1 spent", self.points_per_unit)
+        self.low_stock = QSpinBox()
+        self.low_stock.setRange(0, 999)
+        self.low_stock.setSpecialValueText("Never")
+        self.low_stock.setValue(int(store.setting("low_stock", str(LOW_STOCK))))
+        self.low_stock.setToolTip("Warn in the service bar when this many or fewer are left")
+        steady(self.low_stock)
+        form.addRow("Warn when stock is down to", self.low_stock)
         column.addLayout(form)
         self.load()
 
@@ -463,6 +470,7 @@ class ShopSettings(QFrame):
         self.store.set_setting("block", str(self.block.value()))
         self.store.set_setting("member_discount", str(self.member_discount.value()))
         self.store.set_setting("points_per_unit", str(self.points_per_unit.value()))
+        self.store.set_setting("low_stock", str(self.low_stock.value()))
         if callable(self.changed):
             self.changed()
 

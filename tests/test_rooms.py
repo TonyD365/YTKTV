@@ -645,3 +645,22 @@ def test_windows_on_arm_gets_an_x64_separation_runtime(tmp_path):
     assert runtime_python("Linux", "aarch64") == "3.12"  # Linux ARM has native libraries
     commands = Runtime(tmp_path, system="Windows").install_commands(VARIANTS["cpu"], "uv")
     assert "--python" in commands[0][1]
+
+
+def test_low_stock_shows_in_the_service_bar(qtbot):
+    from ytktv.desk.server import Hub
+    from ytktv.desk.store import Product
+    from ytktv.desk.window import DeskWindow
+
+    store = DeskStore()
+    store.save_product(Product(0, "Cola", "Drinks", 5, stock=2))
+    store.save_product(Product(0, "Chips", "Snacks", 8, stock=40))
+    store.save_product(Product(0, "Tea", "Drinks", 6))  # never runs out
+    store.save_product(Product(0, "Old", "Drinks", 6, active=False, stock=0))
+    assert [p.name for p in store.low_stock()] == ["Cola"]
+    window = DeskWindow(store, Hub(), "192.168.1.10:8770")
+    qtbot.addWidget(window)
+    chips = [window.call_chips.itemAt(i).widget().text() for i in range(window.call_chips.count())]
+    assert chips == ["📦 Cola: 2 left"]
+    store.set_setting("low_stock", "0")
+    assert store.low_stock() == []
