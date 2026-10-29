@@ -40,26 +40,51 @@ def draw(size: int = 1024) -> QImage:
     p.setBrush(QBrush(background))
     p.drawRoundedRect(body, size * 0.2, size * 0.2)
 
-    # The bell: a dome on a flat base, with a small knob on top.
-    gold = QLinearGradient(0, size * 0.25, 0, size * 0.62)
-    gold.setColorAt(0.0, QColor("#ffe08a"))
-    gold.setColorAt(1.0, QColor("#ff3d9a"))
+    # A front-desk bell seen slightly from above: a round base, a shiny dome, and the
+    # plunger on top that you press to ring it, with two "ding" marks beside it.
+    cx = size * 0.5
+    base = QRectF(cx - size * 0.3, size * 0.555, size * 0.6, size * 0.1)
     p.setPen(Qt.PenStyle.NoPen)
-    p.setBrush(QBrush(gold))
-    cx, base_y, radius = size * 0.5, size * 0.6, size * 0.25
+    p.setBrush(QColor("#1b1236"))
+    p.drawEllipse(base.translated(0, size * 0.018))
+    plate = QLinearGradient(base.left(), 0, base.right(), 0)
+    plate.setColorAt(0.0, QColor("#b8860b"))
+    plate.setColorAt(0.5, QColor("#ffe7a0"))
+    plate.setColorAt(1.0, QColor("#b8860b"))
+    p.setBrush(QBrush(plate))
+    p.drawEllipse(base)
+
+    dome_rect = QRectF(cx - size * 0.24, size * 0.33, size * 0.48, size * 0.5)
     dome = QPainterPath()
-    dome.moveTo(cx - radius, base_y)
-    dome.arcTo(QRectF(cx - radius, base_y - radius, 2 * radius, 2 * radius), 180, -180)
+    dome.moveTo(dome_rect.left(), size * 0.585)
+    dome.arcTo(dome_rect, 180, -180)
     dome.closeSubpath()
+    shade = QLinearGradient(dome_rect.left(), 0, dome_rect.right(), 0)
+    shade.setColorAt(0.0, QColor("#ffd36b"))
+    shade.setColorAt(0.35, QColor("#fff4cf"))
+    shade.setColorAt(1.0, QColor("#ff3d9a"))
+    p.setBrush(QBrush(shade))
     p.drawPath(dome)
-    p.drawEllipse(QPointF(cx, base_y - radius - size * 0.03), size * 0.045, size * 0.045)
-    p.setBrush(QColor("#f3eeff"))
-    p.drawRoundedRect(QRectF(cx - radius * 1.25, base_y + size * 0.015, radius * 2.5, size * 0.06),
-                      size * 0.03, size * 0.03)
-    shine = QPainterPath()
-    shine.addEllipse(QRectF(cx - radius * 0.62, base_y - radius * 0.78, radius * 0.32, radius * 0.5))
-    p.setBrush(QColor(255, 255, 255, 110))
-    p.drawPath(shine)
+    rim = QRectF(dome_rect.left(), size * 0.565, dome_rect.width(), size * 0.04)
+    p.setBrush(QColor("#c9416f"))
+    p.drawEllipse(rim)
+
+    p.setBrush(QColor("#e8d9ff"))
+    p.drawRoundedRect(
+        QRectF(cx - size * 0.018, size * 0.26, size * 0.036, size * 0.08), size * 0.01, size * 0.01
+    )
+    button = QLinearGradient(0, size * 0.235, 0, size * 0.275)
+    button.setColorAt(0.0, QColor("#ffffff"))
+    button.setColorAt(1.0, QColor("#b9a8e6"))
+    p.setBrush(QBrush(button))
+    p.drawEllipse(QRectF(cx - size * 0.07, size * 0.235, size * 0.14, size * 0.045))
+
+    p.setPen(QPen(QColor("#2ee6ff"), size * 0.022, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    for side in (-1, 1):
+        for k, (dx, length) in enumerate(((0.17, 0.05), (0.23, 0.065))):
+            x = cx + side * size * dx
+            y = size * (0.25 + 0.035 * k)
+            p.drawLine(QPointF(x, y), QPointF(x + side * size * length * 0.6, y - size * length))
 
     font = QFont()
     font.setWeight(QFont.Weight.Black)
