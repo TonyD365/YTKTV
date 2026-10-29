@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QDateTimeEdit,
     QDialog,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QInputDialog,
@@ -28,7 +29,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ytktv.desk.store import Booking, DeskStore, Member
+from ytktv.desk import reports
+from ytktv.desk.store import Booking, DeskStore, Member, Visit
 
 LENGTHS = {"1 hour": 60, "2 hours": 120, "3 hours": 180, "No time limit": None}
 STATUS_TEXT = {
@@ -237,6 +239,41 @@ class BookingsPage(QWidget):
         self.refresh()
 
 
+class TakingsChart(QWidget):
+    """Bars of takings: per hour of a day, or per day of a week or month."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setMinimumHeight(150)
+        self.bars: list[tuple[str, float]] = []
+
+    def set_bars(self, bars: list[tuple[str, float]]) -> None:
+        self.bars = bars
+        self.update()
+
+    def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt's name
+        if not self.bars:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        top = max(amount for _, amount in self.bars) or 1.0
+        width = self.width() / len(self.bars)
+        chart = self.height() - 20
+        every = max(1, len(self.bars) // 16)  # label every bar only when they fit
+        for i, (label, amount) in enumerate(self.bars):
+            height = chart * amount / top
+            bar = QRectF(i * width + width * 0.15, chart - height, width * 0.7, height)
+            painter.fillRect(bar, QColor("#e0409b" if amount else "#3a3352"))
+            if i % every == 0:
+                painter.setPen(QColor("#9a93b8"))
+                painter.drawText(
+                    QRectF(i * width, chart + 2, width * every, 18),
+                    int(Qt.AlignmentFlag.AlignLeft),
+                    label,
+                )
+        painter.end()
+
+
 class RecordsPage(QWidget):
     COLUMNS = ("Closed", "Room", "Guest", "Time", "Songs", "Total")
 
@@ -246,16 +283,25 @@ class RecordsPage(QWidget):
         column = QVBoxLayout(self)
         column.setContentsMargins(24, 18, 24, 18)
         top = QHBoxLayout()
+        self.period = QComboBox()
+        self.period.addItems(reports.PERIODS)
+        self.period.currentIndexChanged.connect(self.refresh)
         self.day = QDateEdit(QDate.currentDate())
         self.day.setCalendarPopup(True)
         self.day.dateChanged.connect(self.refresh)
         self.summary = QLabel()
         self.summary.setStyleSheet("color: white; font-size: 18px; font-weight: 700;")
-        top.addWidget(QLabel("Day"))
+        export = QPushButton("Export CSV")
+        export.setToolTip("Every session in this period, as a spreadsheet Excel can open")
+        export.clicked.connect(self.export)
+        top.addWidget(self.period)
         top.addWidget(self.day)
         top.addSpacing(24)
         top.addWidget(self.summary, stretch=1)
+        top.addWidget(export)
         column.addLayout(top)
+        self.chart = TakingsChart()
+        column.addWidget(self.chart)
         self.table = QTableWidget(0, len(self.COLUMNS))
         self.table.setHorizontalHeaderLabels(self.COLUMNS)
         self.table.horizontalHeader().setStretchLastSection(True)
@@ -267,8 +313,23 @@ class RecordsPage(QWidget):
         column.addWidget(self.top_songs)
         self.refresh()
 
+    def visits(self) -> list[Visit]:
+        return reports.visits_in(self.store, self.day.date().toPython(), self.period.currentText())
+
+    def export(self, _checked: bool = False, path: str | None = None) -> None:
+        if path is None:
+            day = self.day.date().toString("yyyy-MM-dd")
+            name = f"ytktv-{self.period.currentText().lower()}-{day}.csv"
+            path, _ = QFileDialog.getSaveFileName(self, "Export CSV", name, "CSV (*.csv)")
+        if path:
+            reports.export_csv(self.visits(), path)
+
     def refresh(self) -> None:
-        visits = self.store.history(*day_bounds(self.day.date()))
+        period = self.period.currentText()
+        buckets = reports.period_buckets(self.day.date().toPython(), period)
+        visits = self.visits()
+        amounts = reports.takings(visits, buckets)
+        self.chart.set_bars([(b[0], a) for b, a in zip(buckets, amounts, strict=True)])
         currency = self.store.setting("currency", "$")
         hours = sum(v.closed_at - v.opened_at for v in visits) / 3600
         revenue = sum(v.total for v in visits)
@@ -276,12 +337,13 @@ class RecordsPage(QWidget):
             f"{len(visits)} sessions  ·  {hours:.1f} hours  ·  {currency}{revenue:.2f}"
         )
         self.table.setRowCount(0)
+        stamp = "%H:%M" if period == "Day" else "%m-%d %H:%M"
         for v in visits:
             row = self.table.rowCount()
             self.table.insertRow(row)
             minutes = int((v.closed_at - v.opened_at) // 60)
             cells = (
-                time.strftime("%H:%M", time.localtime(v.closed_at)),
+                time.strftime(stamp, time.localtime(v.closed_at)),
                 v.room,
                 v.guest,
                 f"{minutes // 60}h {minutes % 60:02d}m",
