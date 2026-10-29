@@ -76,8 +76,10 @@ way a real KTV's front desk runs its rooms: the adults in one room, the kids in 
   "This room is closed" and its TV goes black; when time is up the song finishes, then the room closes.
 - **Service and orders**: guests call the desk or order from its menu on the console or their
   phones. The desk beeps and the room's tile flashes.
-- **Billing**: price per hour (per room if you like), a minimum spend, stock that comes off the
-  menu when it runs out, and a bill to print or save as a PDF.
+- **The till**: price per hour (per room if you like), a minimum spend, discounts, dropping the
+  small change, cash, card, WeChat Pay, Alipay or a member's balance, and a bill or a 58/80 mm
+  receipt on any installed printer.
+- **Members**: stored balance, points and a members' discount.
 - **Run the floor**: bookings with a calendar and timeline, room types and seats, cleaning and
   maintenance, change room, broadcasts to every room, remote skip, pause and volume, a shift
   report and the day's records.
@@ -87,6 +89,7 @@ way a real KTV's front desk runs its rooms: the adults in one room, the kids in 
 
 Download `YTKTV-Desk-<version>-…` from the [latest release](https://github.com/TonyD365/YTKTV/releases/latest),
 then in each room open **Settings → Front Desk**, press **Find Desks** and enter the code the desk shows.
+The [YTKTV Desk guide](docs/guide/front-desk.md) walks through all of it.
 
 ## Quick start
 
@@ -127,7 +130,9 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
   of or behind the singing, the two small arrows beside the button move them 0.1 s at a time;
   the shift is remembered for that song.
 - **Finding songs.** Suggestions appear as you type, recent searches stay one tap away, and the
-  Artists page lists well-known artists by scene. Song cards show whether a song is already
+  Artists page lists well-known artists by language (Mandarin, Cantonese, English, Japanese,
+  Korean) and by male, female or group. Like on a KTV machine, pinyin initials work too:
+  `yldb` finds 月亮代表我的心. Song cards show whether a song is already
   selected and whether its instrumental is ready, so you can pick one that starts at once.
 - **Playlists.** Build playlists with "＋ List" on any song, save the current queue as one, or
   paste a YouTube playlist link to import it (up to 200 songs). Play or shuffle a whole playlist
@@ -140,7 +145,13 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
   gets its own score. Octaves do not matter, so
   anyone can sing in their own range.
 - **Danmaku and lights.** Anyone can send a short message from the console or a phone and it
-  flies across the MV screen. A glow around the screen pulses with the music.
+  flies across the MV screen. A glow around the screen pulses with the music, and phones can
+  join in as glow sticks that follow its colours.
+- **PK battle.** Two microphones sing the same song, with two live score bars on the TV and a
+  winner at the end.
+- **Party games.** Twelve games, each with its own screen on the console and the phones: dice,
+  who sings next, truth or dare, number bomb, liar's dice (everyone sees their own dice on their
+  phone), random song, challenge cards, draw lots, high or low, sevens, a countdown and a coin.
 - **Smooth playback.** The next songs in the queue are downloaded ahead of time and played from
   disk; only the first song of a session streams, with a loading screen until it is ready.
   Separation runs in its own low-priority process so it cannot disturb the live sound.
@@ -179,7 +190,7 @@ Download the installer for your system from the
 | macOS (Apple Silicon and Intel) | `YTKTV-<version>-macos-universal.pkg` |
 | Windows 10/11 (64-bit) | `YTKTV-<version>-windows-x64-setup.exe` |
 | Linux (x86-64) | `YTKTV-<version>-linux-x86_64.AppImage` |
-| YTKTV Desk, macOS | `YTKTV-Desk-<version>-macos-arm64.pkg` (Apple Silicon) or `-macos-x86_64.pkg` (Intel) |
+| YTKTV Desk, macOS (Apple Silicon and Intel) | `YTKTV-Desk-<version>-macos-universal.pkg` |
 | YTKTV Desk, Windows | `YTKTV-Desk-<version>-windows-x64-setup.exe` |
 | YTKTV Desk, Linux | `YTKTV-Desk-<version>-linux-x86_64.AppImage` |
 

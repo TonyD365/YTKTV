@@ -698,6 +698,7 @@ class MainWindow(QMainWindow):
         elif topic == "position":
             self._apply_position(payload["position"], payload["duration"])
             self.mv_window.set_live_score(payload.get("score"))
+            self.mv_window.set_pk(payload.get("pk"))
         elif topic == "toast":
             self.show_toast(payload["message"], payload.get("error", False))
         elif topic == "favorites":

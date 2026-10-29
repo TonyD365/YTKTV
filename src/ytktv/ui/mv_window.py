@@ -368,6 +368,24 @@ class MvWindow(QWidget):
             fade_in(self.live_score, 300)
         self.live_score.raise_()
 
+    def set_pk(self, scores: list[dict[str, int]] | None) -> None:
+        """A PK battle's running scores as two bars at the top of the TV; None hides them."""
+        if not hasattr(self, "_pk_bars"):
+            self._pk_bars = PkBars(self)
+        if not scores:
+            self._pk_bars.hide()
+            return
+        width = int(self.width() * 0.5)
+        self._pk_bars.setGeometry(
+            (self.width() - width) // 2,
+            int(self.height() * 0.03),
+            width,
+            max(60, int(self.height() * 0.09)),
+        )
+        self._pk_bars.set_scores(scores)
+        self._pk_bars.show()
+        self._pk_bars.raise_()
+
     def set_room_closed(self, closed: bool) -> None:
         """A closed room's TV is plain black."""
         if not hasattr(self, "_closed_cover"):
@@ -426,6 +444,7 @@ class MvWindow(QWidget):
 
     def show_score(self, score: dict[str, Any]) -> None:
         """The end-of-song result: stays up a few seconds over whatever comes next."""
+        self.set_pk(None)  # the result card takes over from the live bars
         singer = score.get("singer") or ""
         caption = f"{singer}  ·  {score['title']}" if singer else str(score["title"])
         voices = score.get("voices") or []
@@ -639,3 +658,51 @@ class MvWindow(QWidget):
     def release(self) -> None:
         if self.video is not None:
             self.video.release()
+
+
+class PkBars(QWidget):
+    """Two scores racing each other: Mic 1 in pink from the left, Mic 2 in cyan from the right."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.scores: list[dict[str, int]] = []
+        self.hide()
+
+    def set_scores(self, scores: list[dict[str, int]]) -> None:
+        self.scores = scores[:2]
+        self.update()
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 - Qt's name
+        if not self.scores:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(8, 4, 20, 200))
+        p.drawRoundedRect(QRectF(0, 0, w, h), h / 4, h / 4)
+        half = w / 2 - h * 0.6
+        bar_h = h * 0.32
+        top = (h - bar_h) / 2
+        font = p.font()
+        font.setBold(True)
+        font.setPixelSize(int(h * 0.3))
+        p.setFont(font)
+        colours = (QColor("#ff3d9a"), QColor("#2ee6ff"))
+        for side, score in enumerate(self.scores):
+            fraction = max(0.0, min(1.0, score["points"] / 100))
+            length = half * fraction
+            x = (w / 2 - h * 0.6 - length) if side == 0 else (w / 2 + h * 0.6)
+            p.setBrush(colours[side])
+            p.drawRoundedRect(QRectF(x, top, length, bar_h), bar_h / 2, bar_h / 2)
+            p.setPen(QColor("white"))
+            label = QRectF(8 if side == 0 else w / 2, 0, w / 2 - 16, h)
+            align = Qt.AlignmentFlag.AlignLeft if side == 0 else Qt.AlignmentFlag.AlignRight
+            p.drawText(
+                label, align | Qt.AlignmentFlag.AlignTop, f"Mic {score['mic']}  {score['points']}"
+            )
+            p.setPen(Qt.PenStyle.NoPen)
+        p.setPen(QColor("#ffc94a"))
+        p.drawText(QRectF(0, 0, w, h), Qt.AlignmentFlag.AlignCenter, "PK")
+        p.end()

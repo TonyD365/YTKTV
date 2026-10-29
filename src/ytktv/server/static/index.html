@@ -75,6 +75,16 @@
     border-radius: 14px; padding: 16px 4px; font-weight: 800; font-size: 14px; }
   .pad button.on { background: linear-gradient(135deg, var(--pink), var(--purple)); border-color: transparent; }
   .pad button.wide { grid-column: span 3; }
+  .game-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .game-cards button { text-align: left; border: 0; border-radius: 16px; padding: 14px; color: #fff;
+    min-height: 92px; font-weight: 800; font-size: 16px; }
+  .game-cards small { display: block; font-weight: 500; font-size: 12px; opacity: .85; margin-top: 4px; }
+  .game-stage { background: #120c22; border: 1px solid var(--line); border-radius: 18px; min-height: 190px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    padding: 16px; font-size: 54px; font-weight: 800; word-break: break-word; }
+  .game-stage small { font-size: 15px; font-weight: 500; color: var(--muted); margin-top: 8px; }
+  .game-start { width: 100%; margin-top: 12px; border: 0; border-radius: 14px; padding: 16px; color: #fff;
+    font-size: 18px; font-weight: 800; }
   .row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
   .row label { width: 62px; color: var(--muted); font-size: 13px; font-weight: 700; }
   .row output { width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -189,28 +199,6 @@
     <h3>Microphones</h3>
     <div class="chips" id="presets"></div>
     <div id="mics"></div>
-    <h3>Games</h3>
-    <div class="pad">
-      <button data-game="dice">🎲 Dice</button>
-      <button data-game="spin">🎡 Who sings next</button>
-      <button data-game="truth">💬 Truth</button>
-      <button data-game="dare">🔥 Dare</button>
-      <button data-game="challenge">🎤 Challenge</button>
-      <button data-game="random">🎰 Random song</button>
-      <button data-game="lots">🥢 Draw lots</button>
-      <button data-game="highlow">⚖️ High or low</button>
-      <button data-game="sevens">7️⃣ Sevens</button>
-      <button data-game="countdown">⏱ Countdown</button>
-      <button data-game="coin">🪙 Coin</button>
-      <button data-game="bomb">💣 New bomb</button>
-    </div>
-    <div class="pad">
-      <input id="bomb-guess" type="number" min="1" max="100" placeholder="Bomb guess" style="grid-column: span 1">
-      <button id="bomb-go">💣 Guess</button>
-      <button id="liar-roll">🎲 Liar's dice: roll</button>
-      <button data-game="liar_reveal">👀 Reveal</button>
-    </div>
-    <div id="liar-hand" style="text-align:center;font-size:34px;margin:6px 0"></div>
     <h3>Crowd</h3>
     <div class="pad">
       <button data-sfx="applause">Applause</button>
@@ -228,6 +216,21 @@
     <h3>Your name</h3>
     <div class="row"><input type="text" id="singer" maxlength="40" placeholder="Shown next to your songs"></div>
   </section>
+
+  <section id="tab-games">
+    <div id="game-lobby">
+      <p class="small" style="margin:4px 0 10px">Results show big on the TV. You play as <b id="game-me">you</b> (set your name under REMOTE).</p>
+      <div id="game-cards" class="game-cards"></div>
+    </div>
+    <div id="game-screen" style="display:none">
+      <button id="game-back" class="chip">‹ All games</button>
+      <h2 id="game-title" style="margin:10px 0 4px"></h2>
+      <p id="game-rules" class="small" style="margin:0 0 10px"></p>
+      <div id="game-stage" class="game-stage"></div>
+      <div id="game-controls" class="pad" style="margin-top:10px"></div>
+      <button id="game-start" class="game-start">Start Game</button>
+    </div>
+  </section>
 </main>
 
 <nav>
@@ -235,6 +238,7 @@
   <button data-tab="queue">QUEUE<span class="badge" id="count">0</span></button>
   <button data-tab="lists">LISTS</button>
   <button data-tab="remote">REMOTE</button>
+  <button data-tab="games">GAMES</button>
 </nav>
 <div id="toast"></div>
 
@@ -533,17 +537,111 @@ $("glow").addEventListener("click", () => {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (window.glowLock) window.glowLock.release().catch(() => {});
 });
-document.querySelectorAll("[data-game]").forEach((b) => b.addEventListener("click", () => api("/api/game/" + b.dataset.game, "POST")));
-$("bomb-go").addEventListener("click", () => {
-  const value = Number($("bomb-guess").value);
-  if (value >= 1 && value <= 100) api("/api/game/bomb_guess", "POST", {value}).catch(() => {});
-  $("bomb-guess").value = "";
-});
-$("liar-roll").addEventListener("click", async () => {
-  // Only this phone sees its dice; the TV just says that someone rolled.
-  const result = await api("/api/game/liar_roll", "POST", {}).catch(() => null);
-  if (result) $("liar-hand").textContent = result.mine;
-});
+// ---- Games: a lobby, and a screen of its own for every game ----
+const DICE_FACES = "⚀⚁⚂⚃⚄⚅";
+const playerName = () => $("singer").value.trim() || "Guest";
+const playGame = (name, body = {}) => api("/api/game/" + name, "POST", {player: playerName(), ...body});
+const gameStage = (big, small = "", size = 54) => {
+  $("game-stage").innerHTML = "";
+  $("game-stage").append(el("div", {style: `font-size:${size}px`}, big), small ? el("small", {}, small) : "");
+};
+function flash(frames, done, every = 80) {
+  $("game-start").disabled = true;
+  let i = 0;
+  const timer = setInterval(() => {
+    if (i < frames.length) { gameStage(...frames[i++]); return; }
+    clearInterval(timer); $("game-start").disabled = false; done();
+  }, every);
+}
+const rollFrames = (n, label = "Rolling…") =>
+  Array.from({length: 12}, () => [Array.from({length: n}, () => DICE_FACES[Math.floor(Math.random() * 6)]).join(" "), label]);
+const gameButton = (text, onclick) => el("button", {onclick}, text);
+const showResult = (r, size = 54) => gameStage(r.text, r.detail || "", size);
+const GAMES = [
+  {key: "dice", icon: "🎲", title: "Roll the Dice", color: "#d4537e", blurb: "Roll and add them up",
+   rules: "Pick how many dice to roll.", start: "Roll!",
+   setup() { this.n = 5; return [1, 3, 5, 6].map((n) => gameButton(`${n} dice`, () => { this.n = n; gameStage("🎲", `${n} dice`); })); },
+   async go() { const r = await playGame("dice", {value: this.n}); flash(rollFrames(this.n), () => showResult(r, 64)); }},
+  {key: "spin", icon: "🎡", title: "Who Sings Next?", color: "#7f77dd", blurb: "Spin through the singers",
+   rules: "Picks one of the singers in the queue.", start: "Spin!",
+   async go() {
+     const r = await playGame("spin");
+     const names = [...new Set((state?.queue || []).map((i) => i.singer).filter(Boolean))];
+     flash(Array.from({length: 18}, (_, i) => [names.length ? names[i % names.length] : "🎡", "Spinning…", 40]), () => showResult(r, 48), 90);
+   }},
+  {key: "truthdare", icon: "💬", title: "Truth or Dare", color: "#1d9e75", blurb: "Answer, or do the dare",
+   rules: "Pick Truth or Dare, then read the card out loud.", start: "Random",
+   setup() { return [gameButton("💬 Truth", () => this.draw("truth")), gameButton("🔥 Dare", () => this.draw("dare"))]; },
+   draw(kind) { playGame(kind).then((r) => flash(Array(6).fill(["🂠", "Shuffling…", 80]), () => showResult(r, 24))); },
+   go() { this.draw(Math.random() < 0.5 ? "truth" : "dare"); }},
+  {key: "bomb", icon: "💣", title: "Number Bomb", color: "#c2410c", blurb: "Don't hit the bomb",
+   rules: "A bomb hides between 1 and 100. Take turns guessing; the range shrinks. Hit it and you lose.", start: "New Bomb",
+   setup() {
+     const input = el("input", {type: "number", min: "2", max: "99", placeholder: "Guess"});
+     const guess = gameButton("💣 Guess", async () => {
+       const value = Number(input.value); input.value = "";
+       if (!(value >= 1 && value <= 100)) return;
+       const r = await playGame("bomb_guess", {value});
+       if (r.title.includes("BOOM")) flash([["💥", ""], ["", ""], ["💥", ""], ["", ""]], () => showResult(r, 60), 150);
+       else gameStage(r.text, r.detail || "Safe… next player!", 56);
+     });
+     return [input, guess];
+   },
+   async go() { const r = await playGame("bomb"); gameStage(r.text, "Guess a number in between", 56); }},
+  {key: "liar", icon: "🎲", title: "Liar's Dice", color: "#5b3fa0", blurb: "Roll in secret, then bluff",
+   rules: "Everyone rolls five dice only they can see. Bid, e.g. \"four 5s\"; ones are wild. Call liar, then Reveal.", start: "Roll My Dice",
+   setup() {
+     const peek = gameButton("👁 Hold to peek", () => {});
+     const showHand = () => gameStage(this.hand || "Roll first", "Only you should see this!", 48);
+     const hide = () => gameStage(this.hand ? "❓ ❓ ❓ ❓ ❓" : "🎲", this.hand ? "Your dice are hidden" : "Roll first", 44);
+     peek.addEventListener("pointerdown", showHand);
+     ["pointerup", "pointerleave"].forEach((e) => peek.addEventListener(e, hide));
+     this.hide = hide;
+     return [peek, gameButton("👀 Reveal all", async () => { const r = await playGame("liar_reveal"); this.hand = ""; gameStage(r.text, r.detail, 18); })];
+   },
+   async go() { const r = await playGame("liar_roll"); this.hand = r.mine; flash(rollFrames(5), () => this.hide()); }},
+  {key: "random", icon: "🎰", title: "Random Song", color: "#0e7490", blurb: "A slot machine picks your song",
+   rules: "Spins a hot-songs list and queues whatever it stops on, for you.", start: "Pull the Lever",
+   async go() { gameStage("🎰", "Spinning…"); try { const r = await playGame("random"); flash(Array(8).fill(["🎰 🎰 🎰", "…"]), () => showResult(r, 26)); } catch (e) { gameStage("😕", "Could not load songs"); } }},
+  {key: "challenge", icon: "🎤", title: "Challenge Cards", color: "#be185d", blurb: "A dare for the next singer",
+   rules: "Draw a card before the next song and do what it says.", start: "Draw a Card",
+   async go() { const r = await playGame("challenge"); flash(Array(5).fill(["🂠", "Drawing…", 80]), () => showResult(r, 24)); }},
+  {key: "lots", icon: "🥢", title: "Draw Lots", color: "#4d7c0f", blurb: "Drink, sing, or safe",
+   rules: "Draws a lot for one of the singers.", start: "Draw", async go() { const r = await playGame("lots"); flash(Array(6).fill(["🥢 🥢 🥢", "Drawing…"]), () => showResult(r, 26)); }},
+  {key: "highlow", icon: "⚖️", title: "High or Low", color: "#7c2d12", blurb: "One die each",
+   rules: "Every singer rolls one die: highest picks the next song, lowest drinks.", start: "Roll for Everyone",
+   async go() { const r = await playGame("highlow"); flash(rollFrames(4), () => showResult(r, 22)); }},
+  {key: "sevens", icon: "7️⃣", title: "Sevens", color: "#1e40af", blurb: "Say PASS on sevens",
+   rules: "Count up together. Any number with a 7 or divisible by 7 is \"PASS\".", start: "Next Number",
+   setup() { return [gameButton("↺ Start over", async () => { await playGame("sevens_reset"); gameStage("1", "Press Next Number", 80); })]; },
+   async go() { const r = await playGame("sevens"); gameStage(r.text, r.detail || "", 90); }},
+  {key: "countdown", icon: "⏱", title: "Countdown", color: "#9d174d", blurb: "A big timer on the TV",
+   rules: "10 seconds on the TV for any race.", start: "Start Countdown",
+   async go() { await playGame("countdown"); let n = 10; gameStage(n, "", 100); const t = setInterval(() => { n -= 1; gameStage(n > 0 ? n : "Time!", "", 100); if (n <= 0) clearInterval(t); }, 1000); }},
+  {key: "coin", icon: "🪙", title: "Flip a Coin", color: "#a16207", blurb: "Heads or tails",
+   rules: "Call it, then flip.", start: "Flip!",
+   async go() { const r = await playGame("coin"); flash(Array.from({length: 12}, (_, i) => ["🪙", i % 2 ? "Tails" : "Heads", 80]), () => showResult(r, 64), 90); }},
+];
+let currentGame = null;
+function openGame(game) {
+  currentGame = game;
+  $("game-lobby").style.display = "none";
+  $("game-screen").style.display = "";
+  $("game-title").textContent = `${game.icon}  ${game.title}`;
+  $("game-rules").textContent = game.rules;
+  $("game-start").textContent = game.start;
+  $("game-start").style.background = game.color;
+  $("game-controls").replaceChildren(...(game.setup ? game.setup.call(game) : []));
+  $("game-controls").style.display = game.setup ? "" : "none";
+  gameStage(game.icon, "Press " + game.start, 80);
+}
+$("game-cards").replaceChildren(...GAMES.map((g) => el("button", {style: `background:${g.color}`, onclick: () => openGame(g)},
+  `${g.icon}  ${g.title}`, el("small", {}, g.blurb))));
+$("game-back").onclick = () => { $("game-screen").style.display = "none"; $("game-lobby").style.display = ""; };
+$("game-start").onclick = () => currentGame && Promise.resolve(currentGame.go.call(currentGame)).catch((e) => toast(e.message, true));
+const showMe = () => { $("game-me").textContent = playerName(); };
+$("singer").addEventListener("input", showMe);
+showMe();
 document.querySelectorAll("[data-sfx]").forEach((b) => b.addEventListener("click", () => api("/api/sfx/" + b.dataset.sfx, "POST")));
 document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => {
   api("/api/sound", "POST", {vocal_mode: b.dataset.mode});

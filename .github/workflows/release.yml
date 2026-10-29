@@ -324,7 +324,7 @@ jobs:
 
   macos-universal:
     name: Build (macos-universal)
-    needs: build
+    needs: [build, desk]
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v7
@@ -349,6 +349,25 @@ jobs:
           intel="$(ls parts/*-macos-x86_64.pkg)"
           version="$(basename "$arm" | sed -E 's/^YTKTV-(.*)-macos-arm64\.pkg$/\1/')"
           packaging/macos/build_universal_pkg.sh "$arm" "$intel" "$version" dist
+      - uses: actions/download-artifact@v8
+        with:
+          path: desk-parts
+          pattern: installer-desk-macos-*
+          merge-multiple: true
+      - name: Combine YTKTV Desk into a universal installer
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          INSTALLER_IDENTITY: ${{ secrets.MACOS_INSTALLER_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          if ! packaging/macos/import_certificate.sh; then unset INSTALLER_IDENTITY APPLE_ID; fi
+          arm="$(ls desk-parts/*-macos-arm64.pkg)"
+          intel="$(ls desk-parts/*-macos-x86_64.pkg)"
+          version="$(basename "$arm" | sed -E 's/^YTKTV-Desk-(.*)-macos-arm64\.pkg$/\1/')"
+          packaging/macos/build_universal_pkg.sh "$arm" "$intel" "$version" dist YTKTV-Desk
       - uses: actions/upload-artifact@v7
         with:
           name: installer-macos-universal
@@ -373,8 +392,8 @@ jobs:
         working-directory: installers
         run: |
           # The universal installer replaces the two per-architecture macOS packages.
-          # (YTKTV Desk ships one package per architecture.)
-          rm -f ./YTKTV-[0-9]*-macos-arm64.pkg ./YTKTV-[0-9]*-macos-x86_64.pkg
+          # (The same for YTKTV Desk.)
+          rm -f ./*-macos-arm64.pkg ./*-macos-x86_64.pkg
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
       - name: Upload to the release

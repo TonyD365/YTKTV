@@ -23,8 +23,8 @@
 **YTKTV 把一台电脑和一台电视变成 KTV 包厢。** YouTube 上的每一首歌都在点歌本里。电视上放 MV 和卡拉 OK 歌词，AI 把原唱的人声从歌里去掉，朋友们用手机扫码点歌（不用装 App），一台外观和用法都像真硬件的调音台把你的麦克风叠加上去，带回声和混响。免费，支持 macOS、Windows 和 Linux。
 
 <p align="center">
-  <a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><img src="docs/images/promo-poster.png" alt="一分钟看懂 YTKTV 的视频" width="720"></a>
-  <br><a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><b>▶ 一分钟视频演示</b></a>
+  <a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><img src="docs/images/promo-poster.png" alt="70 秒看懂 YTKTV 和服务台的视频" width="720"></a>
+  <br><a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><b>▶ 70 秒视频演示</b></a>
 </p>
 
 <p align="center">
@@ -68,11 +68,12 @@
 
 - **开房、续时、关房**：1～3 小时或不限时。关着的房间显示「This room is closed」，电视全黑；时间到了等这首歌唱完再关房。
 - **呼叫和点单**：客人在控制台或手机上呼叫服务、从菜单点东西，服务台会「哔」一声，房间格子闪烁。
-- **计费**：按小时（可以每间房不同价）、最低消费、库存卖完自动下架，账单可以打印或存成 PDF。
+- **收银**：按小时（可以每间房不同价）、最低消费、打折、抹零，现金、刷卡、微信、支付宝或会员余额付款；账单可以打印或存 PDF，也能用任何已安装的打印机打 58/80mm 小票。
+- **会员**：储值、积分、会员价。
 - **前台管理**：预定（日历和时间轴）、房型和座位数、待清洁和维修、换房、全场广播、远程切歌暂停调音量、交班报表、每日记录。
 - **安全**：用一次性配对码和四个图案的安全码绑定；房间只听服务台签了名的指令；服务台换了 IP 也能按 ID 找到；绑定是永久的，除非服务台连续 7 天不在线；服务台可以设密码。
 
-从[最新 Release](https://github.com/TonyD365/YTKTV/releases/latest) 下载 `YTKTV-Desk-<版本>-…`，然后在每个房间的 YTKTV 里打开 **Settings → Front Desk**，点 **Find Desks**，输入服务台上显示的配对码。
+从[最新 Release](https://github.com/TonyD365/YTKTV/releases/latest) 下载 `YTKTV-Desk-<版本>-…`，然后在每个房间的 YTKTV 里打开 **Settings → Front Desk**，点 **Find Desks**，输入服务台上显示的配对码。详细步骤见 [服务台使用指南（英文）](docs/guide/front-desk.md)。
 
 ## 快速开始
 
@@ -89,7 +90,7 @@
 | macOS（Apple 芯片和 Intel） | `YTKTV-<版本>-macos-universal.pkg` |
 | Windows 10/11（64 位） | `YTKTV-<版本>-windows-x64-setup.exe` |
 | Linux（x86-64） | `YTKTV-<版本>-linux-x86_64.AppImage` |
-| 服务台 YTKTV Desk，macOS | `YTKTV-Desk-<版本>-macos-arm64.pkg`（Apple 芯片）或 `-macos-x86_64.pkg`（Intel） |
+| 服务台 YTKTV Desk，macOS（Apple 芯片和 Intel） | `YTKTV-Desk-<版本>-macos-universal.pkg` |
 | 服务台 YTKTV Desk，Windows | `YTKTV-Desk-<版本>-windows-x64-setup.exe` |
 | 服务台 YTKTV Desk，Linux | `YTKTV-Desk-<版本>-linux-x86_64.AppImage` |
 
@@ -107,14 +108,16 @@ xattr -d com.apple.quarantine ~/Downloads/YTKTV-<版本>-macos-universal.pkg
 
 ## 功能
 
-- **点歌**：搜索有联想和历史记录，歌手页按地区分类，热门榜，YouTube 链接直接点，歌单和导入 YouTube 播放列表。
+- **点歌**：搜索有联想和历史记录，**拼音首字母点歌**（输入 `yldb` 找到《月亮代表我的心》），歌手页按语种（国语、粤语、英文、日语、韩语）和男歌手、女歌手、组合分类，热门榜，YouTube 链接直接点，歌单和导入 YouTube 播放列表。
 - **原唱 / 伴奏**：AI 分离，两条音轨同时播放，切换无缝；导唱滑块可以保留一部分原唱。分离好的伴奏会缓存，同一首歌下次不用再等。
 - **歌词**：用视频的字幕，没有就用 YouTube 自动字幕；颜色逐字跟随演唱，歌词偏早偏晚可以按 0.1 秒微调，按歌记住。
 - **打分**：边唱边显示音高线，金色表示唱准了；唱完显示分数和本场排行榜，对唱时每支麦克风单独打分。不同八度唱也算对。
 - **调音台**：四路麦克风，增益、三段 EQ、压缩、回声、混响、声像、推子、静音；效果预设（流行、抒情、摇滚、KTV 大厅、干声，以及自己保存的）；防啸叫分关、低、中、高四档。
 - **手机**：扫码点歌、遥控、调麦克风；每部手机能看到自己点的歌还要等多久；手机还能直接当麦克风用。
 - **氛围**：弹幕（电脑和手机都能发）、鼓掌欢呼等音效按钮、随音乐变化的氛围灯。
-- **小游戏**：骰子、谁唱下一首、真心话大冒险、数字炸弹、大话骰（各自在手机上看自己的骰子）、随机点歌、唱歌挑战卡、抽签、比大小、逢七过、倒计时、抛硬币。
+- **小游戏**：12 个游戏，控制台和手机上每个都有自己的界面：骰子、谁唱下一首、真心话大冒险、数字炸弹、大话骰（各自在手机上看自己的骰子）、随机点歌、唱歌挑战卡、抽签、比大小、逢七过、倒计时、抛硬币。
+- **PK 对战**：两支麦克风唱同一首歌，电视上两条实时分数条，唱完判输赢。
+- **手机荧光棒**：手机全屏亮起，颜色跟着电视的氛围灯一起变。
 - **包厢系统**：配合服务台 YTKTV Desk 使用，见上面。
 - **其他**：升降调（±6 个半音）、变速、播放队列拖动排序、自动更新。
 

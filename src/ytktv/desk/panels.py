@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ytktv.desk import lock
+from ytktv.desk import lock, receipt
 from ytktv.desk.billing import DEFAULT_RATE, PAYMENTS, ROUNDING, Bill
 from ytktv.desk.server import Hub
 from ytktv.desk.store import DeskStore, Member, Product
@@ -174,18 +174,40 @@ class BillDialog(QDialog):
         print_button.clicked.connect(self.print_bill)
         pdf = QPushButton("Save PDF…")
         pdf.clicked.connect(self.save_pdf)
+        receipt_button = QPushButton("🧾 Receipt")
+        receipt_button.setToolTip("Print a receipt on the receipt printer (Settings → Receipts)")
+        receipt_button.clicked.connect(lambda: self.print_receipt())
         close = QPushButton("Close Room")
         close.setObjectName("accent")
         close.clicked.connect(self.settle)
         cancel = QPushButton("Cancel")
         cancel.clicked.connect(self.reject)
-        for button in (print_button, pdf):
+        for button in (print_button, pdf, receipt_button):
             buttons.addWidget(button)
         buttons.addStretch()
         buttons.addWidget(cancel)
         buttons.addWidget(close)
         column.addLayout(buttons)
         self.update_bill()
+
+    def print_receipt(self, printer: QPrinter | None = None) -> bool:
+        """Print a receipt; asks which printer when none is set in Settings."""
+        if self.store is None:
+            return False
+        self.update_bill()
+        if printer is None:
+            width = int(self.store.setting("receipt_width", "58"))
+            printer = receipt.receipt_printer(
+                self.store.setting("receipt_printer", receipt.ASK), width
+            )
+            if (
+                self.store.setting("receipt_printer", receipt.ASK) == receipt.ASK
+                and not QPrintDialog(printer, self).exec()
+            ):
+                return False
+            receipt.fit_paper(printer, width)  # the dialog may pick another printer
+        receipt.print_receipt(self.store, self.bill, printer)
+        return True
 
     def find_member(self) -> None:
         if self.store is None:
@@ -228,6 +250,8 @@ class BillDialog(QDialog):
         if member is not None and store is not None:
             per_unit = float(store.setting("points_per_unit", "1"))
             store.add_points(member.member_id, int(bill.total * per_unit))
+        if store is not None and store.setting("receipt_auto", "0") == "1":
+            self.print_receipt()
         self.accept()
 
     def _document(self) -> QTextDocument:
@@ -578,3 +602,59 @@ class SecuritySettings(QFrame):
                 return
         lock.set_password(self.store, None)
         self.refresh()
+
+
+class ReceiptSettings(QFrame):
+    """The receipt printer: which one, the paper, the shop's name and a closing line."""
+
+    def __init__(self, store: DeskStore) -> None:
+        super().__init__()
+        self.store = store
+        self.setObjectName("panel")
+        column = QVBoxLayout(self)
+        column.setContentsMargins(24, 20, 24, 20)
+        head = QLabel("RECEIPTS")
+        head.setObjectName("panelHead")
+        note = QLabel(
+            "Any 58 mm or 80 mm receipt printer installed on this computer works through its"
+            " driver (set the driver to cut the paper after each receipt if it can)."
+        )
+        note.setObjectName("muted")
+        note.setWordWrap(True)
+        column.addWidget(head)
+        column.addWidget(note)
+        form = QFormLayout()
+        self.printer = QComboBox()
+        self.printer.addItems(receipt.printers())
+        self.printer.setCurrentText(store.setting("receipt_printer", receipt.ASK))
+        self.paper = QComboBox()
+        for mm in receipt.WIDTHS:
+            self.paper.addItem(f"{mm} mm", mm)
+        self.paper.setCurrentIndex(receipt.WIDTHS.index(int(store.setting("receipt_width", "58"))))
+        self.shop = QLineEdit(store.setting("shop_name", "YTKTV"))
+        self.footer = QLineEdit(store.setting("receipt_footer", "Thank you! See you again."))
+        self.auto = QCheckBox("Print a receipt when a room checks out")
+        self.auto.setChecked(store.setting("receipt_auto", "0") == "1")
+        self.copies = QSpinBox()
+        self.copies.setRange(1, 3)
+        self.copies.setValue(int(store.setting("receipt_copies", "1")))
+        for field in (self.printer, self.paper, self.copies):
+            steady(field)
+        form.addRow("Printer", self.printer)
+        form.addRow("Paper", self.paper)
+        form.addRow("Shop name", self.shop)
+        form.addRow("Closing line", self.footer)
+        form.addRow("Copies", self.copies)
+        form.addRow("", self.auto)
+        column.addLayout(form)
+        save = QPushButton("Save Receipt Settings")
+        save.clicked.connect(self.save)
+        column.addWidget(save, alignment=Qt.AlignmentFlag.AlignLeft)
+
+    def save(self) -> None:
+        self.store.set_setting("receipt_printer", self.printer.currentText())
+        self.store.set_setting("receipt_width", str(self.paper.currentData()))
+        self.store.set_setting("shop_name", self.shop.text().strip() or "YTKTV")
+        self.store.set_setting("receipt_footer", self.footer.text().strip())
+        self.store.set_setting("receipt_auto", "1" if self.auto.isChecked() else "0")
+        self.store.set_setting("receipt_copies", str(self.copies.value()))

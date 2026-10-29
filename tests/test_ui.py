@@ -956,3 +956,15 @@ def test_artist_filters_pk_battle_and_glow(window, qtbot):
     controller.bus.subscribe(lambda topic, data: glows.append(data) if topic == "glow" else None)
     main.mv_window.on_light(0.5, 0.25)
     assert glows == [{"level": 0.5, "hue": 0.25}]
+
+
+def test_live_pk_bars(window, qtbot):
+    main, controller = window
+    controller.set_pk_mode(True)
+    main.mv_window.set_pk([{"mic": 1, "points": 40}, {"mic": 2, "points": 55}])
+    bars = main.mv_window._pk_bars
+    assert not bars.isHidden() and bars.scores[1]["points"] == 55
+    bars.grab()  # paints without errors
+    main.mv_window.set_pk(None)
+    assert bars.isHidden()
+    assert controller.live_pk() is None  # nothing is being scored
