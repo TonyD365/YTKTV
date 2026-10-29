@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -153,6 +153,17 @@ class _Broadcaster:
                 client.put_nowait((topic, payload))
 
 
+class OrderItem(BaseModel):
+    product_id: int
+    qty: int = Field(ge=1, le=20)
+
+
+class ServiceIn(BaseModel):
+    kind: str = Field(default="Other", max_length=40)
+    note: str = Field(default="", max_length=200)
+    items: list[OrderItem] = Field(default_factory=list, max_length=50)
+
+
 def create_app(controller: KTVController, source: SongSource) -> FastAPI:
     broadcaster = _Broadcaster()
 
@@ -165,6 +176,10 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         broadcaster.loop = None
 
     app = FastAPI(title="YTKTV", docs_url=None, redoc_url=None, lifespan=lifespan)
+
+    @app.exception_handler(PermissionError)
+    async def room_closed(_request: Request, exc: PermissionError) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=423)
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
@@ -283,6 +298,20 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         if name not in SFX_NAMES:
             raise HTTPException(404, "unknown effect")
         return {"ok": controller.play_sfx(name)}
+
+    @app.post("/api/service")
+    def service(body: ServiceIn) -> dict[str, bool]:
+        desk = controller.front_desk
+        if desk is None:
+            raise HTTPException(404, "this machine is not a room")
+        ok = (
+            desk.order([(i.product_id, i.qty) for i in body.items])
+            if body.items
+            else desk.call(body.kind, body.note)
+        )
+        if not ok:
+            raise HTTPException(423, "This room is closed")
+        return {"ok": True}
 
     @app.post("/api/game/{name}")
     def game(name: str) -> dict[str, str]:

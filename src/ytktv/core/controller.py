@@ -69,6 +69,8 @@ class KTVController:
         preloader: MediaPreloader | None = None,
     ) -> None:
         self.store = store
+        self.room_closed = False  # set by the front desk; a closed room takes no songs
+        self.front_desk: Any = None  # the RoomClient when this machine is a room
         self.settings = store.settings
         self.player = player
         self.resolver = resolver
@@ -137,6 +139,8 @@ class KTVController:
     def enqueue(
         self, song: Song, singer: str = "", priority: bool = False, owner: str = ""
     ) -> QueueItem:
+        if self.room_closed:
+            raise PermissionError("This room is closed")
         item = self.queue.add(song, singer=singer, priority=priority, owner=owner)
         if self.stems is not None and self.settings.auto_separate:
             self.stems.request(song.video_id)
@@ -201,6 +205,26 @@ class KTVController:
     def shuffle(self) -> None:
         self.queue.shuffle()
         self._prefetch_next()
+        self._emit_state()
+
+    def _service_menu(self) -> dict[str, Any] | None:
+        """The front desk's menu for the phone page, while this room is open."""
+        desk = self.front_desk
+        if desk is None or self.room_closed or not desk.online:
+            return None
+        return {"currency": desk.currency, "products": desk.products}
+
+    def close_room(self) -> None:
+        """The front desk closed this room: stop singing and forget the queue."""
+        self.room_closed = True
+        self.queue.clear()
+        self._sync_preload()
+        if self.current is not None:
+            self.skip()
+        self._emit_state()
+
+    def open_room(self) -> None:
+        self.room_closed = False
         self._emit_state()
 
     def clear_queue(self) -> None:
@@ -1032,6 +1056,8 @@ class KTVController:
             "lyrics": bool(self.lyrics),
             "show_lyrics": settings.show_lyrics,
             "reactions": list(REACTIONS),
+            "room_closed": self.room_closed,
+            "service": self._service_menu(),
             "phone_mic_url": self.phone_mic_url,
             "lyrics_offset": self.lyrics_offset,
             "lights": settings.lights,
@@ -1045,6 +1071,10 @@ class KTVController:
             "separation": self.stems is not None,
             "accelerator": self.accelerator,
         }
+
+    def notify(self) -> None:
+        """Tell every screen and phone that something outside the controller changed."""
+        self._emit_state()
 
     def _emit_state(self) -> None:
         self.bus.emit("state", None)

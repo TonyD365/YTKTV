@@ -29,6 +29,8 @@ dependencies = [
     "certifi",
     "asn1crypto>=1.5",
     "ecdsa>=0.19",
+    # Finds the front desk on the local network even when its IP address changes.
+    "zeroconf>=0.132",
 ]
 
 [project.optional-dependencies]
@@ -47,6 +49,7 @@ package = ["pyinstaller>=6.6", "uv>=0.8"]
 
 [project.scripts]
 ytktv = "ytktv.__main__:main"
+ytktv-desk = "ytktv.desk.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/TonyD365/YTKTV"
