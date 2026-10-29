@@ -479,3 +479,13 @@ def test_arm_machines_get_arm_builds(monkeypatch):
     pattern = bootstrap._windows_mpv_asset()
     assert pattern.match("mpv-dev-x86_64-20261021-git-e471496c56.7z")
     assert not pattern.match("mpv-dev-x86_64-v3-20261021-git-e471496c56.7z")
+
+
+def test_arm_gets_the_cpu_separation_runtime():
+    from ytktv.separation.runtime import Gpu, choose_variant
+
+    nvidia = Gpu("nvidia", "RTX", cuda=True)
+    assert choose_variant("Windows", nvidia, "AMD64") == "cuda"
+    assert choose_variant("Windows", Gpu("intel", "Arc"), "AMD64") == "directml"
+    assert choose_variant("Windows", Gpu("qualcomm", "Adreno"), "ARM64") == "cpu"
+    assert choose_variant("Linux", nvidia, "aarch64") == "cpu"
