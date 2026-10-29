@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections import Counter
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from PySide6.QtCore import QDate, QDateTime, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPaintEvent
@@ -313,8 +313,12 @@ class RecordsPage(QWidget):
         column.addWidget(self.top_songs)
         self.refresh()
 
+    def picked_day(self) -> date:
+        picked = self.day.date()
+        return date(picked.year(), picked.month(), picked.day())
+
     def visits(self) -> list[Visit]:
-        return reports.visits_in(self.store, self.day.date().toPython(), self.period.currentText())
+        return reports.visits_in(self.store, self.picked_day(), self.period.currentText())
 
     def export(self, _checked: bool = False, path: str | None = None) -> None:
         if path is None:
@@ -326,7 +330,7 @@ class RecordsPage(QWidget):
 
     def refresh(self) -> None:
         period = self.period.currentText()
-        buckets = reports.period_buckets(self.day.date().toPython(), period)
+        buckets = reports.period_buckets(self.picked_day(), period)
         visits = self.visits()
         amounts = reports.takings(visits, buckets)
         self.chart.set_bars([(b[0], a) for b, a in zip(buckets, amounts, strict=True)])

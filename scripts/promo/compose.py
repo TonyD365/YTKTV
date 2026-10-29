@@ -26,28 +26,71 @@ SWITCH = 22.5  # when the Instrumental key is pressed in the cut
 SHOTS = [
     (4.0, "intro", 0, "", ""),
     (7.0, "video/console_search.mp4", 0.3, "Pick songs on the console", "在点歌台点歌"),
-    (4.0, "docs/images/phone.png", 0,
-     "…or from any phone: scan the QR code. A phone can even be your mic",
-     "或者手机扫码点歌，手机还能当麦克风"),
-    (6.0, "video/mv.mp4", 0, "🎤 A 1911 recording, with the original singers",
-     "一首 1911 年的老唱片，带原唱"),
-    (3.5, "video/console_party.mp4", 0, "🎵 One click: AI takes the vocals out",
-     "一键 AI 去原唱，马上变伴奏"),
-    (4.0, "video/mv.mp4", 6, "Lyrics follow you · live pitch · cheers from phones",
-     "歌词逐字跟唱 · 音高线 · 手机发弹幕表情"),
-    (5.5, "video/console_controls.mp4", 0, "Change the key · volume keys with a pop-up display",
-     "一键升降调 · 音量按键，屏幕弹出音量条"),
-    (4.5, "video/console_party.mp4", 2.2, "Party games: who sings next?",
-     "派对小游戏：谁唱下一首？"),
+    (
+        4.0,
+        "docs/images/phone.png",
+        0,
+        "…or from any phone: scan the QR code. A phone can even be your mic",
+        "或者手机扫码点歌，手机还能当麦克风",
+    ),
+    (
+        6.0,
+        "video/mv.mp4",
+        0,
+        "🎤 A 1911 recording, with the original singers",
+        "一首 1911 年的老唱片，带原唱",
+    ),
+    (
+        3.5,
+        "video/console_party.mp4",
+        0,
+        "🎵 One click: AI takes the vocals out",
+        "一键 AI 去原唱，马上变伴奏",
+    ),
+    (
+        4.0,
+        "video/mv.mp4",
+        6,
+        "Lyrics follow you · live pitch · cheers from phones",
+        "歌词逐字跟唱 · 音高线 · 手机发弹幕表情",
+    ),
+    (
+        5.5,
+        "video/console_controls.mp4",
+        0,
+        "Change the key · volume keys with a pop-up display",
+        "一键升降调 · 音量按键，屏幕弹出音量条",
+    ),
+    (
+        4.5,
+        "video/console_party.mp4",
+        2.2,
+        "Party games: who sings next?",
+        "派对小游戏：谁唱下一首？",
+    ),
     (4.0, "video/mv.mp4", 12.2, "…and the answer pops up on the TV", "结果直接显示在电视上"),
-    (5.5, "video/console_games2.mp4", 0.2,
-     "14 games: number bomb, liar's dice, random song, challenge cards…",
-     "14 个小游戏：数字炸弹、大话骰、随机点歌、挑战卡……"),
+    (
+        5.5,
+        "video/console_games2.mp4",
+        0.2,
+        "14 games: number bomb, liar's dice, random song, challenge cards…",
+        "14 个小游戏：数字炸弹、大话骰、随机点歌、挑战卡……",
+    ),
     (4.0, "video/mv.mp4", 20.2, "Live scores and tonight's best", "唱完打分，还有本场排行榜"),
-    (5.5, "video/desk.mp4", 0.3, "🛎 NEW · YTKTV Desk: one front desk for every room",
-     "新：YTKTV Desk 服务台，一台管所有包厢"),
-    (5.5, "video/desk.mp4", 5.8, "Service calls, bookings, bills and shift reports",
-     "呼叫服务、预定、结账、交班报表"),
+    (
+        5.5,
+        "video/desk.mp4",
+        0.3,
+        "🛎 NEW · YTKTV Desk: one front desk for every room",
+        "新：YTKTV Desk 服务台，一台管所有包厢",
+    ),
+    (
+        5.5,
+        "video/desk.mp4",
+        5.8,
+        "Service calls, bookings, bills and shift reports",
+        "呼叫服务、预定、结账、交班报表",
+    ),
     (5.0, "outro", 0, "", ""),
 ]
 
@@ -166,7 +209,11 @@ def main() -> None:
                     f"[1]scale=-2:{h},zoompan=z='1+0.0012*on':x='iw/2-iw/zoom/2'"
                     f":y='ih/2-ih/zoom/2':d=1:s={w}x{h}:fps=30"
                 )
-                moving = f"[1]scale={w * 2}:-2,crop=iw:ih,scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=0x0b0620"
+                moving = (
+                    f"[1]scale={w * 2}:-2,crop=iw:ih,"
+                    f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                    f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=0x0b0620"
+                )
             else:
                 clip = ["-ss", str(start), "-t", str(secs), "-i", source]
                 moving = f"[1]scale={w}:{h}"
