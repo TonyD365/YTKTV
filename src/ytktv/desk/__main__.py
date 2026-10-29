@@ -89,6 +89,9 @@ def main() -> int:
     except Exception:  # no multicast here; rooms can still type the address
         announcer = None
     window = DeskWindow(store, hub, f"{ip}:{DESK_PORT}")
+    from ytktv.desk.update import DeskUpdater
+
+    window.watch_updates(DeskUpdater(window))
     window.show()
     try:
         return app.exec()

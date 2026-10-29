@@ -60,6 +60,15 @@ class Booking:
 
 
 @dataclass
+class Member:
+    member_id: int
+    name: str
+    phone: str
+    balance: float
+    points: int
+
+
+@dataclass
 class Visit:
     """A closed session, kept for the records."""
 
@@ -71,6 +80,7 @@ class Visit:
     total: float
     lines: list[tuple[str, float]]
     songs: list[str]
+    payment: str = "Cash"
 
 
 @dataclass
@@ -122,6 +132,7 @@ class DeskStore:
                 ("rooms", "capacity INTEGER NOT NULL DEFAULT 6"),
                 ("rooms", "state TEXT NOT NULL DEFAULT 'ready'"),
                 ("products", "stock INTEGER"),
+                ("history", "payment TEXT NOT NULL DEFAULT 'Cash'"),
             ):
                 with contextlib.suppress(sqlite3.OperationalError):  # added later
                     self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
@@ -143,7 +154,10 @@ class DeskStore:
                 "CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL,"
                 " room TEXT NOT NULL, guest TEXT NOT NULL, opened_at REAL NOT NULL,"
                 " closed_at REAL NOT NULL, total REAL NOT NULL, bill TEXT NOT NULL,"
-                " songs TEXT NOT NULL);"
+                " songs TEXT NOT NULL, payment TEXT NOT NULL DEFAULT 'Cash');"
+                "CREATE TABLE IF NOT EXISTS members (id INTEGER PRIMARY KEY, name TEXT NOT NULL,"
+                " phone TEXT NOT NULL UNIQUE, balance REAL NOT NULL DEFAULT 0,"
+                " points INTEGER NOT NULL DEFAULT 0, created REAL NOT NULL);"
             )
             row = self._db.execute("SELECT v FROM meta WHERE k='private_key'").fetchone()
             if row is None:
@@ -260,7 +274,7 @@ class DeskStore:
                 ).fetchone()
                 self._db.execute(
                     "INSERT INTO history (room_id, room, guest, opened_at, closed_at, total, bill,"
-                    " songs) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    " songs, payment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         room_id,
                         room.name,
@@ -270,6 +284,7 @@ class DeskStore:
                         bill.total,
                         json.dumps(bill.lines),
                         songs[0] if songs else "[]",
+                        getattr(bill, "payment", "Cash"),
                     ),
                 )
             self._db.execute("DELETE FROM sessions WHERE room_id=?", (room_id,))
@@ -308,14 +323,78 @@ class DeskStore:
     def history(self, start: float, end: float) -> list[Visit]:
         with self._lock:
             rows = self._db.execute(
-                "SELECT id, room, guest, opened_at, closed_at, total, bill, songs FROM history"
+                "SELECT id, room, guest, opened_at, closed_at, total, bill, songs, payment"
+                " FROM history"
                 " WHERE closed_at >= ? AND closed_at < ? ORDER BY closed_at",
                 (start, end),
             ).fetchall()
         return [
-            Visit(a, b, c, d, e, f, [tuple(x) for x in json.loads(g)], json.loads(h))
-            for a, b, c, d, e, f, g, h in rows
+            Visit(a, b, c, d, e, f, [tuple(x) for x in json.loads(g)], json.loads(h), i)
+            for a, b, c, d, e, f, g, h, i in rows
         ]
+
+    # -- members ----------------------------------------------------------------
+
+    def add_member(self, name: str, phone: str, now: float | None = None) -> int:
+        """A new member. Raises ValueError when the phone number is already a member."""
+        phone = "".join(ch for ch in phone if ch.isdigit() or ch == "+")
+        if not name.strip() or len(phone) < 4:
+            raise ValueError("a member needs a name and a phone number")
+        with self._lock:
+            try:
+                cursor = self._db.execute(
+                    "INSERT INTO members (name, phone, created) VALUES (?, ?, ?)",
+                    (name.strip()[:60], phone[:20], time.time() if now is None else now),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError("that phone number is already a member") from exc
+            self._db.commit()
+            return int(cursor.lastrowid or 0)
+
+    def members(self, query: str = "") -> list[Member]:
+        like = f"%{query.strip()}%"
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, name, phone, balance, points FROM members"
+                " WHERE name LIKE ? OR phone LIKE ? ORDER BY name",
+                (like, like),
+            ).fetchall()
+        return [Member(*row) for row in rows]
+
+    def member_by_phone(self, phone: str) -> Member | None:
+        phone = "".join(ch for ch in phone if ch.isdigit() or ch == "+")
+        with self._lock:
+            row = self._db.execute(
+                "SELECT id, name, phone, balance, points FROM members WHERE phone=?", (phone,)
+            ).fetchone()
+        return None if row is None else Member(*row)
+
+    def top_up(self, member_id: int, amount: float) -> None:
+        if amount <= 0:
+            raise ValueError("top up a positive amount")
+        with self._lock:
+            self._db.execute(
+                "UPDATE members SET balance = balance + ? WHERE id=?", (amount, member_id)
+            )
+            self._db.commit()
+
+    def pay_from_balance(self, member_id: int, amount: float) -> None:
+        """Take *amount* from a member's balance. Raises ValueError if it is not enough."""
+        with self._lock:
+            cursor = self._db.execute(
+                "UPDATE members SET balance = balance - ? WHERE id=? AND balance >= ?",
+                (amount, member_id, amount - 1e-9),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("not enough balance")
+            self._db.commit()
+
+    def add_points(self, member_id: int, points: int) -> None:
+        with self._lock:
+            self._db.execute(
+                "UPDATE members SET points = MAX(0, points + ?) WHERE id=?", (points, member_id)
+            )
+            self._db.commit()
 
     # -- bookings ---------------------------------------------------------------
 

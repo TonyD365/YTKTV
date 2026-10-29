@@ -496,3 +496,77 @@ def test_scrolling_past_the_price_fields_leaves_them_alone(qtbot):
     assert isinstance(switch, OnMenu) and switch.text() == "Hidden"
     switch.setChecked(True)
     assert switch.text() == "On menu"
+
+
+def test_the_till_members_and_shift_totals(qtbot, monkeypatch):
+    from ytktv.desk.billing import bill
+    from ytktv.desk.pages import MembersPage, shift_report
+    from ytktv.desk.panels import BillDialog
+    from ytktv.desk.store import Product
+
+    store = DeskStore()
+    store.set_setting("rate", "100")
+    store.set_setting("member_discount", "10")
+    room, _ = store.pair(store.new_code(), "101")
+    from PySide6.QtWidgets import QMessageBox
+
+    warned = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: warned.append(a[2]))
+    members = MembersPage(store)
+    qtbot.addWidget(members)
+    kim = members.new_member(name="Kim", phone="0912 345 678")
+    assert kim and members.new_member(name="Copy", phone="0912345678") == 0  # same phone
+    assert "already a member" in warned[0]
+    members.table.selectRow(0)
+    members.top_up(amount=500)
+    assert store.member_by_phone("0912345678").balance == 500
+
+    store.open_room(room.room_id, "Kim", 60)
+    cola = store.save_product(Product(0, "Cola", "Drinks", 7))
+    store.add_order(room.room_id, [(cola, 1)])
+    dialog = BillDialog(bill(store, room.room_id), store=store)
+    qtbot.addWidget(dialog)
+    assert dialog.bill.total == 107
+    dialog.phone.setText("0912345678")
+    dialog.find_member()
+    assert dialog.bill.total == pytest.approx(96.3)  # members save 10%
+    dialog.discount.setValue(10)
+    dialog.round_to.setCurrentIndex(1)  # drop the cents
+    assert dialog.bill.total == 86
+    dialog.payment.setCurrentText("Member balance")
+    dialog.settle()
+    paid = store.member_by_phone("0912345678")
+    assert paid.balance == 500 - 86 and paid.points == 86
+    store.close_room(room.room_id, dialog.bill)
+    assert store.history(0, time.time() + 1)[0].payment == "Member balance"
+    assert "· Member balance</td><td align='right'>$86.00" in shift_report(store)
+
+    poor = BillDialog(
+        bill(store, room.room_id) if store.room(room.room_id).is_open else dialog.bill, store=store
+    )
+    qtbot.addWidget(poor)
+    poor.bill.member_off = 0
+    poor.phone.setText("0912345678")
+    poor.find_member()
+    poor.payment.setCurrentText("Member balance")
+    poor.discount.setValue(0)
+    poor.round_to.setCurrentIndex(0)
+    store.pay_from_balance(paid.member_id, store.member_by_phone("0912345678").balance)
+    poor.find_member()
+    poor.settle()
+    assert "Not enough balance" in poor.error.text()
+
+
+def test_updates_never_mix_up_ytktv_and_the_desk():
+    from ytktv import updater
+
+    assets = [
+        {"name": "YTKTV-Desk-2.1.0-windows-x64-setup.exe"},
+        {"name": "YTKTV-2.1.0-windows-x64-setup.exe"},
+        {"name": "SHA256SUMS"},
+    ]
+    suffixes = ["windows-x64-setup.exe"]
+    assert updater.pick_asset(assets, suffixes)["name"] == "YTKTV-2.1.0-windows-x64-setup.exe"
+    desk = updater.pick_asset(assets, suffixes, "YTKTV-Desk")
+    assert desk["name"] == "YTKTV-Desk-2.1.0-windows-x64-setup.exe"
+    assert updater.pick_asset(assets, ["SHA256SUMS"], None)["name"] == "SHA256SUMS"

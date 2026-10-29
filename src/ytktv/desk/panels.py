@@ -29,9 +29,9 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv.desk import lock
-from ytktv.desk.billing import DEFAULT_RATE, ROUNDING, Bill
+from ytktv.desk.billing import DEFAULT_RATE, PAYMENTS, ROUNDING, Bill
 from ytktv.desk.server import Hub
-from ytktv.desk.store import DeskStore, Product
+from ytktv.desk.store import DeskStore, Member, Product
 
 
 class OrdersBox(QWidget):
@@ -110,18 +110,65 @@ class OrdersBox(QWidget):
 
 
 class BillDialog(QDialog):
-    """The bill shown when a room closes; it can be printed or saved as a PDF."""
+    """The till: the bill, a member, a discount, dropping small change and how it is paid.
 
-    def __init__(self, bill: Bill, parent: QWidget | None = None) -> None:
+    It can be printed or saved as a PDF. Pressing Close Room takes a member's balance when
+    they pay with it and adds their points; the caller then closes the room.
+    """
+
+    def __init__(
+        self, bill: Bill, parent: QWidget | None = None, store: DeskStore | None = None
+    ) -> None:
         super().__init__(parent)
         self.bill = bill
+        self.store = store
+        self.member: Member | None = None
         self.setWindowTitle(f"Bill · {bill.room}")
-        self.resize(480, 560)
+        self.resize(560, 720)
         column = QVBoxLayout(self)
-        view = QTextBrowser()
-        view.setStyleSheet("background: white; color: black; border-radius: 10px;")
-        view.setHtml(bill.html())
-        column.addWidget(view, stretch=1)
+        self.view = QTextBrowser()
+        self.view.setStyleSheet("background: white; color: black; border-radius: 10px;")
+        column.addWidget(self.view, stretch=1)
+
+        form = QFormLayout()
+        member_row = QHBoxLayout()
+        self.phone = QLineEdit()
+        self.phone.setPlaceholderText("Member's phone number")
+        self.phone.returnPressed.connect(self.find_member)
+        find = QPushButton("Find")
+        find.clicked.connect(self.find_member)
+        member_row.addWidget(self.phone, stretch=1)
+        member_row.addWidget(find)
+        self.member_label = QLabel("No member")
+        self.member_label.setObjectName("muted")
+        self.discount = QSpinBox()
+        self.discount.setRange(0, 100)
+        self.discount.setSuffix(" %")
+        self.round_to = QComboBox()
+        for label, value in (
+            ("Keep", 0.0),
+            ("To a whole number", 1.0),
+            ("To the nearest 10 below", 10.0),
+        ):
+            self.round_to.addItem(label, value)
+        self.payment = QComboBox()
+        self.payment.addItems(list(PAYMENTS))
+        for field in (self.discount, self.round_to, self.payment):
+            steady(field)
+        self.discount.valueChanged.connect(self.update_bill)
+        self.round_to.currentIndexChanged.connect(self.update_bill)
+        self.payment.currentIndexChanged.connect(self.update_bill)
+        if store is not None:
+            form.addRow("Member", member_row)
+            form.addRow("", self.member_label)
+        form.addRow("Discount", self.discount)
+        form.addRow("Drop small change", self.round_to)
+        form.addRow("Paid by", self.payment)
+        column.addLayout(form)
+        self.error = QLabel("")
+        self.error.setStyleSheet("color: #ff6b8b;")
+        column.addWidget(self.error)
+
         buttons = QHBoxLayout()
         print_button = QPushButton("Print…")
         print_button.clicked.connect(self.print_bill)
@@ -129,7 +176,7 @@ class BillDialog(QDialog):
         pdf.clicked.connect(self.save_pdf)
         close = QPushButton("Close Room")
         close.setObjectName("accent")
-        close.clicked.connect(self.accept)
+        close.clicked.connect(self.settle)
         cancel = QPushButton("Cancel")
         cancel.clicked.connect(self.reject)
         for button in (print_button, pdf):
@@ -138,6 +185,50 @@ class BillDialog(QDialog):
         buttons.addWidget(cancel)
         buttons.addWidget(close)
         column.addLayout(buttons)
+        self.update_bill()
+
+    def find_member(self) -> None:
+        if self.store is None:
+            return
+        self.member = self.store.member_by_phone(self.phone.text())
+        self.update_bill()
+
+    def update_bill(self) -> None:
+        bill, store, member = self.bill, self.store, self.member
+        bill.member = member.name if member else ""
+        bill.member_off = float(store.setting("member_discount", "10")) if member and store else 0
+        bill.discount = float(self.discount.value())
+        bill.round_to = float(self.round_to.currentData() or 0)
+        bill.payment = self.payment.currentText()
+        if member is not None:
+            self.member_label.setText(
+                f"{member.name} · balance {bill.currency}{member.balance:.2f}"
+                f" · {member.points} points · members save {bill.member_off:g}%"
+            )
+        elif self.phone.text().strip():
+            self.member_label.setText("No member with that phone number")
+        self.view.setHtml(bill.html())
+        self.error.clear()
+
+    def settle(self) -> None:
+        """Take payment from the member's balance if that is how they pay, then close."""
+        self.update_bill()
+        bill, store, member = self.bill, self.store, self.member
+        if bill.payment == "Member balance":
+            if member is None or store is None:
+                self.error.setText("Find the member first to pay from their balance.")
+                return
+            try:
+                store.pay_from_balance(member.member_id, bill.total)
+            except ValueError:
+                self.error.setText(
+                    f"Not enough balance: {bill.currency}{member.balance:.2f}. Top up first."
+                )
+                return
+        if member is not None and store is not None:
+            per_unit = float(store.setting("points_per_unit", "1"))
+            store.add_points(member.member_id, int(bill.total * per_unit))
+        self.accept()
 
     def _document(self) -> QTextDocument:
         document = QTextDocument()
@@ -269,6 +360,17 @@ class ShopSettings(QFrame):
         form.addRow("Minimum spend", self.minimum)
         form.addRow("Rooms without a time limit", self.rounding)
         form.addRow("Block minutes", self.block)
+        self.member_discount = QSpinBox()
+        self.member_discount.setRange(0, 100)
+        self.member_discount.setSuffix(" %")
+        self.member_discount.setValue(int(float(store.setting("member_discount", "10"))))
+        self.points_per_unit = QSpinBox()
+        self.points_per_unit.setRange(0, 100)
+        self.points_per_unit.setValue(int(float(store.setting("points_per_unit", "1"))))
+        steady(self.member_discount)
+        steady(self.points_per_unit)
+        form.addRow("Members save", self.member_discount)
+        form.addRow("Member points per 1 spent", self.points_per_unit)
         column.addLayout(form)
         self.load()
 
@@ -335,6 +437,8 @@ class ShopSettings(QFrame):
         self.store.set_setting("minimum", f"{self.minimum.value():g}")
         self.store.set_setting("rounding", str(self.rounding.currentData()))
         self.store.set_setting("block", str(self.block.value()))
+        self.store.set_setting("member_discount", str(self.member_discount.value()))
+        self.store.set_setting("points_per_unit", str(self.points_per_unit.value()))
         if callable(self.changed):
             self.changed()
 

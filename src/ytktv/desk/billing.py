@@ -10,6 +10,7 @@ from html import escape
 from ytktv.desk.store import DeskStore, Room
 
 DEFAULT_RATE = "20"
+PAYMENTS = ("Cash", "Card", "WeChat Pay", "Alipay", "Member balance")
 # How an open-ended session's time is charged.
 ROUNDING = {
     "minute": "By the minute",
@@ -25,14 +26,27 @@ class Bill:
     currency: str
     lines: list[tuple[str, float]] = field(default_factory=list)
     minimum: float = 0.0
+    # Set at the till:
+    member: str = ""  # the member's name, when one pays or collects points
+    member_off: float = 0.0  # members' discount, percent
+    discount: float = 0.0  # a discount given at the till, percent
+    round_to: float = 0.0  # drop the small change: 0 (keep), 1 or 10
+    payment: str = "Cash"
 
     @property
     def subtotal(self) -> float:
         return round(sum(amount for _, amount in self.lines), 2)
 
     @property
-    def total(self) -> float:
+    def before_discounts(self) -> float:
         return max(self.subtotal, self.minimum)
+
+    @property
+    def total(self) -> float:
+        amount = self.before_discounts * (1 - self.member_off / 100) * (1 - self.discount / 100)
+        if self.round_to:
+            amount = math.floor(amount / self.round_to + 1e-9) * self.round_to
+        return round(amount, 2)
 
     def html(self) -> str:
         rows = "".join(
@@ -44,6 +58,15 @@ class Bill:
                 f"<tr><td>Minimum spend</td><td align='right'>{self.currency}"
                 f"{self.minimum:.2f}</td></tr>"
             )
+        for label, percent in (
+            (f"Member {self.member}", self.member_off),
+            ("Discount", self.discount),
+        ):
+            if percent and (self.member or label == "Discount"):
+                rows += f"<tr><td>{escape(label)} −{percent:g}%</td><td></td></tr>"
+        if self.round_to:
+            rows += "<tr><td>Small change dropped</td><td></td></tr>"
+        rows += f"<tr><td>Paid by</td><td align='right'>{escape(self.payment)}</td></tr>"
         return (
             "<div style='color:#111'>"
             f"<h2>YTKTV · {escape(self.room)}</h2>"
