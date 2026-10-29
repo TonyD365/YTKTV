@@ -685,11 +685,17 @@ def test_party_games_show_on_the_console_and_mv_screen(window, qtbot):
 
     main, _ = window
     page = main.pages["games"]
-    result = page.play("dice")
-    assert result["title"].endswith("Dice") and len(result["text"].split()) == 5
+    page.animate = False
+    dice = page.open_game("dice")
+    assert page.stack.currentWidget() is dice
+    dice.count.setValue(3)
+    dice.start()
+    assert page.last_result["title"].endswith("Dice") and len(page.last_result["text"].split()) == 3
     qtbot.waitUntil(lambda: "Dice" in main.mv_window.game_card.text(), timeout=3000)
-    assert "Dice" in page.result.text()
-    assert page.play("truth")["text"] in games.TRUTHS
+    page.screens["truthdare"].draw("truth")
+    assert page.last_result["text"] in games.TRUTHS
+    page.show_lobby()
+    assert page.stack.currentWidget() is page.lobby
     assert games.spin(["Kim", "Alex"], random.Random(1))["text"] in ("Kim", "Alex")
     assert games.spin([])["text"] == "Add singers first"
 
@@ -772,11 +778,45 @@ def test_more_party_games(window, qtbot):
 
     main, controller = window
     page = main.pages["games"]
-    page.play("liar_roll")
-    assert "Your dice:" in page.result.text()
+    page.animate = False
+    liar = page.open_game("liar")
+    liar.start()
     assert "1 players rolled" in main.mv_window.game_card.text()
-    page.guess.setValue(50)
-    page.play("bomb_guess")
+    liar.show_hand()
+    assert controller.liars.hand("Console") in liar.stage.text()
+    liar.hide_hand()
+    assert controller.liars.hand("Console") not in liar.stage.text()  # hidden again
+    liar.reveal()
+    assert "Console:" in page.last_result["text"]
+
+    bomb = page.open_game("bomb")
+    bomb.start()
+    for _ in range(100):  # keep guessing the bottom of the range until it blows up
+        bomb.guess.setValue(controller.bomb.low + 1)
+        bomb.try_guess()
+        if page.last_result["title"].startswith("💥"):
+            break
+    assert page.last_result["title"].startswith("💥")
+
+    page.players.setText("Kim, Alex, Sam")
+    page.open_game("spin").start()
+    assert page.last_result["text"] in ("Kim", "Alex", "Sam")
+    page.open_game("highlow").start()
+    assert "Kim" in page.last_result["text"]
+    page.open_game("lots").start()
+    assert "Sam:" in page.last_result["text"]
+    sevens = page.open_game("sevens")
+    for _ in range(7):
+        sevens.start()
+    assert page.last_result["text"] == "PASS!"
+    page.open_game("coin").start()
+    assert page.last_result["text"] in ("Heads", "Tails")
+    page.open_game("challenge").start()
+    assert page.last_result["text"] in games.CHALLENGES
+    countdown = page.open_game("countdown")
+    countdown.seconds.setValue(3)
+    countdown.start()
+    assert "3" in countdown.stage.text()
     from tests.helpers import make_song
 
     result = controller.random_song([make_song(91)], who="Kim")

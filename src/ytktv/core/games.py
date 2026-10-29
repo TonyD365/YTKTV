@@ -89,7 +89,8 @@ def high_low(names: list[str], rng: random.Random | None = None) -> dict[str, st
     losers = [n for n, r in rolls.items() if r == worst]
     return {
         "title": "🎲 High or low",
-        "text": "  ".join(f"{n} {DICE[r]}" for n, r in rolls.items()),
+        # Numbers, not dice faces: next to names the faces are too small to read.
+        "text": "   ".join(f"{n} {r + 1}" for n, r in rolls.items()),
         "detail": f"High: {', '.join(winners)}  ·  Low: {', '.join(losers)}",
     }
 

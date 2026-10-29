@@ -718,6 +718,14 @@ class KTVController:
         self.bus.emit("game", result)
         return result
 
+    def announce(self, result: dict[str, str]) -> None:
+        """Show a game's result big on the MV screen (for games played on the console)."""
+        self.bus.emit("game", result)
+
+    def singers(self) -> list[str]:
+        """Everyone with a song playing or waiting, for games that need players."""
+        return [n for n in dict.fromkeys(s.strip() for s in self._singers()) if n]
+
     def countdown(self, seconds: int = 10) -> None:
         """Count down on the MV screen, one number a second (for drinking or singing races)."""
         seconds = max(1, min(60, seconds))
