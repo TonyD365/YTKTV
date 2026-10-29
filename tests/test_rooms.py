@@ -465,3 +465,34 @@ def test_shift_report_and_hand_over(qtbot):
     qtbot.addWidget(dialog)
     dialog.hand_over()
     assert "Sessions closed</td><td align='right'>0" in shift_report(store, now=time.time() + 5)
+
+
+def test_scrolling_past_the_price_fields_leaves_them_alone(qtbot):
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+    from PySide6.QtWidgets import QApplication
+
+    from ytktv.desk.panels import OnMenu, ShopSettings
+    from ytktv.desk.store import Product
+
+    store = DeskStore()
+    store.save_product(Product(0, "Cola", "Drinks", 3, active=False))
+    shop = ShopSettings(store)
+    qtbot.addWidget(shop)
+    before = shop.rate.value()
+    wheel = QWheelEvent(
+        QPointF(5, 5),
+        QPointF(5, 5),
+        QPoint(0, 0),
+        QPoint(0, 120),
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+        Qt.ScrollPhase.NoScrollPhase,
+        False,
+    )
+    QApplication.sendEvent(shop.rate, wheel)
+    assert shop.rate.value() == before
+    switch = shop.table.cellWidget(0, 4)
+    assert isinstance(switch, OnMenu) and switch.text() == "Hidden"
+    switch.setChecked(True)
+    assert switch.text() == "On menu"
