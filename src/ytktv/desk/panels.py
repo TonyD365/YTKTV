@@ -117,6 +117,7 @@ class BillDialog(QDialog):
         self.resize(480, 560)
         column = QVBoxLayout(self)
         view = QTextBrowser()
+        view.setStyleSheet("background: white; color: black; border-radius: 10px;")
         view.setHtml(bill.html())
         column.addWidget(view, stretch=1)
         buttons = QHBoxLayout()
@@ -176,6 +177,7 @@ class ShopSettings(QFrame):
         self.table = QTableWidget(0, len(self.COLUMNS))
         self.table.setHorizontalHeaderLabels(self.COLUMNS)
         self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.verticalHeader().setVisible(False)
         column.addWidget(self.table, stretch=1)
         buttons = QHBoxLayout()
         for text, action in (

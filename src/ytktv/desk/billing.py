@@ -45,11 +45,12 @@ class Bill:
                 f"{self.minimum:.2f}</td></tr>"
             )
         return (
+            "<div style='color:#111'>"
             f"<h2>YTKTV · {escape(self.room)}</h2>"
             f"<p>{escape(self.guest)}<br>{time.strftime('%Y-%m-%d %H:%M')}</p>"
             f"<table width='100%' cellpadding='4'>{rows}"
             f"<tr><td><b>Total</b></td><td align='right'><b>{self.currency}{self.total:.2f}"
-            "</b></td></tr></table>"
+            "</b></td></tr></table></div>"
         )
 
 

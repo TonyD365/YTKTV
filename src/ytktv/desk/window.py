@@ -33,6 +33,7 @@ from ytktv.desk.store import CODE_SECONDS, Booking, DeskStore, Room
 from ytktv.rooms.state import format_left
 
 COLUMNS = 3
+TIPS = ("Skip the song", "Pause or resume", "Music volume", "Send a message", "Lock or unlock")
 LENGTHS = {"1 hour": 60, "2 hours": 120, "3 hours": 180, "No time limit": None}
 EXTRA = {"30 minutes": 30, "1 hour": 60}
 STYLE = """
@@ -55,6 +56,23 @@ STYLE = """
 #roomTile { border-radius: 18px; }
 #roomTile[selected="true"] { border: 3px solid #2ee6ff; }
 QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: 0; }
+QTableWidget, QListWidget, QTextBrowser { background: #120c22; color: white;
+  alternate-background-color: #1a1430; gridline-color: #2a2445; border: 1px solid #33284f;
+  border-radius: 10px; selection-background-color: #ff3d9a; selection-color: white; }
+QHeaderView::section { background: #1a1430; color: #9a93b8; border: 0;
+  border-bottom: 1px solid #33284f; padding: 6px; font-weight: 700; }
+QTableCornerButton::section { background: #1a1430; border: 0; }
+QSpinBox, QDoubleSpinBox, QDateEdit, QDateTimeEdit { background: #1a1430; color: white;
+  border: 1px solid #33284f; border-radius: 8px; padding: 6px 10px; min-height: 26px; }
+QCalendarWidget QWidget { background: #120c22; color: white;
+  alternate-background-color: #1a1430; }
+QCalendarWidget QToolButton { background: transparent; color: white; font-weight: 700;
+  padding: 6px; }
+QCalendarWidget #qt_calendar_navigationbar { background: #1a1430; }
+QCalendarWidget QAbstractItemView:enabled { color: white; selection-background-color: #ff3d9a;
+  selection-color: white; }
+QCalendarWidget QAbstractItemView:disabled { color: #4a4466; }
+QCheckBox { color: white; }
 """
 STATUS = {  # status: (label, tile colour, dot)
     "free": ("Free", "#2b2f3d", "🟢"),
@@ -91,7 +109,8 @@ class DeskWindow(QMainWindow):
         self._code_until = 0.0
         self.setWindowTitle("YTKTV Desk")
         self.setStyleSheet(STYLE)
-        self.resize(1440, 900)
+        self.resize(1280, 820)
+        self.setMinimumWidth(1100)
         root = QWidget()
         page = QVBoxLayout(root)
         page.setContentsMargins(0, 0, 0, 0)
@@ -142,7 +161,10 @@ class DeskWindow(QMainWindow):
         self.records = RecordsPage(self.store)
         self.stack.addWidget(self.bookings)
         self.stack.addWidget(self.records)
-        self.stack.addWidget(self._settings_tab())
+        settings = QScrollArea()  # taller than a laptop screen: let it scroll
+        settings.setWidgetResizable(True)
+        settings.setWidget(self._settings_tab())
+        self.stack.addWidget(settings)
         page.addWidget(self.stack, stretch=1)
 
         calls = QFrame()
@@ -238,25 +260,28 @@ class DeskWindow(QMainWindow):
             ("Close Room", self.close_room),
         ):
             button = QPushButton(text)
-            button.setMinimumHeight(46)
+            button.setMinimumHeight(40)
             button.setEnabled(False)
             button.clicked.connect(action)
             side.addWidget(button)
             self.room_actions.append(button)
         self.room_actions[0].setObjectName("accent")
-        remote = QHBoxLayout()
+        remote = QGridLayout()
+        remote.setSpacing(8)
         self.remote_buttons: list[QPushButton] = []
         for text, handler in (
-            ("⏭ Skip", lambda: self._control("skip")),
-            ("⏯ Pause", lambda: self._control("pause")),
-            ("🔊 Volume", self._volume),
-            ("💬 Message", self._message_room),
-            ("🔒 Lock", self._toggle_lock),
+            ("⏭", lambda: self._control("skip")),
+            ("⏯", lambda: self._control("pause")),
+            ("🔊", self._volume),
+            ("💬", self._message_room),
+            ("🔒", self._toggle_lock),
         ):
             button = QPushButton(text)
             button.clicked.connect(handler)
             button.setEnabled(False)
-            remote.addWidget(button)
+            button.setMinimumHeight(40)
+            button.setToolTip(TIPS[len(self.remote_buttons)])
+            remote.addWidget(button, 0, len(self.remote_buttons))
             self.remote_buttons.append(button)
         side.addLayout(remote)
         body.addWidget(panel)
@@ -326,6 +351,7 @@ class DeskWindow(QMainWindow):
         online = self.hub.online()
         self.stat_rooms.setText(str(len(rooms)))
         self.stat_online.setText(str(len(online)))
+        self.stat_used.setText(str(sum(r.is_open for r in rooms)))
         self._fill_wall(rooms, online)
         self._fill_panel(rooms, online)
         self._fill_settings(rooms)
@@ -506,7 +532,7 @@ class DeskWindow(QMainWindow):
         self.orders.show_room(room.room_id if room.is_open else None)
         for button in self.remote_buttons:
             button.setEnabled(room.is_open and up)
-        self.remote_buttons[4].setText("🔓 Unlock" if room.room_id in self._locked else "🔒 Lock")
+        self.remote_buttons[4].setText("🔓" if room.room_id in self._locked else "🔒")
 
     def _status(self, room: Room, online: set[str]) -> str:
         if room.is_open and any(c.room_id == room.room_id for c in self.store.calls()):
