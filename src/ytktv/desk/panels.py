@@ -162,7 +162,7 @@ class BillDialog(QDialog):
 class ShopSettings(QFrame):
     """The menu rooms can order from, and how rooms are charged."""
 
-    COLUMNS = ("Name", "Category", "Price", "On menu")
+    COLUMNS = ("Name", "Category", "Price", "Stock", "On menu")
 
     def __init__(self, store: DeskStore, changed: object = None) -> None:
         super().__init__()
@@ -229,9 +229,12 @@ class ShopSettings(QFrame):
         self.table.setItem(row, 0, name)
         self.table.setItem(row, 1, QTableWidgetItem(product.category))
         self.table.setItem(row, 2, QTableWidgetItem(f"{product.price:g}"))
+        stock = QTableWidgetItem("" if product.stock is None else str(product.stock))
+        stock.setToolTip("Leave empty if it never runs out")
+        self.table.setItem(row, 3, stock)
         active = QCheckBox()
         active.setChecked(product.active)
-        self.table.setCellWidget(row, 3, active)
+        self.table.setCellWidget(row, 4, active)
 
     def add_row(self) -> None:
         self._row(Product(0, "New item", "Drinks", 0.0))
@@ -255,7 +258,10 @@ class ShopSettings(QFrame):
                 price = float(cells[2].text()) if cells[2] else 0.0
             except ValueError:
                 price = 0.0
-            active = self.table.cellWidget(row, 3)
+            active = self.table.cellWidget(row, 4)
+            stock_cell = self.table.item(row, 3)
+            stock_text = stock_cell.text().strip() if stock_cell else ""
+            stock = int(stock_text) if stock_text.isdigit() else None
             product_id = int(cells[0].data(Qt.ItemDataRole.UserRole) or 0) if cells[0] else 0
             new_id = self.store.save_product(
                 Product(
@@ -264,6 +270,7 @@ class ShopSettings(QFrame):
                     cells[1].text().strip() if cells[1] else "",
                     max(0.0, price),
                     isinstance(active, QCheckBox) and active.isChecked(),
+                    stock,
                 )
             )
             if cells[0] is not None:
