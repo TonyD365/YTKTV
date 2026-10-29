@@ -636,9 +636,12 @@ def test_receipts(qtbot, tmp_path):
     assert abs(width_mm - 80) < 1
 
 
-def test_windows_on_arm_does_not_offer_the_separation_download():
-    from ytktv.separation.runtime import supported
+def test_windows_on_arm_gets_an_x64_separation_runtime(tmp_path):
+    from ytktv.separation.runtime import VARIANTS, Runtime, runtime_python, supported
 
-    assert supported("Windows", frozen=True, machine="AMD64")
-    assert supported("Linux", frozen=True, machine="aarch64")
-    assert not supported("Windows", frozen=True, machine="ARM64")
+    assert supported("Windows", frozen=True, machine="ARM64")
+    assert runtime_python("Windows", "ARM64") == "cpython-3.12-windows-x86_64-none"
+    assert runtime_python("Windows", "AMD64") == "3.12"
+    assert runtime_python("Linux", "aarch64") == "3.12"  # Linux ARM has native libraries
+    commands = Runtime(tmp_path, system="Windows").install_commands(VARIANTS["cpu"], "uv")
+    assert "--python" in commands[0][1]
