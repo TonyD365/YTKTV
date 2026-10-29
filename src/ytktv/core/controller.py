@@ -70,6 +70,7 @@ class KTVController:
     ) -> None:
         self.store = store
         self.room_closed = False  # set by the front desk; a closed room takes no songs
+        self.pk_mode = False  # two microphones battle on the same song
         self.front_desk: Any = None  # the RoomClient when this machine is a room
         self.settings = store.settings
         self.bomb = games.NumberBomb()
@@ -449,7 +450,12 @@ class KTVController:
             self._last_position_emit = now
             self.bus.emit(
                 "position",
-                {"position": position, "duration": self.duration, "score": self.live_score()},
+                {
+                    "position": position,
+                    "duration": self.duration,
+                    "score": self.live_score(),
+                    "pk": self.live_pk(),
+                },
             )
 
     def _sync_preload(self) -> None:
@@ -572,6 +578,14 @@ class KTVController:
                 return None
             return self._keeper, self.position
 
+    def live_pk(self) -> list[dict[str, int]] | None:
+        """In a PK battle, each microphone's running score, for the bars on the TV."""
+        keeper = self._keeper
+        if not self.pk_mode or keeper is None:
+            return None
+        voices = keeper.voice_results()
+        return [{"mic": mic + 1, "points": s.points} for mic, s in sorted(voices.items())] or None
+
     def live_score(self) -> int | None:
         keeper = self._keeper
         result = keeper.result() if keeper is not None else None
@@ -595,8 +609,20 @@ class KTVController:
             result, rank = voices[best["mic"] - 1], best["rank"]
         else:
             rank = self.scoreboard.add(result.points, item.song.title, item.singer)
+        pk: dict[str, Any] | None = None
+        if self.pk_mode:
+            if len(entries) >= 2:
+                ranked = sorted(entries, key=lambda entry: entry["points"], reverse=True)
+                tie = ranked[0]["points"] == ranked[1]["points"]
+                pk = {
+                    "scores": [{"mic": e["mic"], "points": e["points"]} for e in entries],
+                    "winner": None if tie else ranked[0]["mic"],
+                }
+            else:
+                pk = {"scores": [], "winner": None, "note": "PK needs two microphones"}
         self.last_score = {
             **result.to_dict(),
+            **({"pk": pk} if pk is not None else {}),
             "title": item.song.title,
             "singer": item.singer,
             "rank": rank,
@@ -604,6 +630,12 @@ class KTVController:
             "voices": entries,
         }
         self.bus.emit("score", self.last_score)
+
+    def set_pk_mode(self, enabled: bool) -> None:
+        """PK battle: two singers on two microphones, the higher score wins the song."""
+        self.pk_mode = bool(enabled)
+        self.toast("PK battle on: two microphones, one winner" if enabled else "PK battle off")
+        self._emit_state()
 
     def set_lights(self, enabled: bool) -> None:
         self.settings.lights = bool(enabled)
@@ -685,7 +717,7 @@ class KTVController:
         *value* is a guess for the number bomb; *player* names who is playing.
         """
         if game == "dice":
-            result = games.roll_dice()
+            result = games.roll_dice(max(1, min(6, value or 5)))
         elif game == "spin":
             result = games.spin(self._singers())
         elif game in ("truth", "dare"):
@@ -717,6 +749,14 @@ class KTVController:
             raise ValueError(f"unknown game {game!r}")
         self.bus.emit("game", result)
         return result
+
+    def announce(self, result: dict[str, str]) -> None:
+        """Show a game's result big on the MV screen (for games played on the console)."""
+        self.bus.emit("game", result)
+
+    def singers(self) -> list[str]:
+        """Everyone with a song playing or waiting, for games that need players."""
+        return [n for n in dict.fromkeys(s.strip() for s in self._singers()) if n]
 
     def countdown(self, seconds: int = 10) -> None:
         """Count down on the MV screen, one number a second (for drinking or singing races)."""
@@ -1111,6 +1151,7 @@ class KTVController:
             "show_lyrics": settings.show_lyrics,
             "reactions": list(REACTIONS),
             "room_closed": self.room_closed,
+            "pk": self.pk_mode,
             "service": self._service_menu(),
             "phone_mic_url": self.phone_mic_url,
             "lyrics_offset": self.lyrics_offset,

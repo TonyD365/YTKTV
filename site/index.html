@@ -155,8 +155,8 @@
         <div class="card"><div class="icon">📱</div><h3 data-i18n="f3.t">Phones as remote and microphone</h3><p data-i18n="f3.d">Scan a QR code to queue songs, see how long until your turn, or sing straight into the mixer from your phone.</p></div>
         <div class="card"><div class="icon">🎚️</div><h3 data-i18n="f4.t">A mixing console that feels real</h3><p data-i18n="f4.d">Four channels with EQ, compressor, echo, reverb, presets and a feedback guard that catches the squeal.</p></div>
         <div class="card"><div class="icon">🏆</div><h3 data-i18n="f5.t">Live pitch and scores</h3><p data-i18n="f5.d">See your voice against the tune as you sing, then your place on tonight's leaderboard. Duets score each singer.</p></div>
-        <div class="card"><div class="icon">✨</div><h3 data-i18n="f6.t">The KTV atmosphere</h3><p data-i18n="f6.d">Lyrics that follow the singer word by word, key and tempo, danmaku, applause buttons, lights and party games: number bomb, liar's dice and more.</p></div>
-        <div class="card"><div class="icon">🛎</div><h3 data-i18n="f7.t">A front desk for many rooms</h3><p data-i18n="f7.d">YTKTV Desk opens, times and closes rooms, takes calls and orders, bills, books and keeps the day's records, like a real KTV's front desk.</p></div>
+        <div class="card"><div class="icon">✨</div><h3 data-i18n="f6.t">The KTV atmosphere</h3><p data-i18n="f6.d">Lyrics that follow the singer word by word, key and tempo, danmaku, applause buttons, lights party games with their own screens, PK battles, and phones as glow sticks.</p></div>
+        <div class="card"><div class="icon">🛎</div><h3 data-i18n="f7.t">A front desk for many rooms</h3><p data-i18n="f7.d">YTKTV Desk opens, times and closes rooms, takes calls and orders, runs the till with members and receipts, books and keeps the day's records, like a real KTV's front desk.</p></div>
       </div>
     </div>
   </section>
@@ -226,9 +226,11 @@
           <p class="small" data-i18n="dl.linux">x86-64 AppImage</p>
           <a class="btn primary" data-asset="linux-x86_64.AppImage" href="https://github.com/TonyD365/YTKTV/releases/latest" data-i18n="dl.button">Download</a></div>
       </div>
+      <p class="small" style="text-align:center;margin:16px auto 0"><span data-i18n="dl.arm">ARM:</span>
+        <a data-asset="windows-arm64-setup.exe" href="https://github.com/TonyD365/YTKTV/releases/latest">Windows on ARM</a> ·
+        <a data-asset="linux-aarch64.AppImage" href="https://github.com/TonyD365/YTKTV/releases/latest">Linux ARM (Raspberry Pi 4/5)</a></p>
       <p class="small" style="text-align:center;margin:22px auto 0"><span data-i18n="dl.desk">YTKTV Desk (front desk):</span>
-        <a data-desk data-asset="macos-arm64.pkg" href="https://github.com/TonyD365/YTKTV/releases/latest">macOS Apple Silicon</a> ·
-        <a data-desk data-asset="macos-x86_64.pkg" href="https://github.com/TonyD365/YTKTV/releases/latest">macOS Intel</a> ·
+        <a data-desk data-asset="macos-universal.pkg" href="https://github.com/TonyD365/YTKTV/releases/latest">macOS</a> ·
         <a data-desk data-asset="windows-x64-setup.exe" href="https://github.com/TonyD365/YTKTV/releases/latest">Windows</a> ·
         <a data-desk data-asset="linux-x86_64.AppImage" href="https://github.com/TonyD365/YTKTV/releases/latest">Linux</a></p>
       <p class="small" style="text-align:center;max-width:760px;margin:22px auto 0" data-i18n="dl.note" data-html>
@@ -280,11 +282,12 @@ const ZH = {
   "f3.t": "手机是遥控器，也是麦克风", "f3.d": "扫码点歌，看还要等几首；也能直接用手机唱进调音台。",
   "f4.t": "像真的一样的调音台", "f4.d": "四路麦克风，EQ、压缩、回声、混响、效果预设，还有抓啸叫的防啸叫。",
   "f5.t": "实时音高和打分", "f5.d": "边唱边看自己的音高线，唱完看本场排名。对唱时各自打分。",
-  "f6.t": "KTV 氛围", "f6.d": "逐字变色的歌词、升降调和变速、弹幕、欢呼音效、氛围灯，还有数字炸弹、大话骰等小游戏。",
-  "f7.t": "管理多个包厢的服务台", "f7.d": "YTKTV Desk 可以开房、计时、关房，处理呼叫和点单，结账、预定、记录每天的营业，就像真 KTV 的前台。",
+  "f6.t": "KTV 氛围", "f6.d": "逐字变色的歌词、升降调和变速、弹幕、欢呼音效、氛围灯，每个都有自己界面的小游戏、PK 对战，手机还能当荧光棒。",
+  "f7.t": "管理多个包厢的服务台", "f7.d": "YTKTV Desk 可以开房、计时、关房，处理呼叫和点单，收银（会员、小票），预定、记录每天的营业，就像真 KTV 的前台。",
   "desk.title": "YTKTV Desk 服务台", "desk.sub": "一台服务台管多个包厢：大人一间，小孩一间。",
   "desk.how": "在一台电脑上安装 YTKTV Desk，然后在每个房间的 YTKTV 里打开 Settings → Front Desk，点 Find Desks，输入服务台显示的配对码。",
   "dl.desk": "服务台 YTKTV Desk：",
+  "dl.arm": "ARM 版：",
   "p1.t": "像真的点歌台一样", "p1.d": "大按钮，已点歌曲一目了然，拖动排序，歌单和收藏。底部控制栏有 KTV 遥控器的所有功能。",
   "p2.t": "像调音师一样调音", "p2.d": "每路麦克风都有增益、三段 EQ、压缩、回声和混响，还有流行、抒情、摇滚、大厅等预设。",
   "p3.t": "手机上什么都不用装", "p3.d": "客人扫电视上的二维码，在浏览器里点歌。每部手机都能看到自己点的歌和轮到自己还要多久。",

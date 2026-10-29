@@ -42,3 +42,13 @@ router. A phone that disconnects stays chosen on its channel and is back when it
 Phone microphones have not been tested on many phones yet. If yours does not connect, please
 [open an issue](https://github.com/TonyD365/YTKTV/issues/new/choose) with the phone model and
 browser.
+
+## Games, glow sticks and service
+
+- **GAMES** (bottom bar): the same twelve party games as the console, each with its own screen.
+  You play under the name you typed in **REMOTE → Your name**. In liar's dice your dice show
+  only on your phone (hold **Hold to peek**); the TV shows everyone's at the reveal.
+- **✨ Glow stick** (REMOTE): the whole screen lights up in the colours of the TV's edge lights.
+  Tap to stop.
+- **🛎 Service** (REMOTE, in rooms run by a [YTKTV Desk](front-desk.md)): call the staff or order
+  from the menu.

@@ -66,9 +66,9 @@ def test_suggest_parses_caches_and_never_raises(monkeypatch):
 
 
 def test_artist_list_is_sane():
-    assert set(ARTISTS) == {"Mandopop", "Cantopop", "English", "K-Pop", "J-Pop"}
+    assert set(ARTISTS) == {"Mandarin", "Cantonese", "English", "Japanese", "Korean"}
     for names in ARTISTS.values():
-        assert len(names) == 16 and len(set(names)) == 16 and all(names)
+        assert len(names) >= 10 and len(set(names)) == len(names) and all(names)
 
 
 def test_song_marks_and_search_memory(ktv):
@@ -194,3 +194,23 @@ def test_typing_fetches_suggestions(console, qtbot):
     )
     page.search()
     assert page.browse_list is not None
+
+
+def test_pinyin_initials_find_songs():
+    from ytktv import catalog
+
+    assert catalog.initials("月亮代表我的心") == "yldbwdx"
+    assert catalog.initials("Let It Be") == "lib"
+    assert catalog.initials("K歌之王") == "kgzw"
+    assert catalog.match_initials("yldb")[0].startswith("月亮代表我的心")
+    assert catalog.match_initials("hktk")[0].startswith("海闊天空")
+    assert catalog.match_initials("wdge", [("我的歌兒", "Kim")]) == ["我的歌兒 - Kim"]
+    assert catalog.match_initials("hello world") == []  # not initials
+    assert set(catalog.artists("Cantonese", "Group")) >= {"Beyond", "Twins"}
+    assert "Beyond" not in catalog.artists("Mandarin")
+
+
+def test_initials_reach_the_phone(ktv):
+    controller, _, _ = ktv
+    with TestClient(create_app(controller, FakeSource())) as http:
+        assert http.get("/api/suggest", params={"q": "yldb"}).json()[0].startswith("月亮代表我的心")

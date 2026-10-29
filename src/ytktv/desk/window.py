@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -28,10 +28,19 @@ from PySide6.QtWidgets import (
 
 from ytktv.desk import lock
 from ytktv.desk.billing import bill
-from ytktv.desk.pages import BookingsPage, RecordsPage, ShiftDialog
-from ytktv.desk.panels import BillDialog, BroadcastDialog, OrdersBox, SecuritySettings, ShopSettings
+from ytktv.desk.pages import BookingsPage, MembersPage, RecordsPage, ShiftDialog
+from ytktv.desk.panels import (
+    MAX_PRICE,
+    BillDialog,
+    BroadcastDialog,
+    OrdersBox,
+    ReceiptSettings,
+    SecuritySettings,
+    ShopSettings,
+)
 from ytktv.desk.server import Hub, tell, tell_all_products, unbind
 from ytktv.desk.store import CODE_SECONDS, Booking, DeskStore, Room
+from ytktv.desk.update import DeskUpdater
 from ytktv.rooms.state import format_left
 
 COLUMNS = 4
@@ -85,6 +94,8 @@ QCalendarWidget QAbstractItemView:enabled { color: white; selection-background-c
   selection-color: white; }
 QCalendarWidget QAbstractItemView:disabled { color: #4a4466; }
 QCheckBox { color: white; }
+QAbstractSpinBox QLineEdit { padding: 0; margin: 0; border: 0; border-radius: 0;
+  background: transparent; font-size: 16px; }
 """
 STATUS = {  # status: (label, tile colour, dot)
     "free": ("Free", "#24506b", "🟢"),
@@ -169,7 +180,12 @@ class DeskWindow(QMainWindow):
         money.addWidget(self.stat_today, alignment=Qt.AlignmentFlag.AlignRight)
         money.addWidget(today_label, alignment=Qt.AlignmentFlag.AlignRight)
         bar.addLayout(money)
-        bar.addSpacing(24)
+        bar.addSpacing(16)
+        self.update_button = QPushButton()
+        self.update_button.setObjectName("accent")
+        self.update_button.hide()
+        bar.addWidget(self.update_button)
+        bar.addSpacing(16)
         self.clock = QLabel()
         self.clock.setObjectName("deskClock")
         bar.addWidget(self.clock)
@@ -187,6 +203,8 @@ class DeskWindow(QMainWindow):
         self.records = RecordsPage(self.store)
         self.stack.addWidget(self.bookings)
         self.stack.addWidget(self.records)
+        self.members = MembersPage(self.store)
+        self.stack.addWidget(self.members)
         settings = QScrollArea()  # taller than a laptop screen: let it scroll
         settings.setWidgetResizable(True)
         settings.setWidget(self._settings_tab())
@@ -325,9 +343,34 @@ class DeskWindow(QMainWindow):
         column.addWidget(panel, stretch=1)
         self.shop = ShopSettings(self.store, lambda: tell_all_products(self.store, self.hub))
         column.addWidget(self.shop, stretch=2)
+        self.receipts = ReceiptSettings(self.store)
+        column.addWidget(self.receipts)
         self.security = SecuritySettings(self.store)
         column.addWidget(self.security)
         return tab
+
+    def watch_updates(self, updates: DeskUpdater) -> None:
+        """Offer a downloaded update in the top bar; installing quits the desk."""
+
+        def ready(version: str) -> None:
+            self.update_button.setText(f"⬆  Update to {version}")
+            self.update_button.setToolTip("Install the new version and restart the desk")
+            self.update_button.show()
+
+        def available(version: str, page: str) -> None:
+            self.update_button.setText(f"⬆  {version} is out")
+            self.update_button.setToolTip(page)
+            self.update_button.show()
+
+        def install() -> None:
+            if updates.install():
+                QApplication.quit()
+            else:
+                QDesktopServices.openUrl(QUrl(self.update_button.toolTip()))
+
+        updates.ready.connect(ready)
+        updates.available.connect(available)
+        self.update_button.clicked.connect(install)
 
     def _side_bar(self) -> QWidget:
         bar = QFrame()
@@ -353,7 +396,13 @@ class DeskWindow(QMainWindow):
         head("VIEW")
         self.nav: dict[str, QPushButton] = {}
         for index, (name, icon) in enumerate(
-            (("Rooms", "🏠"), ("Bookings", "📅"), ("Records", "📊"), ("Settings", "⚙️"))
+            (
+                ("Rooms", "🏠"),
+                ("Bookings", "📅"),
+                ("Records", "📊"),
+                ("Members", "💳"),
+                ("Settings", "⚙️"),
+            )
         ):
             self.nav[name] = button(f"{icon}  {name}", lambda _c=False, i=index: self.show_tab(i))
             self.nav[name].setCheckable(True)
@@ -483,7 +532,7 @@ class DeskWindow(QMainWindow):
                 "This room's price per hour (0 = desk default):",
                 0,
                 0,
-                100000,
+                MAX_PRICE,
                 2,
             )
             if ok:
@@ -680,7 +729,7 @@ class DeskWindow(QMainWindow):
         if self.selected is None:
             return
         result = bill(self.store, self.selected)
-        if confirm and not BillDialog(result, self).exec():
+        if confirm and not BillDialog(result, self, self.store).exec():
             return
         self.store.close_room(self.selected, result)
         self.records.refresh()

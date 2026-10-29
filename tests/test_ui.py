@@ -685,11 +685,17 @@ def test_party_games_show_on_the_console_and_mv_screen(window, qtbot):
 
     main, _ = window
     page = main.pages["games"]
-    result = page.play("dice")
-    assert result["title"].endswith("Dice") and len(result["text"].split()) == 5
+    page.animate = False
+    dice = page.open_game("dice")
+    assert page.stack.currentWidget() is dice
+    dice.count.setValue(3)
+    dice.start()
+    assert page.last_result["title"].endswith("Dice") and len(page.last_result["text"].split()) == 3
     qtbot.waitUntil(lambda: "Dice" in main.mv_window.game_card.text(), timeout=3000)
-    assert "Dice" in page.result.text()
-    assert page.play("truth")["text"] in games.TRUTHS
+    page.screens["truthdare"].draw("truth")
+    assert page.last_result["text"] in games.TRUTHS
+    page.show_lobby()
+    assert page.stack.currentWidget() is page.lobby
     assert games.spin(["Kim", "Alex"], random.Random(1))["text"] in ("Kim", "Alex")
     assert games.spin([])["text"] == "Add singers first"
 
@@ -772,11 +778,45 @@ def test_more_party_games(window, qtbot):
 
     main, controller = window
     page = main.pages["games"]
-    page.play("liar_roll")
-    assert "Your dice:" in page.result.text()
+    page.animate = False
+    liar = page.open_game("liar")
+    liar.start()
     assert "1 players rolled" in main.mv_window.game_card.text()
-    page.guess.setValue(50)
-    page.play("bomb_guess")
+    liar.show_hand()
+    assert controller.liars.hand("Console") in liar.stage.text()
+    liar.hide_hand()
+    assert controller.liars.hand("Console") not in liar.stage.text()  # hidden again
+    liar.reveal()
+    assert "Console:" in page.last_result["text"]
+
+    bomb = page.open_game("bomb")
+    bomb.start()
+    for _ in range(100):  # keep guessing the bottom of the range until it blows up
+        bomb.guess.setValue(controller.bomb.low + 1)
+        bomb.try_guess()
+        if page.last_result["title"].startswith("💥"):
+            break
+    assert page.last_result["title"].startswith("💥")
+
+    page.players.setText("Kim, Alex, Sam")
+    page.open_game("spin").start()
+    assert page.last_result["text"] in ("Kim", "Alex", "Sam")
+    page.open_game("highlow").start()
+    assert "Kim" in page.last_result["text"]
+    page.open_game("lots").start()
+    assert "Sam:" in page.last_result["text"]
+    sevens = page.open_game("sevens")
+    for _ in range(7):
+        sevens.start()
+    assert page.last_result["text"] == "PASS!"
+    page.open_game("coin").start()
+    assert page.last_result["text"] in ("Heads", "Tails")
+    page.open_game("challenge").start()
+    assert page.last_result["text"] in games.CHALLENGES
+    countdown = page.open_game("countdown")
+    countdown.seconds.setValue(3)
+    countdown.start()
+    assert "3" in countdown.stage.text()
     from tests.helpers import make_song
 
     result = controller.random_song([make_song(91)], who="Kim")
@@ -888,3 +928,43 @@ def test_desk_messages_and_controls_reach_the_room(window, qtbot):
     Client.state.apply({"type": "unlock"})
     main._on_desk({"type": "unlock"})
     assert not main.room_closed_view.isVisible()
+
+
+def test_artist_filters_pk_battle_and_glow(window, qtbot):
+    main, controller = window
+    artists = main.pages["artists"]
+    artists.filters["language:Cantonese"].click()
+    artists.filters["kind:Group"].click()
+    assert "Beyond" in artists.buttons and "陳奕迅" not in artists.buttons
+
+    party = main.pages["party"]
+    party.pk_button.setChecked(True)
+    assert controller.pk_mode and controller.state()["pk"]
+    main.mv_window.show_score(
+        {
+            "points": 92,
+            "grade": "Great!",
+            "title": "Song",
+            "singer": "",
+            "board": [],
+            "pk": {"scores": [{"mic": 1, "points": 87}, {"mic": 2, "points": 92}], "winner": 2},
+        }
+    )
+    assert "Mic 2 wins" in main.mv_window.score_card._grade
+
+    glows = []
+    controller.bus.subscribe(lambda topic, data: glows.append(data) if topic == "glow" else None)
+    main.mv_window.on_light(0.5, 0.25)
+    assert glows == [{"level": 0.5, "hue": 0.25}]
+
+
+def test_live_pk_bars(window, qtbot):
+    main, controller = window
+    controller.set_pk_mode(True)
+    main.mv_window.set_pk([{"mic": 1, "points": 40}, {"mic": 2, "points": 55}])
+    bars = main.mv_window._pk_bars
+    assert not bars.isHidden() and bars.scores[1]["points"] == 55
+    bars.grab()  # paints without errors
+    main.mv_window.set_pk(None)
+    assert bars.isHidden()
+    assert controller.live_pk() is None  # nothing is being scored

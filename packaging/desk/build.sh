@@ -43,7 +43,7 @@ if [ "$(uname)" = "Darwin" ]; then
   if [ -n "${INSTALLER_IDENTITY:-}" ]; then SIGN_ARGS=(--sign "$INSTALLER_IDENTITY"); fi
   OUT="dist/YTKTV-Desk-${VERSION}-macos-$(uname -m).pkg"
   pkgbuild --root "$STAGE" --component-plist build/desk-component.plist \
-    --install-location /Applications --identifier "com.tonyd365.ytktv.desk" \
+    --install-location /Applications --identifier "com.tonyd365.ytktv.desk.$(uname -m)" \
     --version "$VERSION" ${SIGN_ARGS[@]+"${SIGN_ARGS[@]}"} "$OUT"
 else
   APPDIR=build/YTKTV-Desk.AppDir

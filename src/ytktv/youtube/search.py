@@ -14,6 +14,7 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
+from ytktv import catalog
 from ytktv.core.models import Song
 from ytktv.net import urlopen
 from ytktv.youtube.hd_unlock import HdUnlock
@@ -44,97 +45,9 @@ HOT_CATEGORIES: dict[str, str] = {
 }
 
 # Starting points for the Artists page; each name is simply searched for.
+# Artists by language, for the Artists page and the phone (see ytktv.catalog).
 ARTISTS: dict[str, tuple[str, ...]] = {
-    "Mandopop": (
-        "周杰倫",
-        "林俊傑",
-        "鄧紫棋",
-        "五月天",
-        "張惠妹",
-        "蔡依林",
-        "孫燕姿",
-        "王力宏",
-        "田馥甄",
-        "李榮浩",
-        "薛之謙",
-        "毛不易",
-        "周深",
-        "告五人",
-        "張韶涵",
-        "任賢齊",
-    ),
-    "Cantopop": (
-        "陳奕迅",
-        "張學友",
-        "容祖兒",
-        "楊千嬅",
-        "古巨基",
-        "李克勤",
-        "Beyond",
-        "謝霆鋒",
-        "鄭秀文",
-        "林家謙",
-        "姜濤",
-        "MIRROR",
-        "王菲",
-        "劉德華",
-        "梅艷芳",
-        "張國榮",
-    ),
-    "English": (
-        "Taylor Swift",
-        "Ed Sheeran",
-        "Adele",
-        "Bruno Mars",
-        "Coldplay",
-        "Queen",
-        "The Beatles",
-        "ABBA",
-        "Lady Gaga",
-        "Billie Eilish",
-        "Maroon 5",
-        "Backstreet Boys",
-        "Whitney Houston",
-        "Celine Dion",
-        "Bon Jovi",
-        "Michael Jackson",
-    ),
-    "K-Pop": (
-        "BTS",
-        "BLACKPINK",
-        "IU",
-        "TWICE",
-        "NewJeans",
-        "EXO",
-        "BIGBANG",
-        "SEVENTEEN",
-        "aespa",
-        "Stray Kids",
-        "(G)I-DLE",
-        "PSY",
-        "Red Velvet",
-        "TAEYEON",
-        "ITZY",
-        "LE SSERAFIM",
-    ),
-    "J-Pop": (
-        "YOASOBI",
-        "米津玄師",
-        "あいみょん",
-        "Official髭男dism",
-        "宇多田ヒカル",
-        "嵐",
-        "back number",
-        "King Gnu",
-        "Ado",
-        "中島美嘉",
-        "藤井風",
-        "スピッツ",
-        "Mrs. GREEN APPLE",
-        "優里",
-        "LiSA",
-        "Vaundy",
-    ),
+    language: tuple(catalog.artists(language)) for language in catalog.LANGUAGES
 }
 _SUGGEST_URL = "https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q="
 

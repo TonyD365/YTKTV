@@ -146,6 +146,9 @@ class MainWindow(QMainWindow):
 
         self.mv_window.set_url(server_url)
         self.mv_window.level_source = controller.player.levels
+        self.mv_window.on_light = lambda level, hue: controller.bus.emit(
+            "glow", {"level": round(level, 2), "hue": round(hue, 3)}
+        )
         self._apply_state()
 
     # -- construction -----------------------------------------------------
@@ -695,6 +698,7 @@ class MainWindow(QMainWindow):
         elif topic == "position":
             self._apply_position(payload["position"], payload["duration"])
             self.mv_window.set_live_score(payload.get("score"))
+            self.mv_window.set_pk(payload.get("pk"))
         elif topic == "toast":
             self.show_toast(payload["message"], payload.get("error", False))
         elif topic == "favorites":

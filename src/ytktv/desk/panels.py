@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QTextDocument
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -26,10 +28,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ytktv.desk import lock
-from ytktv.desk.billing import DEFAULT_RATE, ROUNDING, Bill
+from ytktv.desk import lock, receipt
+from ytktv.desk.billing import DEFAULT_RATE, PAYMENTS, ROUNDING, Bill
 from ytktv.desk.server import Hub
-from ytktv.desk.store import DeskStore, Product
+from ytktv.desk.store import DeskStore, Member, Product
 
 
 class OrdersBox(QWidget):
@@ -108,34 +110,149 @@ class OrdersBox(QWidget):
 
 
 class BillDialog(QDialog):
-    """The bill shown when a room closes; it can be printed or saved as a PDF."""
+    """The till: the bill, a member, a discount, dropping small change and how it is paid.
 
-    def __init__(self, bill: Bill, parent: QWidget | None = None) -> None:
+    It can be printed or saved as a PDF. Pressing Close Room takes a member's balance when
+    they pay with it and adds their points; the caller then closes the room.
+    """
+
+    def __init__(
+        self, bill: Bill, parent: QWidget | None = None, store: DeskStore | None = None
+    ) -> None:
         super().__init__(parent)
         self.bill = bill
+        self.store = store
+        self.member: Member | None = None
         self.setWindowTitle(f"Bill · {bill.room}")
-        self.resize(480, 560)
+        self.resize(560, 720)
         column = QVBoxLayout(self)
-        view = QTextBrowser()
-        view.setStyleSheet("background: white; color: black; border-radius: 10px;")
-        view.setHtml(bill.html())
-        column.addWidget(view, stretch=1)
+        self.view = QTextBrowser()
+        self.view.setStyleSheet("background: white; color: black; border-radius: 10px;")
+        column.addWidget(self.view, stretch=1)
+
+        form = QFormLayout()
+        member_row = QHBoxLayout()
+        self.phone = QLineEdit()
+        self.phone.setPlaceholderText("Member's phone number")
+        self.phone.returnPressed.connect(self.find_member)
+        find = QPushButton("Find")
+        find.clicked.connect(self.find_member)
+        member_row.addWidget(self.phone, stretch=1)
+        member_row.addWidget(find)
+        self.member_label = QLabel("No member")
+        self.member_label.setObjectName("muted")
+        self.discount = QSpinBox()
+        self.discount.setRange(0, 100)
+        self.discount.setSuffix(" %")
+        self.round_to = QComboBox()
+        for label, value in (
+            ("Keep", 0.0),
+            ("To a whole number", 1.0),
+            ("To the nearest 10 below", 10.0),
+        ):
+            self.round_to.addItem(label, value)
+        self.payment = QComboBox()
+        self.payment.addItems(list(PAYMENTS))
+        for field in (self.discount, self.round_to, self.payment):
+            steady(field)
+        self.discount.valueChanged.connect(self.update_bill)
+        self.round_to.currentIndexChanged.connect(self.update_bill)
+        self.payment.currentIndexChanged.connect(self.update_bill)
+        if store is not None:
+            form.addRow("Member", member_row)
+            form.addRow("", self.member_label)
+        form.addRow("Discount", self.discount)
+        form.addRow("Drop small change", self.round_to)
+        form.addRow("Paid by", self.payment)
+        column.addLayout(form)
+        self.error = QLabel("")
+        self.error.setStyleSheet("color: #ff6b8b;")
+        column.addWidget(self.error)
+
         buttons = QHBoxLayout()
         print_button = QPushButton("Print…")
         print_button.clicked.connect(self.print_bill)
         pdf = QPushButton("Save PDF…")
         pdf.clicked.connect(self.save_pdf)
+        receipt_button = QPushButton("🧾 Receipt")
+        receipt_button.setToolTip("Print a receipt on the receipt printer (Settings → Receipts)")
+        receipt_button.clicked.connect(lambda: self.print_receipt())
         close = QPushButton("Close Room")
         close.setObjectName("accent")
-        close.clicked.connect(self.accept)
+        close.clicked.connect(self.settle)
         cancel = QPushButton("Cancel")
         cancel.clicked.connect(self.reject)
-        for button in (print_button, pdf):
+        for button in (print_button, pdf, receipt_button):
             buttons.addWidget(button)
         buttons.addStretch()
         buttons.addWidget(cancel)
         buttons.addWidget(close)
         column.addLayout(buttons)
+        self.update_bill()
+
+    def print_receipt(self, printer: QPrinter | None = None) -> bool:
+        """Print a receipt; asks which printer when none is set in Settings."""
+        if self.store is None:
+            return False
+        self.update_bill()
+        if printer is None:
+            width = int(self.store.setting("receipt_width", "58"))
+            printer = receipt.receipt_printer(
+                self.store.setting("receipt_printer", receipt.ASK), width
+            )
+            if (
+                self.store.setting("receipt_printer", receipt.ASK) == receipt.ASK
+                and not QPrintDialog(printer, self).exec()
+            ):
+                return False
+            receipt.fit_paper(printer, width)  # the dialog may pick another printer
+        receipt.print_receipt(self.store, self.bill, printer)
+        return True
+
+    def find_member(self) -> None:
+        if self.store is None:
+            return
+        self.member = self.store.member_by_phone(self.phone.text())
+        self.update_bill()
+
+    def update_bill(self) -> None:
+        bill, store, member = self.bill, self.store, self.member
+        bill.member = member.name if member else ""
+        bill.member_off = float(store.setting("member_discount", "10")) if member and store else 0
+        bill.discount = float(self.discount.value())
+        bill.round_to = float(self.round_to.currentData() or 0)
+        bill.payment = self.payment.currentText()
+        if member is not None:
+            self.member_label.setText(
+                f"{member.name} · balance {bill.currency}{member.balance:.2f}"
+                f" · {member.points} points · members save {bill.member_off:g}%"
+            )
+        elif self.phone.text().strip():
+            self.member_label.setText("No member with that phone number")
+        self.view.setHtml(bill.html())
+        self.error.clear()
+
+    def settle(self) -> None:
+        """Take payment from the member's balance if that is how they pay, then close."""
+        self.update_bill()
+        bill, store, member = self.bill, self.store, self.member
+        if bill.payment == "Member balance":
+            if member is None or store is None:
+                self.error.setText("Find the member first to pay from their balance.")
+                return
+            try:
+                store.pay_from_balance(member.member_id, bill.total)
+            except ValueError:
+                self.error.setText(
+                    f"Not enough balance: {bill.currency}{member.balance:.2f}. Top up first."
+                )
+                return
+        if member is not None and store is not None:
+            per_unit = float(store.setting("points_per_unit", "1"))
+            store.add_points(member.member_id, int(bill.total * per_unit))
+        if store is not None and store.setting("receipt_auto", "0") == "1":
+            self.print_receipt()
+        self.accept()
 
     def _document(self) -> QTextDocument:
         document = QTextDocument()
@@ -159,6 +276,50 @@ class BillDialog(QDialog):
             self._document().print_(printer)
 
 
+MAX_PRICE = 99_999_999  # room for currencies like yen, won or dong
+
+
+class _IgnoreWheel(QObject):
+    """Scrolling the settings page must not change the number or choice under the mouse."""
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt's name
+        if (
+            event.type() == QEvent.Type.Wheel
+            and isinstance(watched, QWidget)
+            and not watched.hasFocus()
+        ):
+            parent = watched.parentWidget()
+            if parent is not None:  # hand the scroll to the page instead of the value
+                QApplication.sendEvent(parent, event)
+            return True
+        return False
+
+
+_IGNORE_WHEEL = _IgnoreWheel()
+
+
+def steady(widget: QWidget) -> QWidget:
+    """Only take the mouse wheel once clicked into."""
+    widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    widget.installEventFilter(_IGNORE_WHEEL)
+    if isinstance(widget, QAbstractSpinBox):
+        widget.setMinimumWidth(140)
+    return widget
+
+
+class OnMenu(QCheckBox):
+    """The On menu switch in the menu table: says what it means, not just a colour."""
+
+    def __init__(self, on: bool) -> None:
+        super().__init__()
+        self.toggled.connect(self._label)
+        self.setChecked(on)
+        self._label(on)
+
+    def _label(self, on: bool) -> None:
+        self.setText("On menu" if on else "Hidden")
+
+
 class ShopSettings(QFrame):
     """The menu rooms can order from, and how rooms are charged."""
 
@@ -178,6 +339,13 @@ class ShopSettings(QFrame):
         self.table.setHorizontalHeaderLabels(self.COLUMNS)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(44)
+        # The console's big text fields do not fit in a table cell: edit in a plain one.
+        self.table.setStyleSheet(
+            "QTableWidget QLineEdit { padding: 0 8px; margin: 0; border: 1px solid #2ee6ff;"
+            " border-radius: 4px; min-height: 0; font-size: 14px; background: #1a1430; }"
+            " QCheckBox { padding-left: 10px; }"
+        )
         column.addWidget(self.table, stretch=1)
         buttons = QHBoxLayout()
         for text, action in (
@@ -195,10 +363,12 @@ class ShopSettings(QFrame):
         self.currency = QLineEdit(store.setting("currency", "$"))
         self.currency.setMaxLength(4)
         self.rate = QDoubleSpinBox()
-        self.rate.setRange(0, 100000)
+        self.rate.setGroupSeparatorShown(True)
+        self.rate.setRange(0, MAX_PRICE)
         self.rate.setValue(float(store.setting("rate", DEFAULT_RATE)))
         self.minimum = QDoubleSpinBox()
-        self.minimum.setRange(0, 100000)
+        self.minimum.setGroupSeparatorShown(True)
+        self.minimum.setRange(0, MAX_PRICE)
         self.minimum.setValue(float(store.setting("minimum", "0")))
         self.rounding = QComboBox()
         for key, text in ROUNDING.items():
@@ -207,11 +377,24 @@ class ShopSettings(QFrame):
         self.block = QSpinBox()
         self.block.setRange(5, 120)
         self.block.setValue(int(store.setting("block", "15")))
+        for field in (self.rate, self.minimum, self.rounding, self.block):
+            steady(field)
         form.addRow("Currency", self.currency)
         form.addRow("Price per hour", self.rate)
         form.addRow("Minimum spend", self.minimum)
         form.addRow("Rooms without a time limit", self.rounding)
         form.addRow("Block minutes", self.block)
+        self.member_discount = QSpinBox()
+        self.member_discount.setRange(0, 100)
+        self.member_discount.setSuffix(" %")
+        self.member_discount.setValue(int(float(store.setting("member_discount", "10"))))
+        self.points_per_unit = QSpinBox()
+        self.points_per_unit.setRange(0, 100)
+        self.points_per_unit.setValue(int(float(store.setting("points_per_unit", "1"))))
+        steady(self.member_discount)
+        steady(self.points_per_unit)
+        form.addRow("Members save", self.member_discount)
+        form.addRow("Member points per 1 spent", self.points_per_unit)
         column.addLayout(form)
         self.load()
 
@@ -232,9 +415,7 @@ class ShopSettings(QFrame):
         stock = QTableWidgetItem("" if product.stock is None else str(product.stock))
         stock.setToolTip("Leave empty if it never runs out")
         self.table.setItem(row, 3, stock)
-        active = QCheckBox()
-        active.setChecked(product.active)
-        self.table.setCellWidget(row, 4, active)
+        self.table.setCellWidget(row, 4, OnMenu(product.active))
 
     def add_row(self) -> None:
         self._row(Product(0, "New item", "Drinks", 0.0))
@@ -280,6 +461,8 @@ class ShopSettings(QFrame):
         self.store.set_setting("minimum", f"{self.minimum.value():g}")
         self.store.set_setting("rounding", str(self.rounding.currentData()))
         self.store.set_setting("block", str(self.block.value()))
+        self.store.set_setting("member_discount", str(self.member_discount.value()))
+        self.store.set_setting("points_per_unit", str(self.points_per_unit.value()))
         if callable(self.changed):
             self.changed()
 
@@ -385,6 +568,7 @@ class SecuritySettings(QFrame):
         self.lock_after = QComboBox()
         self.lock_after.addItems(list(lock.LOCK_AFTER))
         self.lock_after.setCurrentText(store.setting("lock_after", "Never"))
+        steady(self.lock_after)
         self.lock_after.currentTextChanged.connect(lambda v: store.set_setting("lock_after", v))
         form.addRow("Lock when idle for", self.lock_after)
         column.addLayout(form)
@@ -418,3 +602,59 @@ class SecuritySettings(QFrame):
                 return
         lock.set_password(self.store, None)
         self.refresh()
+
+
+class ReceiptSettings(QFrame):
+    """The receipt printer: which one, the paper, the shop's name and a closing line."""
+
+    def __init__(self, store: DeskStore) -> None:
+        super().__init__()
+        self.store = store
+        self.setObjectName("panel")
+        column = QVBoxLayout(self)
+        column.setContentsMargins(24, 20, 24, 20)
+        head = QLabel("RECEIPTS")
+        head.setObjectName("panelHead")
+        note = QLabel(
+            "Any 58 mm or 80 mm receipt printer installed on this computer works through its"
+            " driver (set the driver to cut the paper after each receipt if it can)."
+        )
+        note.setObjectName("muted")
+        note.setWordWrap(True)
+        column.addWidget(head)
+        column.addWidget(note)
+        form = QFormLayout()
+        self.printer = QComboBox()
+        self.printer.addItems(receipt.printers())
+        self.printer.setCurrentText(store.setting("receipt_printer", receipt.ASK))
+        self.paper = QComboBox()
+        for mm in receipt.WIDTHS:
+            self.paper.addItem(f"{mm} mm", mm)
+        self.paper.setCurrentIndex(receipt.WIDTHS.index(int(store.setting("receipt_width", "58"))))
+        self.shop = QLineEdit(store.setting("shop_name", "YTKTV"))
+        self.footer = QLineEdit(store.setting("receipt_footer", "Thank you! See you again."))
+        self.auto = QCheckBox("Print a receipt when a room checks out")
+        self.auto.setChecked(store.setting("receipt_auto", "0") == "1")
+        self.copies = QSpinBox()
+        self.copies.setRange(1, 3)
+        self.copies.setValue(int(store.setting("receipt_copies", "1")))
+        for field in (self.printer, self.paper, self.copies):
+            steady(field)
+        form.addRow("Printer", self.printer)
+        form.addRow("Paper", self.paper)
+        form.addRow("Shop name", self.shop)
+        form.addRow("Closing line", self.footer)
+        form.addRow("Copies", self.copies)
+        form.addRow("", self.auto)
+        column.addLayout(form)
+        save = QPushButton("Save Receipt Settings")
+        save.clicked.connect(self.save)
+        column.addWidget(save, alignment=Qt.AlignmentFlag.AlignLeft)
+
+    def save(self) -> None:
+        self.store.set_setting("receipt_printer", self.printer.currentText())
+        self.store.set_setting("receipt_width", str(self.paper.currentData()))
+        self.store.set_setting("shop_name", self.shop.text().strip() or "YTKTV")
+        self.store.set_setting("receipt_footer", self.footer.text().strip())
+        self.store.set_setting("receipt_auto", "1" if self.auto.isChecked() else "0")
+        self.store.set_setting("receipt_copies", str(self.copies.value()))

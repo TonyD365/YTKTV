@@ -82,11 +82,20 @@ def platform_suffixes(system: str | None = None, machine: str | None = None) -> 
     return []
 
 
-def pick_asset(assets: list[dict[str, Any]], suffixes: list[str]) -> dict[str, Any] | None:
-    """The first asset matching the earliest suffix in *suffixes*."""
+def pick_asset(
+    assets: list[dict[str, Any]], suffixes: list[str], app: str | None = "YTKTV"
+) -> dict[str, Any] | None:
+    """The first asset matching the earliest suffix in *suffixes*.
+
+    *app* is the start of the file name ("YTKTV" or "YTKTV-Desk") followed by the
+    version: YTKTV and YTKTV Desk installers end the same way, and a room must never
+    install the desk (or the other way round). None matches any name.
+    """
+    prefix = re.compile(rf"^{re.escape(app)}-\d") if app else None
     for suffix in suffixes:
         for asset in assets:
-            if str(asset.get("name", "")).endswith(suffix):
+            name = str(asset.get("name", ""))
+            if name.endswith(suffix) and (prefix is None or prefix.match(name)):
                 return asset
     return None
 
@@ -104,6 +113,7 @@ def check_for_update(
     repo: str = GITHUB_REPO,
     fetch: Fetch = _http_get,
     suffixes: list[str] | None = None,
+    app: str = "YTKTV",
 ) -> UpdateInfo | None:
     """Return the Latest release if it is newer than *current* and has an installer for us."""
     try:
@@ -116,10 +126,10 @@ def check_for_update(
     if release.get("draft") or release.get("prerelease") or not is_newer(tag, current):
         return None
     assets = release.get("assets") or []
-    asset = pick_asset(assets, platform_suffixes() if suffixes is None else suffixes)
+    asset = pick_asset(assets, platform_suffixes() if suffixes is None else suffixes, app)
     if asset is None:
         return None
-    checksums = pick_asset(assets, [CHECKSUM_ASSET])
+    checksums = pick_asset(assets, [CHECKSUM_ASSET], None)
     if checksums is None:
         # Installers are attached a while after the release is published; until the
         # checksums are there too, treat the release as not ready.
