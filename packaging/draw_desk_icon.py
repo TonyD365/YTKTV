@@ -1,7 +1,7 @@
 """Redraw the YTKTV Desk icon. Usage: python packaging/draw_desk_icon.py
 
 Writes src/ytktv/desk/assets/icon.png (1024 px): the same rounded tile as the YTKTV
-icon, with a front-desk service bell, so the two apps look related but never get
+icon, with a front-desk service bell and the name, so the two apps look related but never get
 mixed up in the Dock or the taskbar.
 """
 
@@ -42,6 +42,8 @@ def draw(size: int = 1024) -> QImage:
 
     # A front-desk bell seen slightly from above: a round base, a shiny dome, and the
     # plunger on top that you press to ring it, with two "ding" marks beside it.
+    p.save()
+    p.translate(0, -size * 0.045)  # leave room below for the name
     cx = size * 0.5
     base = QRectF(cx - size * 0.3, size * 0.555, size * 0.6, size * 0.1)
     p.setPen(Qt.PenStyle.NoPen)
@@ -86,13 +88,23 @@ def draw(size: int = 1024) -> QImage:
             y = size * (0.25 + 0.035 * k)
             p.drawLine(QPointF(x, y), QPointF(x + side * size * length * 0.6, y - size * length))
 
+    p.restore()
+    glow = QLinearGradient(body.left(), 0, body.right(), 0)
+    glow.setColorAt(0.0, QColor("#ff3d9a"))
+    glow.setColorAt(1.0, QColor("#2ee6ff"))
     font = QFont()
     font.setWeight(QFont.Weight.Black)
-    font.setPixelSize(int(size * 0.13))
-    font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, size * 0.02)
+    font.setPixelSize(int(size * 0.135))
     p.setFont(font)
-    p.setPen(QColor("#2ee6ff"))
-    p.drawText(QRectF(0, size * 0.69, size, size * 0.16), Qt.AlignmentFlag.AlignCenter, "DESK")
+    p.setPen(QPen(QBrush(glow), 1))
+    p.drawText(QRectF(0, size * 0.63, size, size * 0.15), Qt.AlignmentFlag.AlignCenter, "YTKTV")
+    small = QFont()
+    small.setWeight(QFont.Weight.Bold)
+    small.setPixelSize(int(size * 0.058))
+    small.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, size * 0.022)
+    p.setFont(small)
+    p.setPen(QColor("#f3eeff"))
+    p.drawText(QRectF(0, size * 0.77, size, size * 0.08), Qt.AlignmentFlag.AlignCenter, "DESK")
     p.end()
     return image
 
