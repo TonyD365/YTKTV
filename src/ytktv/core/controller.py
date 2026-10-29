@@ -70,6 +70,9 @@ class KTVController:
     ) -> None:
         self.store = store
         self.settings = store.settings
+        self.bomb = games.NumberBomb()
+        self.liars = games.LiarsDice()
+        self.sevens = games.Sevens()
         self.player = player
         self.resolver = resolver
         self.library = library or Library()
@@ -646,19 +649,70 @@ class KTVController:
         self.bus.emit("danmaku", {"text": text})
         return True
 
-    def play_game(self, game: str) -> dict[str, str]:
-        """Run a party game and show its result big on the MV screen."""
+    def _singers(self) -> list[str]:
+        names = [i.singer for i in self.queue.snapshot()]
+        if self.current is not None:
+            names.append(self.current.singer)
+        return names
+
+    def play_game(self, game: str, value: int | None = None, player: str = "") -> dict[str, str]:
+        """Run a party game and show its result big on the MV screen.
+
+        *value* is a guess for the number bomb; *player* names who is playing.
+        """
         if game == "dice":
             result = games.roll_dice()
         elif game == "spin":
-            names = [i.singer for i in self.queue.snapshot()]
-            if self.current is not None:
-                names.append(self.current.singer)
-            result = games.spin(names)
+            result = games.spin(self._singers())
         elif game in ("truth", "dare"):
             result = games.truth_or_dare(game)
+        elif game == "challenge":
+            result = games.challenge()
+        elif game == "lots":
+            result = games.draw_lots(self._singers())
+        elif game == "highlow":
+            result = games.high_low(self._singers())
+        elif game == "coin":
+            result = games.coin()
+        elif game == "sevens":
+            result = self.sevens.next()
+        elif game == "sevens_reset":
+            result = self.sevens.reset()
+        elif game == "bomb":
+            result = self.bomb.start()
+        elif game == "bomb_guess":
+            if value is None:
+                raise ValueError("a guess needs a number")
+            result = self.bomb.guess(value, player)
+        elif game == "liar_roll":
+            self.liars.roll(player or "Console")
+            result = self.liars.public()
+        elif game == "liar_reveal":
+            result = self.liars.reveal()
         else:
             raise ValueError(f"unknown game {game!r}")
+        self.bus.emit("game", result)
+        return result
+
+    def countdown(self, seconds: int = 10) -> None:
+        """Count down on the MV screen, one number a second (for drinking or singing races)."""
+        seconds = max(1, min(60, seconds))
+
+        def run() -> None:
+            for n in range(seconds, 0, -1):
+                self.bus.emit("game", {"title": "⏱ Countdown", "text": str(n), "detail": ""})
+                time.sleep(1)
+            self.bus.emit("game", {"title": "⏱ Countdown", "text": "Time!", "detail": ""})
+
+        threading.Thread(target=run, name="countdown", daemon=True).start()
+
+    def random_song(self, songs: list[Song], who: str = "") -> dict[str, str] | None:
+        """Lucky draw: queue a random song from *songs* (a hot list) for *who*."""
+        if not songs:
+            return None
+        song = random.choice(songs)
+        self.enqueue(song, singer=who)
+        result = {"title": "🎰 Random song", "text": song.title, "detail": song.channel}
         self.bus.emit("game", result)
         return result
 

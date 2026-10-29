@@ -181,7 +181,22 @@
       <button data-game="spin">🎡 Who sings next</button>
       <button data-game="truth">💬 Truth</button>
       <button data-game="dare">🔥 Dare</button>
+      <button data-game="challenge">🎤 Challenge</button>
+      <button data-game="random">🎰 Random song</button>
+      <button data-game="lots">🥢 Draw lots</button>
+      <button data-game="highlow">⚖️ High or low</button>
+      <button data-game="sevens">7️⃣ Sevens</button>
+      <button data-game="countdown">⏱ Countdown</button>
+      <button data-game="coin">🪙 Coin</button>
+      <button data-game="bomb">💣 New bomb</button>
     </div>
+    <div class="pad">
+      <input id="bomb-guess" type="number" min="1" max="100" placeholder="Bomb guess" style="grid-column: span 1">
+      <button id="bomb-go">💣 Guess</button>
+      <button id="liar-roll">🎲 Liar's dice: roll</button>
+      <button data-game="liar_reveal">👀 Reveal</button>
+    </div>
+    <div id="liar-hand" style="text-align:center;font-size:34px;margin:6px 0"></div>
     <h3>Crowd</h3>
     <div class="pad">
       <button data-sfx="applause">Applause</button>
@@ -440,6 +455,16 @@ for (const b of document.querySelectorAll("nav button")) {
 }
 document.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => api("/api/player/" + b.dataset.act, "POST")));
 document.querySelectorAll("[data-game]").forEach((b) => b.addEventListener("click", () => api("/api/game/" + b.dataset.game, "POST")));
+$("bomb-go").addEventListener("click", () => {
+  const value = Number($("bomb-guess").value);
+  if (value >= 1 && value <= 100) api("/api/game/bomb_guess", "POST", {value}).catch(() => {});
+  $("bomb-guess").value = "";
+});
+$("liar-roll").addEventListener("click", async () => {
+  // Only this phone sees its dice; the TV just says that someone rolled.
+  const result = await api("/api/game/liar_roll", "POST", {}).catch(() => null);
+  if (result) $("liar-hand").textContent = result.mine;
+});
 document.querySelectorAll("[data-sfx]").forEach((b) => b.addEventListener("click", () => api("/api/sfx/" + b.dataset.sfx, "POST")));
 document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => {
   api("/api/sound", "POST", {vocal_mode: b.dataset.mode});

@@ -152,3 +152,14 @@ def test_reactions_over_http(client):
     assert http.post("/api/reaction", json={"emoji": "🎉"}).json() == {"ok": True}
     assert seen == [{"emoji": "🎉"}]
     assert http.post("/api/reaction", json={"emoji": "💩"}).status_code == 429
+
+
+def test_more_games_over_http(client):
+    http, controller = client
+    assert http.post("/api/game/bomb").json()["text"] == "1 – 100"
+    assert http.post("/api/game/bomb_guess", json={"value": 50}).status_code == 200
+    assert http.post("/api/game/bomb_guess", json={"value": 500}).status_code == 422
+    mine = http.post("/api/game/liar_roll", json={}).json()["mine"]
+    assert len(mine.split()) == 5
+    assert "Phone" in http.post("/api/game/liar_reveal").json()["text"]
+    assert http.post("/api/game/sevens").json()["text"] == "1"

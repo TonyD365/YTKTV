@@ -741,3 +741,47 @@ def test_levels_stay_within_range_and_changes_from_a_phone_show_up(window, qtbot
     qtbot.waitUntil(lambda: main.level_hud.isVisible(), timeout=3000)
     assert main.level_hud.kind == "music_volume" and main.level_hud.value == 40
     main.level_hud.grab()
+
+
+def test_more_party_games(window, qtbot):
+    import random
+
+    from ytktv.core import games
+
+    rng = random.Random(4)
+    bomb = games.NumberBomb(rng)
+    secret = bomb.secret
+    below = bomb.guess(secret - 1) if secret > 2 else bomb.guess(secret + 1)
+    assert "–" in below["text"]
+    assert bomb.guess(secret, "Kim")["title"] == "💥 BOOM!"
+    assert (bomb.low, bomb.high) == (1, 100)  # a new round starts
+    assert "not in the range" in bomb.guess(150)["detail"]
+
+    liars = games.LiarsDice(rng)
+    assert len(liars.roll("Kim")) == 5 and len(liars.hand("Kim").split()) == 5
+    liars.roll("Alex")
+    reveal = liars.reveal()
+    assert "Kim:" in reveal["text"] and "Alex:" in reveal["text"] and liars.hands == {}
+
+    sevens = games.Sevens()
+    said = [sevens.next()["text"] for _ in range(17)]
+    assert said[6] == "PASS!" and said[13] == "PASS!" and said[16] == "PASS!" and said[7] == "8"
+    assert games.high_low(["Kim"], rng)["detail"].startswith("High:")
+    assert games.challenge(rng)["text"] in games.CHALLENGES
+    assert games.coin(rng)["text"] in ("Heads", "Tails")
+
+    main, controller = window
+    page = main.pages["games"]
+    page.play("liar_roll")
+    assert "Your dice:" in page.result.text()
+    assert "1 players rolled" in main.mv_window.game_card.text()
+    page.guess.setValue(50)
+    page.play("bomb_guess")
+    from tests.helpers import make_song
+
+    result = controller.random_song([make_song(91)], who="Kim")
+    assert result is not None
+    queued = [i.singer for i in controller.queue.snapshot()]
+    if controller.current is not None:  # nothing was playing, so it started right away
+        queued.append(controller.current.singer)
+    assert "Kim" in queued
