@@ -83,6 +83,8 @@ way a real KTV's staff terminal runs its rooms: the adults in one room, the kids
 - **Run the floor**: bookings with a calendar and timeline, room types and seats, cleaning and
   maintenance, change room, broadcasts to every room, remote skip, pause and volume, a shift
   report, and records by day, week or month with a chart and a CSV export for Excel.
+- **Several staff terminals**: other computers running YTKTV Desk can pair with the main one and
+  work on the same rooms; the Log shows which machine did what, and when.
 - **Stock alerts**: a product running low shows in the service bar ("Cola: 2 left").
 - **Updates**: Settings → Updates checks for a new Desk on its own or when you ask.
 - **Safe by design**: rooms bind with a one-time code and a four-picture security code, obey only

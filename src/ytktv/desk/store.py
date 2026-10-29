@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import secrets
 import sqlite3
@@ -86,6 +87,23 @@ class Visit:
 
 
 @dataclass
+class Terminal:
+    """Another Desk paired to work on this one."""
+
+    terminal_id: str
+    name: str
+    paired: float
+    last_seen: float
+
+
+@dataclass
+class LogEntry:
+    at: float
+    machine: str
+    action: str
+
+
+@dataclass
 class Room:
     room_id: str
     name: str
@@ -111,6 +129,7 @@ class DeskStore:
         self._db = sqlite3.connect(str(path), check_same_thread=False)
         self._lock = threading.Lock()
         self._codes: dict[str, float] = {}
+        self._terminal_codes: dict[str, float] = {}
         with self._lock:
             migrate(self._db, path)
             row = self._db.execute("SELECT v FROM meta WHERE k='private_key'").fetchone()
@@ -122,6 +141,80 @@ class DeskStore:
         self.public_key = crypto.public_key(self.private_key)
         self.desk_id = crypto.desk_id(self.public_key)
         self.fingerprint = crypto.fingerprint(self.public_key)
+
+    # -- staff terminals ----------------------------------------------------------
+
+    def new_terminal_code(self, now: float | None = None) -> str:
+        """A one-time code that pairs another Desk as a staff terminal (not a room)."""
+        now = time.time() if now is None else now
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        with self._lock:
+            self._terminal_codes = {c: t for c, t in self._terminal_codes.items() if t > now}
+            self._terminal_codes[code] = now + CODE_SECONDS
+        return code
+
+    def pair_terminal(self, code: str, name: str, now: float | None = None) -> tuple[str, str]:
+        """Use up *code*; returns (terminal id, token). KeyError for a wrong or expired code."""
+        now = time.time() if now is None else now
+        with self._lock:
+            if self._terminal_codes.pop(code, 0.0) <= now:
+                raise KeyError(code)
+            terminal_id, token = secrets.token_hex(8), secrets.token_urlsafe(32)
+            self._db.execute(
+                "INSERT INTO staff VALUES (?, ?, ?, ?, ?)",
+                (terminal_id, name or "Staff terminal", _token_hash(token), now, now),
+            )
+            self._db.commit()
+        return terminal_id, token
+
+    def terminal_by_token(self, token: str, now: float | None = None) -> Terminal | None:
+        """The terminal holding *token*, marked as seen; None for an unknown token."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT id, name, paired FROM staff WHERE token_hash=?", (_token_hash(token),)
+            ).fetchone()
+            if row is None:
+                return None
+            seen = time.time() if now is None else now
+            self._db.execute("UPDATE staff SET last_seen=? WHERE id=?", (seen, row[0]))
+            self._db.commit()
+        return Terminal(row[0], row[1], row[2], seen)
+
+    def terminals(self) -> list[Terminal]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, name, paired, last_seen FROM staff ORDER BY paired"
+            ).fetchall()
+        return [Terminal(*row) for row in rows]
+
+    def rename_terminal(self, terminal_id: str, name: str) -> None:
+        with self._lock:
+            self._db.execute("UPDATE staff SET name=? WHERE id=?", (name, terminal_id))
+            self._db.commit()
+
+    def remove_terminal(self, terminal_id: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM staff WHERE id=?", (terminal_id,))
+            self._db.commit()
+
+    def log(self, machine: str, action: str, now: float | None = None) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO oplog (at, machine, action) VALUES (?, ?, ?)",
+                (time.time() if now is None else now, machine, action),
+            )
+            self._db.commit()
+
+    def oplog(self, start: float, end: float) -> list[LogEntry]:
+        """What was done between *start* and *end*, newest first."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT at, machine, action FROM oplog WHERE at >= ? AND at < ? ORDER BY at DESC",
+                (start, end),
+            ).fetchall()
+        return [LogEntry(*row) for row in rows]
+
+    # -- rooms --------------------------------------------------------------------
 
     def new_code(self, now: float | None = None) -> str:
         now = time.time() if now is None else now
@@ -567,6 +660,10 @@ class DeskStore:
         return None if row is None else str(row[0])
 
 
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def migrate(db: sqlite3.Connection, path: Path | str = ":memory:") -> None:
     """Bring the database up to SCHEMA_VERSION, one numbered step at a time.
 
@@ -644,5 +741,16 @@ def _baseline(db: sqlite3.Connection) -> None:
 
 
 # MIGRATIONS[n] takes the database from version n to n + 1. Only ever append to it.
-MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [_baseline]
+def _staff_terminals(db: sqlite3.Connection) -> None:
+    """Other Desks working on this one, and the log of who did what."""
+    db.executescript(
+        "CREATE TABLE IF NOT EXISTS staff (id TEXT PRIMARY KEY, name TEXT NOT NULL,"
+        " token_hash TEXT NOT NULL, paired REAL NOT NULL, last_seen REAL NOT NULL DEFAULT 0);"
+        "CREATE TABLE IF NOT EXISTS oplog (id INTEGER PRIMARY KEY, at REAL NOT NULL,"
+        " machine TEXT NOT NULL, action TEXT NOT NULL);"
+        "CREATE INDEX IF NOT EXISTS oplog_at ON oplog (at);"
+    )
+
+
+MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [_baseline, _staff_terminals]
 SCHEMA_VERSION = len(MIGRATIONS)
