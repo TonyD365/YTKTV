@@ -36,6 +36,12 @@ class PartyPage(Page):
         row.addWidget(send)
         self.body.addLayout(row)
 
+        self.body.addWidget(self._caption("PK BATTLE: TWO MICROPHONES, ONE SONG, ONE WINNER"))
+        self.pk_button = QPushButton("⚔️  PK Battle: Off")
+        self.pk_button.setCheckable(True)
+        self.pk_button.setMinimumHeight(52)
+        self.pk_button.toggled.connect(self._pk)
+        self.body.addWidget(self.pk_button)
         self.body.addWidget(self._caption("CHEER THE SINGER"))
         grid = QGridLayout()
         grid.setSpacing(10)
@@ -69,3 +75,7 @@ class PartyPage(Page):
     def send(self) -> None:
         if self._send(self.danmaku_input.text()):
             self.danmaku_input.clear()
+
+    def _pk(self, on: bool) -> None:
+        self.ctx.controller.set_pk_mode(on)
+        self.pk_button.setText(f"⚔️  PK Battle: {'On' if on else 'Off'}")

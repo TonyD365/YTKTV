@@ -254,6 +254,9 @@ class MvWindow(QWidget):
         self._light_show = LightShow()
         self._lights_enabled = True
         self.level_source: Callable[[], tuple[float, float]] | None = None
+        # Told the lights' colour a few times a second, for the phones' glow sticks.
+        self.on_light: Callable[[float, float], None] | None = None
+        self._light_sent = 0.0
         self.lyrics = LyricsOverlay(self)
         self.pitch_lane = PitchLane(self)
         self.danmaku = DanmakuOverlay(self)
@@ -429,8 +432,17 @@ class MvWindow(QWidget):
         if len(voices) >= 2:  # a duet: one score for each microphone
             caption = "   ·   ".join(f"Mic {voice['mic']}  {voice['points']}" for voice in voices)
         board = score.get("board") or []
+        grade = str(score["grade"])
+        pk = score.get("pk")
+        if pk:  # a PK battle: say who won
+            scores = pk.get("scores") or []
+            caption = "  vs  ".join(f"Mic {s['mic']}  {s['points']}" for s in scores) or str(
+                pk.get("note", "")
+            )
+            winner = pk.get("winner")
+            grade = f"⚔️ Mic {winner} wins!" if winner else ("⚔️ A draw!" if scores else grade)
         self.score_card.set_score(
-            int(score["points"]), str(score["grade"]), caption, int(score.get("rank") or 0), board
+            int(score["points"]), grade, caption, int(score.get("rank") or 0), board
         )
         self._place_score_card()
         fade_in(self.score_card, 400)
@@ -494,10 +506,13 @@ class MvWindow(QWidget):
                 self.pitch_lane.set_time(position)
             if self._lights_enabled and self.level_source is not None:
                 left, right = self.level_source()
-                for side, (intensity, hue) in self._light_show.step(
-                    max(left, right), elapsed
-                ).items():
+                strips = self._light_show.step(max(left, right), elapsed)
+                for side, (intensity, hue) in strips.items():
                     self.lights[side].set_light(intensity, hue)
+                if self.on_light is not None and now - self._light_sent >= 0.25 and strips:
+                    self._light_sent = now
+                    intensity, hue = next(iter(strips.values()))
+                    self.on_light(intensity, hue)
         if not self._playing or not self._lights_enabled:
             for light in self.lights.values():
                 light.set_light(0.0, 0.0)

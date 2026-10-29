@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from ytktv import catalog
 from ytktv.audio.sfx import SFX_NAMES
 from ytktv.core.controller import KTVController
 from ytktv.core.models import Song, VocalMode
@@ -121,7 +122,9 @@ class DanmakuIn(BaseModel):
 
 
 # Controller events that are forwarded to phones over the WebSocket.
-_PUSHED_TOPICS = frozenset({"state", "position", "toast", "danmaku", "score", "playlists", "mixer"})
+_PUSHED_TOPICS = frozenset(
+    {"state", "position", "toast", "danmaku", "score", "playlists", "mixer", "glow"}
+)
 
 
 def client_id(request: Request) -> str:
@@ -208,7 +211,10 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
     @app.get("/api/suggest")
     def suggest(q: str) -> list[str]:
         suggest_fn = getattr(source, "suggest", None)
-        return suggest_fn(q[:100]) if suggest_fn else []
+        known = [(s.title, s.channel) for s in controller.library.favorites()]
+        local = catalog.match_initials(q[:20], known)
+        remote = suggest_fn(q[:100]) if suggest_fn else []
+        return local + [s for s in remote if s not in local]
 
     @app.get("/api/artists")
     def artists() -> dict[str, list[str]]:

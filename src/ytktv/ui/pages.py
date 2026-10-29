@@ -28,14 +28,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ytktv import __version__
+from ytktv import __version__, catalog
 from ytktv.core.controller import KTVController
 from ytktv.core.models import Song, StemStatus
 from ytktv.rooms.client import RoomClient
 from ytktv.ui.front_desk_card import FrontDeskCard
 from ytktv.ui.song_list import STEM_TAGS, Action, SongList, SongRow, tag
 from ytktv.ui.support import ThumbnailLoader, run_async
-from ytktv.youtube.search import ARTISTS, HOT_CATEGORIES, YouTube
+from ytktv.youtube.search import HOT_CATEGORIES, YouTube
 
 
 def ask_text(parent: QWidget, title: str, label: str, text: str = "") -> str:
@@ -219,12 +219,25 @@ class SearchPage(Page):
         self._suggest_request += 1
         request = self._suggest_request
 
+        # Pinyin initials ("yldb" -> 月亮代表我的心) answer at once, from the song book
+        # and from what this room has sung or saved.
+        controller = self.ctx.controller
+        known = [
+            (s.title, s.channel)
+            for s in (*controller.library.favorites(), *controller.queue.history())
+        ]
+        local = catalog.match_initials(text, known)
+        if local and self.input.hasFocus():
+            self._suggestions.setStringList(local)
+            self.completer.complete()
+
         def done(suggestions: list[str]) -> None:
             # Ignore answers for text that has since changed, or once a search has started.
             if request != self._suggest_request or not self.input.hasFocus():
                 return
-            self._suggestions.setStringList(suggestions)
-            if suggestions:
+            combined = local + [s for s in suggestions if s not in local]
+            self._suggestions.setStringList(combined)
+            if combined:
                 self.completer.complete()
 
         run_async(lambda: self.ctx.youtube.suggest(text), done)
@@ -333,35 +346,57 @@ class HotPage(Page):
 
 
 class ArtistsPage(Page):
-    """Well-known artists by scene; picking one searches for them."""
+    """Well-known artists, filtered by language and by male, female or group, like a KTV
+    song book; picking one searches for them."""
 
     def __init__(self, ctx: Context) -> None:
         super().__init__("Artists", ctx)
+        self.language, self.kind = "", ""
+        self.filters: dict[str, QPushButton] = {}
+        for options, attr in (
+            (("", *catalog.LANGUAGES), "language"),
+            (("", *catalog.KINDS), "kind"),
+        ):
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            group = QButtonGroup(self)
+            for option in options:
+                button = QPushButton(option or "All")
+                button.setCheckable(True)
+                button.setProperty("chip", True)
+                button.setChecked(option == "")
+                button.clicked.connect(lambda _c=False, a=attr, o=option: self.filter(a, o))
+                group.addButton(button)
+                self.filters[f"{attr}:{option}"] = button
+                row.addWidget(button)
+            row.addStretch()
+            self.body.addLayout(row)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         holder = QWidget()
-        column = QVBoxLayout(holder)
-        column.setContentsMargins(0, 0, 8, 0)
-        column.setSpacing(10)
+        self.grid = QGridLayout(holder)
+        self.grid.setSpacing(8)
+        self.grid.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll.setWidget(holder)
         self.body.addWidget(scroll, stretch=1)
         self.buttons: dict[str, QPushButton] = {}
-        for group, names in ARTISTS.items():
-            heading = QLabel(group.upper())
-            heading.setObjectName("settingsHead")
-            column.addWidget(heading)
-            grid = QGridLayout()
-            grid.setSpacing(8)
-            for i, name in enumerate(names):
-                button = QPushButton(name)
-                button.setMinimumHeight(46)
-                button.setCursor(Qt.CursorShape.PointingHandCursor)
-                button.clicked.connect(lambda _checked=False, n=name: self.ctx.open_search(n))
-                self.buttons[name] = button
-                grid.addWidget(button, i // 4, i % 4)
-            column.addLayout(grid)
-            column.addSpacing(6)
-        column.addStretch()
+        self.filter("language", "")
+
+    def filter(self, attr: str, option: str) -> None:
+        setattr(self, attr, option)
+        while self.grid.count():
+            item = self.grid.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.deleteLater()
+        self.buttons = {}
+        for i, name in enumerate(catalog.artists(self.language, self.kind)):
+            button = QPushButton(name)
+            button.setMinimumHeight(46)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(lambda _checked=False, n=name: self.ctx.open_search(n))
+            self.buttons[name] = button
+            self.grid.addWidget(button, i // 4, i % 4)
 
 
 class FavoritesPage(Page):

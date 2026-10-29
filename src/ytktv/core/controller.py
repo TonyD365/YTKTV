@@ -70,6 +70,7 @@ class KTVController:
     ) -> None:
         self.store = store
         self.room_closed = False  # set by the front desk; a closed room takes no songs
+        self.pk_mode = False  # two microphones battle on the same song
         self.front_desk: Any = None  # the RoomClient when this machine is a room
         self.settings = store.settings
         self.bomb = games.NumberBomb()
@@ -595,8 +596,20 @@ class KTVController:
             result, rank = voices[best["mic"] - 1], best["rank"]
         else:
             rank = self.scoreboard.add(result.points, item.song.title, item.singer)
+        pk: dict[str, Any] | None = None
+        if self.pk_mode:
+            if len(entries) >= 2:
+                ranked = sorted(entries, key=lambda entry: entry["points"], reverse=True)
+                tie = ranked[0]["points"] == ranked[1]["points"]
+                pk = {
+                    "scores": [{"mic": e["mic"], "points": e["points"]} for e in entries],
+                    "winner": None if tie else ranked[0]["mic"],
+                }
+            else:
+                pk = {"scores": [], "winner": None, "note": "PK needs two microphones"}
         self.last_score = {
             **result.to_dict(),
+            **({"pk": pk} if pk is not None else {}),
             "title": item.song.title,
             "singer": item.singer,
             "rank": rank,
@@ -604,6 +617,12 @@ class KTVController:
             "voices": entries,
         }
         self.bus.emit("score", self.last_score)
+
+    def set_pk_mode(self, enabled: bool) -> None:
+        """PK battle: two singers on two microphones, the higher score wins the song."""
+        self.pk_mode = bool(enabled)
+        self.toast("PK battle on: two microphones, one winner" if enabled else "PK battle off")
+        self._emit_state()
 
     def set_lights(self, enabled: bool) -> None:
         self.settings.lights = bool(enabled)
@@ -1111,6 +1130,7 @@ class KTVController:
             "show_lyrics": settings.show_lyrics,
             "reactions": list(REACTIONS),
             "room_closed": self.room_closed,
+            "pk": self.pk_mode,
             "service": self._service_menu(),
             "phone_mic_url": self.phone_mic_url,
             "lyrics_offset": self.lyrics_offset,
