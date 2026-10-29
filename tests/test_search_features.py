@@ -216,6 +216,27 @@ def test_initials_reach_the_phone(ktv):
         assert http.get("/api/suggest", params={"q": "yldb"}).json()[0].startswith("月亮代表我的心")
 
 
+def test_duet_parts_follow_markers_or_alternate_by_verse():
+    from ytktv.youtube.lyrics import PART_A, PART_B, PART_BOTH, LyricLine, duet_parts
+
+    marked = [
+        LyricLine(0, 2, "Intro line"),
+        LyricLine(2, 4, "男：你好", ((2.0, 0), (3.0, 3))),
+        LyricLine(4, 6, "再见"),
+        LyricLine(6, 8, "(女) 嗯"),
+        LyricLine(8, 9, "合：一起"),
+        LyricLine(9, 10, "Note: not a part"),
+    ]
+    lines, parts = duet_parts(marked)
+    assert parts == [PART_BOTH, PART_A, PART_A, PART_B, PART_BOTH, PART_BOTH]
+    assert [line.text for line in lines][1:5] == ["你好", "再见", "嗯", "一起"]
+    assert lines[1].words == ((2.0, 0), (3.0, 1))
+    assert lines[5].text == "Note: not a part"
+
+    plain = [LyricLine(s, s + 1.5, "x") for s in (0, 2, 8, 10, 16)]
+    assert duet_parts(plain)[1] == [PART_A, PART_A, PART_B, PART_B, PART_A]
+
+
 def test_lrc_lyrics_for_videos_without_subtitles():
     from ytktv.youtube.lyrics import parse_lrc, pick_lrc, search_terms
 

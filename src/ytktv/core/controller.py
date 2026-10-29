@@ -74,6 +74,7 @@ class KTVController:
         self.store = store
         self.room_closed = False  # set by the staff terminal; a closed room takes no songs
         self.pk_mode = False  # two microphones battle on the same song
+        self.duet_mode = False  # two singers share the song: the lyrics say whose line it is
         self.front_desk: Any = None  # the RoomClient when this machine is a room
         self.settings = store.settings
         self.bomb = games.NumberBomb()
@@ -647,6 +648,14 @@ class KTVController:
         self.toast("PK battle on: two microphones, one winner" if enabled else "PK battle off")
         self._emit_state()
 
+    def set_duet_mode(self, enabled: bool) -> None:
+        """Duet: the lyrics on the TV are coloured by who sings each line."""
+        self.duet_mode = bool(enabled)
+        self.toast(
+            "Duet on: blue lines for one singer, pink for the other" if enabled else "Duet off"
+        )
+        self._emit_state()
+
     def set_lights(self, enabled: bool) -> None:
         self.settings.lights = bool(enabled)
         self._save_soon()
@@ -1193,6 +1202,7 @@ class KTVController:
             "reactions": list(REACTIONS),
             "room_closed": self.room_closed,
             "pk": self.pk_mode,
+            "duet": self.duet_mode,
             "service": self._service_menu(),
             "phone_mic_url": self.phone_mic_url,
             "lyrics_offset": self.lyrics_offset,

@@ -151,6 +151,8 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
   its lyrics and instrumental, then sing it without internet.
 - **PK battle.** Two microphones sing the same song, with two live score bars on the TV and a
   winner at the end.
+- **Duet.** The lyrics on the TV turn blue for one singer, pink for the other and gold for both,
+  from the 男/女/合 (or M/F) marks in the lyrics, or verse by verse when there are none.
 - **Party games.** Twelve games, each with its own screen on the console and the phones: dice,
   who sings next, truth or dare, number bomb, liar's dice (everyone sees their own dice on their
   phone), random song, challenge cards, draw lots, high or low, sevens, a countdown and a coin.

@@ -26,7 +26,15 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 
 from ytktv.ui import theme
-from ytktv.youtube.lyrics import LyricLine, line_at, sung_fraction
+from ytktv.youtube.lyrics import (
+    PART_A,
+    PART_B,
+    PART_BOTH,
+    LyricLine,
+    duet_parts,
+    line_at,
+    sung_fraction,
+)
 
 # Show the next line this long before it starts, so singers can read ahead.
 LEAD_SECONDS = 3.0
@@ -162,12 +170,23 @@ class _LineArt:
 _DONE = object()
 
 
+# Per duet part: the line before it is sung, then the blend it fills with.
+DUET_COLOURS = {
+    PART_A: ("#bfe3ff", "#3da5ff", "#33e0ff"),
+    PART_B: ("#ffc9e6", "#ff4fa8", "#ff8ad0"),
+    PART_BOTH: ("#ffe9b0", "#ffb020", "#ffe066"),
+}
+
+
 class LyricsOverlay(_Overlay):
     """Two lines at the bottom of the screen; the current one fills with colour as it is sung."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._source: list[LyricLine] = []
         self._lines: list[LyricLine] = []
+        self._parts: list[int] = []  # who sings each line, while it is a duet
+        self._duet = False
         self._position = 0.0
         self._shown: tuple[int, int] | None = None  # (line index, progress in 1/200ths)
         # Each line is drawn once (see _TextSprite) and frames in between only copy it.
@@ -180,7 +199,20 @@ class LyricsOverlay(_Overlay):
         self._geometry: tuple[int, int, float] | None = None
 
     def set_lines(self, lines: list[dict[str, Any]]) -> None:
-        self._lines = [LyricLine.from_dict(d) for d in lines]
+        self._source = [LyricLine.from_dict(d) for d in lines]
+        self._reset()
+
+    def set_duet(self, enabled: bool) -> None:
+        """Duet: colour each line by who sings it (see DUET_COLOURS)."""
+        if enabled != self._duet:
+            self._duet = enabled
+            self._reset()
+
+    def _reset(self) -> None:
+        if self._duet:
+            self._lines, self._parts = duet_parts(self._source)
+        else:
+            self._lines, self._parts = list(self._source), []
         self._stops.clear()
         self._shown = None
         self._art.clear()
@@ -259,21 +291,28 @@ class LyricsOverlay(_Overlay):
         w, h = float(self.width()), float(self.height())
         line = self._lines[index]
         font, width = self._fitted_font(line.text, h * 0.36, w * 0.92)
-        white = _TextSprite(font, line.text, QColor("white"), ratio)
-        sung = _TextSprite(
-            font, line.text, (QColor(theme.PINK), QColor(theme.CYAN)), ratio, outline=False
-        )
+        waiting, fill = self._colours(index)
+        white = _TextSprite(font, line.text, waiting, ratio)
+        sung = _TextSprite(font, line.text, fill, ratio, outline=False)
         upcoming = None
         if index + 1 < len(self._lines):
             following = self._lines[index + 1]
             if following.start - line.end < 8.0:  # not across an instrumental break
                 next_font, _width = self._fitted_font(following.text, h * 0.24, w * 0.88)
-                upcoming = _TextSprite(next_font, following.text, QColor("white"), ratio)
+                next_colour = self._colours(index + 1)[0]
+                upcoming = _TextSprite(next_font, following.text, next_colour, ratio)
         for sprite in (white, sung, upcoming):
             if sprite is not None:
                 yield from sprite.steps()
                 yield
         self._art[index] = _LineArt(white, sung, upcoming, (w - width) / 2)
+
+    def _colours(self, index: int) -> tuple[QColor, tuple[QColor, QColor]]:
+        """The colour of line *index* before it is sung, and the blend it fills with."""
+        if not self._parts:
+            return QColor("white"), (QColor(theme.PINK), QColor(theme.CYAN))
+        waiting, left, right = DUET_COLOURS[self._parts[index]]
+        return QColor(waiting), (QColor(left), QColor(right))
 
     def _draw_ahead(self) -> None:
         """Do one step of drawing for the line on screen or the one that follows it."""
