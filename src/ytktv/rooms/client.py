@@ -41,6 +41,7 @@ class RoomClient:
         # Calls and orders wait here until the desk is reachable.
         self._outbox: list[dict[str, Any]] = []
         self._outbox_lock = threading.Lock()
+        self.now_singing: Callable[[], str] = lambda: ""  # set by the console
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -121,7 +122,7 @@ class RoomClient:
                 if now - self.store.settings.desk_last_seen >= HEARTBEAT:
                     self.store.settings.desk_last_seen = now
                     self.store.save()
-                    await ws.send(json.dumps({"type": "heartbeat"}))
+                    await ws.send(json.dumps({"type": "heartbeat", "song": self.now_singing()}))
                 with self._outbox_lock:
                     outbox, self._outbox = self._outbox, []
                 for message in outbox:

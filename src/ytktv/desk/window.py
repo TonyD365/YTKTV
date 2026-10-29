@@ -26,9 +26,10 @@ from PySide6.QtWidgets import (
 
 from ytktv.desk import lock
 from ytktv.desk.billing import bill
+from ytktv.desk.pages import BookingsPage, RecordsPage
 from ytktv.desk.panels import BillDialog, BroadcastDialog, OrdersBox, SecuritySettings, ShopSettings
 from ytktv.desk.server import Hub, tell, tell_all_products, unbind
-from ytktv.desk.store import CODE_SECONDS, DeskStore, Room
+from ytktv.desk.store import CODE_SECONDS, Booking, DeskStore, Room
 from ytktv.rooms.state import format_left
 
 COLUMNS = 3
@@ -85,6 +86,7 @@ class DeskWindow(QMainWindow):
         self.selected: str | None = None
         self._call_count = 0
         self._locked: set[str] = set()
+        self._reminded: set[int] = set()
         self._calls_shown: list[int] = []
         self._code_until = 0.0
         self.setWindowTitle("YTKTV Desk")
@@ -112,7 +114,7 @@ class DeskWindow(QMainWindow):
         bar.addSpacing(36)
         self.stack = QStackedWidget()
         self.nav: dict[str, QPushButton] = {}
-        for index, name in enumerate(("Rooms", "Settings")):
+        for index, name in enumerate(("Rooms", "Bookings", "Records", "Settings")):
             button = QPushButton(name)
             button.setObjectName("navButton")
             button.setCheckable(True)
@@ -136,6 +138,10 @@ class DeskWindow(QMainWindow):
         page.addWidget(top)
 
         self.stack.addWidget(self._rooms_tab())
+        self.bookings = BookingsPage(self.store, self.check_in)
+        self.records = RecordsPage(self.store)
+        self.stack.addWidget(self.bookings)
+        self.stack.addWidget(self.records)
         self.stack.addWidget(self._settings_tab())
         page.addWidget(self.stack, stretch=1)
 
@@ -179,11 +185,13 @@ class DeskWindow(QMainWindow):
         stats.setSpacing(14)
         self.stat_rooms, self.stat_online = QLabel(), QLabel()
         self.stat_used, self.stat_calls = QLabel("0"), QLabel("0")
+        self.stat_today = QLabel("0")
         for label, title in (
             (self.stat_rooms, "Rooms"),
             (self.stat_online, "Online"),
             (self.stat_used, "In use"),
             (self.stat_calls, "Calls"),
+            (self.stat_today, "Today"),
         ):
             stats.addWidget(stat(label, title))
         column.addLayout(stats)
@@ -322,6 +330,9 @@ class DeskWindow(QMainWindow):
         self._fill_panel(rooms, online)
         self._fill_settings(rooms)
         self._fill_calls(rooms)
+        start = time.mktime(time.localtime()[:3] + (0, 0, 0, 0, 0, -1))
+        today = sum(v.total for v in self.store.history(start, start + 86400))
+        self.stat_today.setText(f"{self.store.setting('currency', '$')}{today:g}")
 
     def _fill_calls(self, rooms: list[Room]) -> None:
         calls = self.store.calls()
@@ -413,6 +424,13 @@ class DeskWindow(QMainWindow):
             empty.setMinimumHeight(360)
             self.grid.addWidget(empty, 0, 0, 1, COLUMNS)
             return
+        now = time.time()
+        upcoming: dict[str, Booking] = {}
+        for booking in self.store.bookings(now - 3600, now + 12 * 3600, live_only=True):
+            upcoming.setdefault(booking.room_id, booking)
+            if booking.starts - now <= 15 * 60 and booking.booking_id not in self._reminded:
+                self._reminded.add(booking.booking_id)
+                QApplication.beep()  # a booked guest is due within 15 minutes
         for n, room in enumerate(rooms):
             label, colour, dot = STATUS[self._status(room, online)]
             left = room.ends_at - time.time() if room.is_open and room.ends_at else None
@@ -423,6 +441,12 @@ class DeskWindow(QMainWindow):
             extra = f"\n{room.guest}" if room.is_open and room.guest else ""
             if left is not None and left > 0:
                 extra += f"\n{format_left(left)} left"
+            singing = self.store.now_singing(room.room_id) if room.is_open else ""
+            if singing:
+                extra += f"\n♪ {singing[:28]}"
+            booked = upcoming.get(room.room_id)
+            if booked is not None and not room.is_open:
+                extra += f"\n📅 Booked {time.strftime('%H:%M', time.localtime(booked.starts))}"
             tile.setText(f"{room.name}\n\n{dot}  {label}{extra}")
             tile.setStyleSheet(
                 f"#roomTile {{ background: {colour}; color: white; font-size: 20px;"
@@ -513,8 +537,20 @@ class DeskWindow(QMainWindow):
             )
             if not ok:
                 return
-        self.store.open_room(self.selected, guest.strip(), LENGTHS[length])
+        minutes = LENGTHS[length]
+        clashes = self.store.clashes(self.selected, time.time(), minutes)
+        if clashes and not _checked_clash(self, clashes):
+            return
+        self.store.open_room(self.selected, guest.strip(), minutes)
         tell(self.store, self.hub, self.selected)
+        self.refresh()
+
+    def check_in(self, booking: Booking) -> None:
+        """A booked guest arrived: open their room as booked."""
+        self.store.open_room(booking.room_id, booking.guest, booking.minutes)
+        tell(self.store, self.hub, booking.room_id)
+        self.selected = booking.room_id
+        self.show_tab(0)
         self.refresh()
 
     def extend_room(self, _checked: bool = False, length: str | None = None) -> None:
@@ -531,9 +567,11 @@ class DeskWindow(QMainWindow):
     def close_room(self, _checked: bool = False, confirm: bool = True) -> None:
         if self.selected is None:
             return
-        if confirm and not BillDialog(bill(self.store, self.selected), self).exec():
+        result = bill(self.store, self.selected)
+        if confirm and not BillDialog(result, self).exec():
             return
-        self.store.close_room(self.selected)
+        self.store.close_room(self.selected, result)
+        self.records.refresh()
         tell(self.store, self.hub, self.selected)
         self.refresh()
 
@@ -573,3 +611,12 @@ class DeskWindow(QMainWindow):
         if room_id:
             unbind(self.store, self.hub, room_id)
             self.refresh()
+
+
+def _checked_clash(parent: QWidget, clashes: list[Booking]) -> bool:
+    """Ask before opening a room that is booked soon; True to open anyway."""
+    when = ", ".join(time.strftime("%H:%M", time.localtime(c.starts)) for c in clashes)
+    answer = QMessageBox.question(
+        parent, "Room is booked", f"This room is booked at {when}. Open it anyway?"
+    )
+    return answer == QMessageBox.StandardButton.Yes

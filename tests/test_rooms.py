@@ -331,3 +331,65 @@ def test_room_lock_state():
     state.apply({"type": "lock"})
     state.apply({"type": "close"})
     assert not state.locked
+
+
+def test_bookings_clash_and_check_in(qtbot):
+    from PySide6.QtCore import QDate, QDateTime, QTime
+
+    from ytktv.desk.pages import BookingDialog, day_bounds
+    from ytktv.desk.server import Hub
+    from ytktv.desk.store import Booking
+    from ytktv.desk.window import DeskWindow
+
+    store = DeskStore()
+    kids, _ = store.pair(store.new_code(), "Kids")
+    adults, _ = store.pair(store.new_code(), "Adults")
+    seven = 1_000_000.0
+    first = store.book(Booking(0, kids.room_id, seven, 120, "Kim"))
+    assert [b.booking_id for b in store.clashes(kids.room_id, seven + 3600, 60)] == [first]
+    assert store.clashes(kids.room_id, seven + 2 * 3600, 60) == []  # right after it
+    assert store.clashes(adults.room_id, seven, 60) == []  # another room
+    store.set_booking_status(first, "cancelled")
+    assert store.clashes(kids.room_id, seven, 60) == []
+
+    window = DeskWindow(store, Hub(), "192.168.1.10:8770")
+    qtbot.addWidget(window)
+    today = QDate.currentDate()
+    dialog = BookingDialog(store, today)
+    qtbot.addWidget(dialog)
+    dialog.room.setCurrentIndex(0)
+    dialog.when.setDateTime(QDateTime(today, QTime(23, 0)))
+    dialog.guest.setText("Alex")
+    assert dialog.save(confirm_clash=False)
+    page = window.bookings
+    page.calendar.setSelectedDate(today)
+    page.refresh()
+    assert page.table.rowCount() == 1 and page.table.item(0, 2).text() == "Alex"
+    page.table.selectRow(0)
+    page.set_status("arrived")
+    room = store.room(kids.room_id)
+    assert room.is_open and room.guest == "Alex" and room.ends_at is not None
+    assert store.bookings(*day_bounds(today))[0].status == "arrived"
+
+
+def test_closed_sessions_are_kept_in_the_records(qtbot):
+    from ytktv.desk.server import Hub, receive
+    from ytktv.desk.window import DeskWindow
+
+    store = DeskStore()
+    kids, _ = store.pair(store.new_code(), "Kids")
+    store.set_setting("rate", "10")
+    window = DeskWindow(store, Hub(), "192.168.1.10:8770")
+    qtbot.addWidget(window)
+    window.select(kids.room_id)
+    window.open_room(guest="Kim", length="1 hour")
+    for song in ("Alexander's Ragtime Band", "Alexander's Ragtime Band", "A Perfect Day"):
+        receive(store, kids.room_id, {"type": "heartbeat", "song": song})
+    assert store.now_singing(kids.room_id) == "A Perfect Day"
+    window.close_room(confirm=False)
+    visits = store.history(0, time.time() + 1)
+    assert len(visits) == 1 and visits[0].total == 10 and visits[0].guest == "Kim"
+    assert visits[0].songs == ["Alexander's Ragtime Band", "A Perfect Day"]
+    window.records.refresh()
+    assert window.records.table.rowCount() == 1 and "1 sessions" in window.records.summary.text()
+    assert "Alexander" in window.records.top_songs.text()

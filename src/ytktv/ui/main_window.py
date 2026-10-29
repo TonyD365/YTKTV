@@ -566,6 +566,9 @@ class MainWindow(QMainWindow):
         self.room_closed_view.open_settings.connect(self._settings_while_closed)
         self.controller.front_desk = room_client
         if room_client is not None:
+            room_client.now_singing = lambda: (
+                self.controller.current.song.title if self.controller.current else ""
+            )
             room_client.on_event = lambda kind, data: self.controller.bus.emit(
                 "room", data if isinstance(data, dict) else {"type": kind}
             )

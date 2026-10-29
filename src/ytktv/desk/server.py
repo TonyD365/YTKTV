@@ -139,7 +139,9 @@ def receive(store: DeskStore, room_id: str, message: dict[str, Any]) -> None:
     room = store.room(room_id)
     if room is None or not room.is_open:
         return
-    if kind == "call":
+    if kind == "heartbeat":
+        store.note_song(room_id, str(message.get("song", "")))
+    elif kind == "call":
         store.add_call(room_id, str(message.get("kind", "Other")), str(message.get("note", "")))
     elif kind == "order":
         items = message.get("items")

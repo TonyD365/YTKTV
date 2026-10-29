@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import secrets
 import sqlite3
 import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from ytktv.rooms import crypto
 
@@ -42,6 +44,32 @@ class Call:
     kind: str
     note: str
     created: float
+
+
+@dataclass
+class Booking:
+    booking_id: int
+    room_id: str
+    starts: float
+    minutes: int | None
+    guest: str = ""
+    contact: str = ""
+    note: str = ""
+    status: str = "booked"  # booked, arrived, cancelled or no_show
+
+
+@dataclass
+class Visit:
+    """A closed session, kept for the records."""
+
+    visit_id: int
+    room: str
+    guest: str
+    opened_at: float
+    closed_at: float
+    total: float
+    lines: list[tuple[str, float]]
+    songs: list[str]
 
 
 @dataclass
@@ -85,6 +113,7 @@ class DeskStore:
             for table, column in (
                 ("sessions", "opened_at REAL NOT NULL DEFAULT 0"),
                 ("rooms", "rate REAL"),
+                ("sessions", "songs TEXT NOT NULL DEFAULT '[]'"),
             ):
                 with contextlib.suppress(sqlite3.OperationalError):  # added later
                     self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
@@ -98,6 +127,15 @@ class DeskStore:
                 "CREATE TABLE IF NOT EXISTS calls (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL,"
                 " kind TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', created REAL NOT NULL,"
                 " done INTEGER NOT NULL DEFAULT 0);"
+                "CREATE TABLE IF NOT EXISTS bookings (id INTEGER PRIMARY KEY,"
+                " room_id TEXT NOT NULL, starts REAL NOT NULL, minutes INTEGER,"
+                " guest TEXT NOT NULL DEFAULT '',"
+                " contact TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '',"
+                " status TEXT NOT NULL DEFAULT 'booked');"
+                "CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL,"
+                " room TEXT NOT NULL, guest TEXT NOT NULL, opened_at REAL NOT NULL,"
+                " closed_at REAL NOT NULL, total REAL NOT NULL, bill TEXT NOT NULL,"
+                " songs TEXT NOT NULL);"
             )
             row = self._db.execute("SELECT v FROM meta WHERE k='private_key'").fetchone()
             if row is None:
@@ -198,13 +236,124 @@ class DeskStore:
             )
             self._db.commit()
 
-    def close_room(self, room_id: str) -> None:
-        """End the session; its orders and calls are settled with it."""
+    def close_room(self, room_id: str, bill: Any = None, now: float | None = None) -> None:
+        """End the session; its orders and calls are settled with it.
+
+        With *bill* (a billing.Bill) the session is kept in the records.
+        """
+        room = self.room(room_id)
         with self._lock:
+            if bill is not None and room is not None and room.is_open:
+                songs = self._db.execute(
+                    "SELECT songs FROM sessions WHERE room_id=?", (room_id,)
+                ).fetchone()
+                self._db.execute(
+                    "INSERT INTO history (room_id, room, guest, opened_at, closed_at, total, bill,"
+                    " songs) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        room_id,
+                        room.name,
+                        room.guest,
+                        room.opened_at,
+                        time.time() if now is None else now,
+                        bill.total,
+                        json.dumps(bill.lines),
+                        songs[0] if songs else "[]",
+                    ),
+                )
             self._db.execute("DELETE FROM sessions WHERE room_id=?", (room_id,))
             self._db.execute("DELETE FROM orders WHERE room_id=?", (room_id,))
             self._db.execute("UPDATE calls SET done=1 WHERE room_id=?", (room_id,))
             self._db.commit()
+
+    def note_song(self, room_id: str, title: str) -> None:
+        """Remember what an open room sang, once per song."""
+        title = title.strip()[:200]
+        if not title:
+            return
+        with self._lock:
+            row = self._db.execute(
+                "SELECT songs FROM sessions WHERE room_id=?", (room_id,)
+            ).fetchone()
+            if row is None:
+                return
+            songs = json.loads(row[0] or "[]")
+            if not songs or songs[-1] != title:
+                songs.append(title)
+                self._db.execute(
+                    "UPDATE sessions SET songs=? WHERE room_id=?", (json.dumps(songs), room_id)
+                )
+                self._db.commit()
+
+    def now_singing(self, room_id: str) -> str:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT songs FROM sessions WHERE room_id=?", (room_id,)
+            ).fetchone()
+        songs = json.loads(row[0]) if row and row[0] else []
+        return str(songs[-1]) if songs else ""
+
+    def history(self, start: float, end: float) -> list[Visit]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, room, guest, opened_at, closed_at, total, bill, songs FROM history"
+                " WHERE closed_at >= ? AND closed_at < ? ORDER BY closed_at",
+                (start, end),
+            ).fetchall()
+        return [
+            Visit(a, b, c, d, e, f, [tuple(x) for x in json.loads(g)], json.loads(h))
+            for a, b, c, d, e, f, g, h in rows
+        ]
+
+    # -- bookings ---------------------------------------------------------------
+
+    def book(self, booking: Booking) -> int:
+        with self._lock:
+            cursor = self._db.execute(
+                "INSERT INTO bookings (room_id, starts, minutes, guest, contact, note)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    booking.room_id,
+                    booking.starts,
+                    booking.minutes,
+                    booking.guest[:80],
+                    booking.contact[:80],
+                    booking.note[:200],
+                ),
+            )
+            self._db.commit()
+            return int(cursor.lastrowid or 0)
+
+    def bookings(self, start: float, end: float, live_only: bool = False) -> list[Booking]:
+        """Bookings that start between *start* and *end*."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, room_id, starts, minutes, guest, contact, note, status FROM bookings"
+                " WHERE starts >= ? AND starts < ?"
+                + (" AND status='booked'" if live_only else "")
+                + " ORDER BY starts",
+                (start, end),
+            ).fetchall()
+        return [Booking(*row) for row in rows]
+
+    def set_booking_status(self, booking_id: int, status: str) -> None:
+        with self._lock:
+            self._db.execute("UPDATE bookings SET status=? WHERE id=?", (status, booking_id))
+            self._db.commit()
+
+    def clashes(
+        self, room_id: str, starts: float, minutes: int | None, skip: int = 0
+    ) -> list[Booking]:
+        """Live bookings for *room_id* that overlap a stay from *starts* (open-ended: 12 h)."""
+        end = starts + (minutes or 12 * 60) * 60
+        found = []
+        for booking in self.bookings(starts - 24 * 3600, end, live_only=True):
+            if booking.room_id != room_id or booking.booking_id == skip:
+                continue
+            other_end = booking.starts + (booking.minutes or 12 * 60) * 60
+            if booking.starts < end and starts < other_end:
+                found.append(booking)
+        return found
 
     def set_rate(self, room_id: str, rate: float | None) -> None:
         with self._lock:
