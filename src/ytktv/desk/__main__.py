@@ -1,4 +1,4 @@
-"""Start YTKTV Desk: the front desk server and its window."""
+"""Start YTKTV Desk: the staff terminal server and its window."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ def main() -> int:
     window = DeskWindow(store, hub, f"{ip}:{DESK_PORT}")
     from ytktv.desk.update import DeskUpdater
 
-    window.watch_updates(DeskUpdater(window))
+    window.watch_updates(DeskUpdater(window, automatic=window.updates.automatic))
     window.show()
     try:
         return app.exec()

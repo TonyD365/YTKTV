@@ -1,4 +1,4 @@
-"""Whether a room bound to the front desk is open, and until when."""
+"""Whether a room bound to the staff terminal is open, and until when."""
 
 from __future__ import annotations
 

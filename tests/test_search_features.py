@@ -235,3 +235,29 @@ def test_duet_parts_follow_markers_or_alternate_by_verse():
 
     plain = [LyricLine(s, s + 1.5, "x") for s in (0, 2, 8, 10, 16)]
     assert duet_parts(plain)[1] == [PART_A, PART_A, PART_B, PART_B, PART_A]
+
+
+def test_lrc_lyrics_for_videos_without_subtitles():
+    from ytktv.youtube.lyrics import parse_lrc, pick_lrc, search_terms
+
+    assert (
+        search_terms("周杰倫 Jay Chou【晴天 Sunny Day】Official MV")
+        == "周杰倫 Jay Chou 晴天 Sunny Day"
+    )
+    assert search_terms("Yesterday (Remastered 2009)", "The Beatles - Topic").endswith(
+        "The Beatles"
+    )
+    lines = parse_lrc("[ar:x]\n[00:01.50]first\n[00:04.00][01:00.00]twice\n[00:07.00]\n[00:09]last")
+    assert [(line.start, line.end, line.text) for line in lines] == [
+        (1.5, 4.0, "first"),
+        (4.0, 7.0, "twice"),
+        (9.0, 29.0, "last"),
+        (60.0, 65.0, "twice"),
+    ]
+    results = [
+        {"duration": 300, "syncedLyrics": "[00:01]far"},
+        {"duration": 241, "syncedLyrics": "[00:01]near"},
+        {"duration": 240, "syncedLyrics": None, "plainLyrics": "plain"},
+    ]
+    assert pick_lrc(results, 238) == "[00:01]near"
+    assert pick_lrc(results, 100) == ""

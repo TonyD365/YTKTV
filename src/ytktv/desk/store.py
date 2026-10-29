@@ -8,6 +8,7 @@ import secrets
 import sqlite3
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from typing import Any
 from ytktv.rooms import crypto
 
 CODE_SECONDS = 300  # a pairing code works for five minutes, once
+LOW_STOCK = 5  # warn when a product is down to this many, unless the shop sets otherwise
 
 
 @dataclass
@@ -110,55 +112,7 @@ class DeskStore:
         self._lock = threading.Lock()
         self._codes: dict[str, float] = {}
         with self._lock:
-            columns = {row[1] for row in self._db.execute("PRAGMA table_info(rooms)")}
-            if columns and "key" not in columns:
-                # Rooms paired by the first test version kept only a hash of their key,
-                # which the signed handshake cannot use: they have to pair again.
-                self._db.execute("DROP TABLE rooms")
-            self._db.execute(
-                "CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL,"
-                " key TEXT NOT NULL, last_seen REAL NOT NULL DEFAULT 0)"
-            )
-            self._db.execute("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)")
-            self._db.execute(
-                "CREATE TABLE IF NOT EXISTS sessions (room_id TEXT PRIMARY KEY, guest TEXT,"
-                " ends_at REAL, opened_at REAL NOT NULL DEFAULT 0)"
-            )
-            for table, column in (
-                ("sessions", "opened_at REAL NOT NULL DEFAULT 0"),
-                ("rooms", "rate REAL"),
-                ("sessions", "songs TEXT NOT NULL DEFAULT '[]'"),
-                ("rooms", "room_type TEXT NOT NULL DEFAULT 'Medium'"),
-                ("rooms", "capacity INTEGER NOT NULL DEFAULT 6"),
-                ("rooms", "state TEXT NOT NULL DEFAULT 'ready'"),
-                ("products", "stock INTEGER"),
-                ("history", "payment TEXT NOT NULL DEFAULT 'Cash'"),
-            ):
-                with contextlib.suppress(sqlite3.OperationalError):  # added later
-                    self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
-            self._db.executescript(
-                "CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, name TEXT NOT NULL,"
-                " category TEXT NOT NULL DEFAULT '', price REAL NOT NULL, active INTEGER NOT NULL"
-                " DEFAULT 1, stock INTEGER);"
-                "CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL,"
-                " name TEXT NOT NULL, price REAL NOT NULL, qty INTEGER NOT NULL, status TEXT NOT"
-                " NULL DEFAULT 'pending', created REAL NOT NULL);"
-                "CREATE TABLE IF NOT EXISTS calls (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL,"
-                " kind TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', created REAL NOT NULL,"
-                " done INTEGER NOT NULL DEFAULT 0);"
-                "CREATE TABLE IF NOT EXISTS bookings (id INTEGER PRIMARY KEY,"
-                " room_id TEXT NOT NULL, starts REAL NOT NULL, minutes INTEGER,"
-                " guest TEXT NOT NULL DEFAULT '',"
-                " contact TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '',"
-                " status TEXT NOT NULL DEFAULT 'booked');"
-                "CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL,"
-                " room TEXT NOT NULL, guest TEXT NOT NULL, opened_at REAL NOT NULL,"
-                " closed_at REAL NOT NULL, total REAL NOT NULL, bill TEXT NOT NULL,"
-                " songs TEXT NOT NULL, payment TEXT NOT NULL DEFAULT 'Cash');"
-                "CREATE TABLE IF NOT EXISTS members (id INTEGER PRIMARY KEY, name TEXT NOT NULL,"
-                " phone TEXT NOT NULL UNIQUE, balance REAL NOT NULL DEFAULT 0,"
-                " points INTEGER NOT NULL DEFAULT 0, created REAL NOT NULL);"
-            )
+            migrate(self._db, path)
             row = self._db.execute("SELECT v FROM meta WHERE k='private_key'").fetchone()
             if row is None:
                 row = (crypto.new_private_key(),)
@@ -491,6 +445,16 @@ class DeskStore:
 
     # -- products, orders and service calls -----------------------------------
 
+    def low_stock(self) -> list[Product]:
+        """Products on the menu that are running out, fewest left first."""
+        limit = int(self.setting("low_stock", str(LOW_STOCK)))
+        if limit <= 0:
+            return []
+        running_out = [
+            p for p in self.products(active_only=True) if p.stock is not None and p.stock <= limit
+        ]
+        return sorted(running_out, key=lambda p: (p.stock, p.name))
+
     def products(self, active_only: bool = False) -> list[Product]:
         with self._lock:
             rows = self._db.execute(
@@ -601,3 +565,84 @@ class DeskStore:
             self._db.execute("UPDATE calls SET done=1 WHERE id=?", (call_id,))
             self._db.commit()
         return None if row is None else str(row[0])
+
+
+def migrate(db: sqlite3.Connection, path: Path | str = ":memory:") -> None:
+    """Bring the database up to SCHEMA_VERSION, one numbered step at a time.
+
+    The version lives in SQLite's user_version. A file from before this existed reads 0
+    and gets the baseline, which copes with every earlier layout. A copy of the file is
+    kept before an existing database is changed.
+    """
+    version = db.execute("PRAGMA user_version").fetchone()[0]
+    if version > SCHEMA_VERSION:
+        raise RuntimeError(
+            f"This desk database is from a newer YTKTV Desk (schema {version}); update the app."
+        )
+    if version < SCHEMA_VERSION and version > 0 and str(path) != ":memory:":
+        backup = sqlite3.connect(f"{path}.v{version}.bak")
+        with backup:
+            db.backup(backup)
+        backup.close()
+    for step in range(version, SCHEMA_VERSION):
+        MIGRATIONS[step](db)
+        db.execute(f"PRAGMA user_version = {step + 1}")
+        db.commit()
+
+
+def _baseline(db: sqlite3.Connection) -> None:
+    """Every table as of v2.1, including the columns older test versions lacked."""
+    columns = {row[1] for row in db.execute("PRAGMA table_info(rooms)")}
+    if columns and "key" not in columns:
+        # Rooms paired by the first test version kept only a hash of their key,
+        # which the signed handshake cannot use: they have to pair again.
+        db.execute("DROP TABLE rooms")
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL,"
+        " key TEXT NOT NULL, last_seen REAL NOT NULL DEFAULT 0)"
+    )
+    db.execute("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)")
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS sessions (room_id TEXT PRIMARY KEY, guest TEXT,"
+        " ends_at REAL, opened_at REAL NOT NULL DEFAULT 0)"
+    )
+    for table, column in (
+        ("sessions", "opened_at REAL NOT NULL DEFAULT 0"),
+        ("rooms", "rate REAL"),
+        ("sessions", "songs TEXT NOT NULL DEFAULT '[]'"),
+        ("rooms", "room_type TEXT NOT NULL DEFAULT 'Medium'"),
+        ("rooms", "capacity INTEGER NOT NULL DEFAULT 6"),
+        ("rooms", "state TEXT NOT NULL DEFAULT 'ready'"),
+        ("products", "stock INTEGER"),
+        ("history", "payment TEXT NOT NULL DEFAULT 'Cash'"),
+    ):
+        with contextlib.suppress(sqlite3.OperationalError):  # added later
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
+    db.executescript(
+        "CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, name TEXT NOT NULL,"
+        " category TEXT NOT NULL DEFAULT '', price REAL NOT NULL, active INTEGER NOT NULL"
+        " DEFAULT 1, stock INTEGER);"
+        "CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL,"
+        " name TEXT NOT NULL, price REAL NOT NULL, qty INTEGER NOT NULL, status TEXT NOT"
+        " NULL DEFAULT 'pending', created REAL NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS calls (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL,"
+        " kind TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', created REAL NOT NULL,"
+        " done INTEGER NOT NULL DEFAULT 0);"
+        "CREATE TABLE IF NOT EXISTS bookings (id INTEGER PRIMARY KEY,"
+        " room_id TEXT NOT NULL, starts REAL NOT NULL, minutes INTEGER,"
+        " guest TEXT NOT NULL DEFAULT '',"
+        " contact TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '',"
+        " status TEXT NOT NULL DEFAULT 'booked');"
+        "CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL,"
+        " room TEXT NOT NULL, guest TEXT NOT NULL, opened_at REAL NOT NULL,"
+        " closed_at REAL NOT NULL, total REAL NOT NULL, bill TEXT NOT NULL,"
+        " songs TEXT NOT NULL, payment TEXT NOT NULL DEFAULT 'Cash');"
+        "CREATE TABLE IF NOT EXISTS members (id INTEGER PRIMARY KEY, name TEXT NOT NULL,"
+        " phone TEXT NOT NULL UNIQUE, balance REAL NOT NULL DEFAULT 0,"
+        " points INTEGER NOT NULL DEFAULT 0, created REAL NOT NULL);"
+    )
+
+
+# MIGRATIONS[n] takes the database from version n to n + 1. Only ever append to it.
+MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [_baseline]
+SCHEMA_VERSION = len(MIGRATIONS)

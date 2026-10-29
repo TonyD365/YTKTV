@@ -1,4 +1,4 @@
-"""The YTKTV Desk window: a front desk that shows every room."""
+"""The YTKTV Desk window: a staff terminal that shows every room."""
 
 from __future__ import annotations
 
@@ -37,6 +37,7 @@ from ytktv.desk.panels import (
     ReceiptSettings,
     SecuritySettings,
     ShopSettings,
+    UpdateSettings,
 )
 from ytktv.desk.server import Hub, tell, tell_all_products, unbind
 from ytktv.desk.store import CODE_SECONDS, Booking, DeskStore, Room
@@ -133,7 +134,7 @@ class DeskWindow(QMainWindow):
         self._call_count = 0
         self._locked: set[str] = set()
         self._reminded: set[int] = set()
-        self._calls_shown: list[int] = []
+        self._calls_shown: list[object] = []
         self._code_until = 0.0
         self.setWindowTitle("YTKTV Desk")
         self.setWindowIcon(QIcon(str(ICON)))
@@ -154,7 +155,7 @@ class DeskWindow(QMainWindow):
         brand.setSpacing(2)
         logo = QLabel("YTKTV")
         logo.setObjectName("deskLogo")
-        sub = QLabel("KARAOKE SYSTEM  ·  FRONT DESK")
+        sub = QLabel("KARAOKE SYSTEM  ·  STAFF TERMINAL")
         sub.setObjectName("deskSub")
         brand.addWidget(logo)
         brand.addWidget(sub)
@@ -347,6 +348,8 @@ class DeskWindow(QMainWindow):
         column.addWidget(self.receipts)
         self.security = SecuritySettings(self.store)
         column.addWidget(self.security)
+        self.updates = UpdateSettings(self.store)
+        column.addWidget(self.updates)
         return tab
 
     def watch_updates(self, updates: DeskUpdater) -> None:
@@ -371,6 +374,8 @@ class DeskWindow(QMainWindow):
         updates.ready.connect(ready)
         updates.available.connect(available)
         self.update_button.clicked.connect(install)
+        updates.status.connect(self.updates.state.setText)
+        self.updates.check_now = updates.check
 
     def _side_bar(self) -> QWidget:
         bar = QFrame()
@@ -416,7 +421,7 @@ class DeskWindow(QMainWindow):
             "cleaned": button("🧹  Cleaned", self.mark_cleaned, "The room is ready again"),
             "repair": button("🔧  Maintenance", self.toggle_maintenance),
         }
-        head("FRONT DESK")
+        head("STAFF TERMINAL")
         button("📢  Broadcast", self.broadcast)
         button("＋  Add Room", self.add_room)
         button("📋  Shift Report", self.shift_report)
@@ -471,7 +476,9 @@ class DeskWindow(QMainWindow):
             QApplication.beep()
         self._call_count = len(calls)
         self.stat_calls.setText(str(len(calls)))
-        shown = [c.call_id for c in calls]
+        low = self.store.low_stock()
+        shown: list[object] = [c.call_id for c in calls]
+        shown += [(p.product_id, p.stock) for p in low]
         if shown == self._calls_shown:
             return
         self._calls_shown = shown
@@ -481,13 +488,20 @@ class DeskWindow(QMainWindow):
             if widget is not None:
                 widget.deleteLater()
         names = {r.room_id: r.name for r in rooms}
-        self.calls_label.setVisible(not calls)
+        self.calls_label.setVisible(not calls and not low)
         for call in calls[:6]:
             note = f": {call.note}" if call.note else ""
             chip = QPushButton(f"🛎 {names.get(call.room_id, '?')} · {call.kind}{note}  ✓")
             chip.setToolTip("Mark as handled; the room is told staff is on the way")
             chip.setStyleSheet("background: #9c2f45; color: white; border-radius: 14px;")
             chip.clicked.connect(lambda _c=False, c=call.call_id: self.finish_call(c))
+            self.call_chips.addWidget(chip)
+        for product in low[:4]:
+            left = "sold out" if product.stock == 0 else f"{product.stock} left"
+            chip = QPushButton(f"📦 {product.name}: {left}")
+            chip.setToolTip("Running low: open Settings to restock it")
+            chip.setStyleSheet("background: #8a6a1c; color: white; border-radius: 14px;")
+            chip.clicked.connect(lambda: self.show_tab(self.stack.count() - 1))
             self.call_chips.addWidget(chip)
 
     # -- remote control -------------------------------------------------------
@@ -548,7 +562,7 @@ class DeskWindow(QMainWindow):
             empty = QLabel(
                 "<div style='font-size:64px'>🎤</div>"
                 "<div style='font-size:22px;font-weight:700;color:white'>No rooms yet</div>"
-                "<div style='color:#9a93b8'>Press “Add Room”, then open Settings → Front Desk"
+                "<div style='color:#9a93b8'>Press “Add Room”, then open Settings → Staff Terminal"
                 " on a YTKTV and enter the code.</div>"
             )
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -597,7 +611,7 @@ class DeskWindow(QMainWindow):
             self.panel_head.setText("PAIR A NEW ROOM")
             self.panel_name.setText("Enter this code on the room")
             self.panel_info.setText(
-                f"On the YTKTV in that room: Settings → Front Desk.\n"
+                f"On the YTKTV in that room: Settings → Staff Terminal.\n"
                 f"Desk address: {self.address}\n\n"
                 f"Security code: {self.store.fingerprint}\n"
                 "The room must show the same four pictures; if not, do not confirm.\n\n"

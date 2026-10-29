@@ -55,7 +55,7 @@ else
 [Desktop Entry]
 Type=Application
 Name=YTKTV Desk
-Comment=Front desk for YTKTV karaoke rooms
+Comment=Staff terminal for YTKTV karaoke rooms
 Exec=ytktv-desk
 Icon=ytktv-desk
 Categories=Office;

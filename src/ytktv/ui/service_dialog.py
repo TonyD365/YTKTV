@@ -1,4 +1,4 @@
-"""Call the front desk: ask for help, or order from its menu."""
+"""Call the staff: ask for help, or order from its menu."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class ServiceDialog(QDialog):
         self.setWindowTitle("Service")
         self.resize(560, 620)
         column = QVBoxLayout(self)
-        head = QLabel("CALL THE FRONT DESK")
+        head = QLabel("CALL THE STAFF")
         head.setObjectName("settingsHead")
         column.addWidget(head)
         kinds = QHBoxLayout()
@@ -59,7 +59,7 @@ class ServiceDialog(QDialog):
             grid.addWidget(qty, row, 1)
             self.quantities[int(item["product_id"])] = qty
         if not client.products:
-            grid.addWidget(QLabel("The front desk has no menu yet."), 0, 0)
+            grid.addWidget(QLabel("The staff terminal has no menu yet."), 0, 0)
         scroll.setWidget(holder)
         column.addWidget(scroll, stretch=1)
         order = QPushButton("Send Order")
@@ -70,11 +70,11 @@ class ServiceDialog(QDialog):
 
     def call(self, kind: str) -> None:
         if self.client.call(kind, self.note.text()):
-            self.sent = f"Asked the front desk: {kind}"
+            self.sent = f"Asked the staff: {kind}"
             self.accept()
 
     def order(self) -> None:
         items = [(pid, box.value()) for pid, box in self.quantities.items() if box.value()]
         if self.client.order(items):
-            self.sent = "Order sent to the front desk"
+            self.sent = "Order sent to the staff"
             self.accept()

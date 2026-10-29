@@ -271,3 +271,55 @@ def duet_parts(lines: list[LyricLine]) -> tuple[list[LyricLine], list[int]]:
             current = PART_B if current == PART_A else PART_A
         parts.append(current)
     return cleaned, parts
+
+
+# Words in video titles that are about the video, not the song.
+_TITLE_NOISE = re.compile(
+    r"official\s*(music\s*)?(video|mv|audio)|music\s*video|lyrics?\s*video|lyrics?|\bmv\b"
+    r"|\b(hd|hq|4k|1080p|720p)\b|官方|完整版|高清|歌词|動態歌詞|动态歌词|字幕",
+    re.IGNORECASE,
+)
+_TITLE_MARKS = re.compile(r"[\[\]\(\)（）【】「」『』《》<>|｜/\\\-–—_~:：\"'“”]+")
+_LRC_TIME = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\]")
+# A synced lyric is used only when its recording is about as long as the video.
+LRC_DURATION_SLACK = 10.0
+
+
+def search_terms(title: str, channel: str = "") -> str:
+    """A lyrics search for a video title: the song and singer without "Official MV" and such."""
+    text = _SPACE.sub(" ", _TITLE_MARKS.sub(" ", _TITLE_NOISE.sub(" ", title))).strip()
+    # "Singer - Topic" channels are named after the singer; other channel names are
+    # usually labels, which would only get in the way of the search.
+    if channel.endswith(" - Topic"):
+        singer = channel.removesuffix(" - Topic").strip()
+        if singer.lower() not in text.lower():
+            text = f"{text} {singer}"
+    return text
+
+
+def parse_lrc(text: str) -> list[LyricLine]:
+    """Lines from an LRC file; a line ends where the next one starts."""
+    stamped: list[tuple[float, str]] = []
+    for raw in text.splitlines():
+        times = _LRC_TIME.findall(raw)
+        words = _SPACE.sub(" ", _LRC_TIME.sub("", raw)).strip()
+        stamped.extend((int(m) * 60 + float(s), words) for m, s in times)
+    stamped.sort(key=lambda pair: pair[0])
+    lines: list[LyricLine] = []
+    for i, (start, words) in enumerate(stamped):
+        if not words:
+            continue  # an empty stamp marks a break
+        end = stamped[i + 1][0] if i + 1 < len(stamped) else start + 5.0
+        lines.append(LyricLine(start, min(end, start + _MAX_LINE_SECONDS), words))
+    return lines
+
+
+def pick_lrc(results: list[dict[str, Any]], duration: float) -> str:
+    """The synced lyrics of the search result closest in length to the video; "" when none fit."""
+    synced = [r for r in results if r.get("syncedLyrics") and not r.get("instrumental")]
+    if duration > 0:
+        synced = [
+            r for r in synced if abs(float(r.get("duration") or 0) - duration) <= LRC_DURATION_SLACK
+        ]
+        synced.sort(key=lambda r: abs(float(r.get("duration") or 0) - duration))
+    return str(synced[0]["syncedLyrics"]) if synced else ""
