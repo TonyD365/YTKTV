@@ -372,7 +372,7 @@ def test_bookings_clash_and_check_in(qtbot):
     assert store.bookings(*day_bounds(today))[0].status == "arrived"
 
 
-def test_closed_sessions_are_kept_in_the_records(qtbot):
+def test_closed_sessions_are_kept_in_the_records(qtbot, tmp_path):
     from ytktv.desk.server import Hub, receive
     from ytktv.desk.window import DeskWindow
 
@@ -393,6 +393,15 @@ def test_closed_sessions_are_kept_in_the_records(qtbot):
     window.records.refresh()
     assert window.records.table.rowCount() == 1 and "1 sessions" in window.records.summary.text()
     assert "Alexander" in window.records.top_songs.text()
+    for period in ("Week", "Month"):
+        window.records.period.setCurrentText(period)
+        assert window.records.table.rowCount() == 1
+        assert sum(amount for _, amount in window.records.chart.bars) == 10
+    assert len(window.records.chart.bars) >= 28
+    out = tmp_path / "month.csv"
+    window.records.export(path=str(out))
+    lines = out.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[0].startswith("Closed,Room,Guest") and ",Kids,Kim," in lines[1]
 
 
 def test_room_types_cleaning_maintenance_and_change_room(qtbot):
@@ -664,3 +673,30 @@ def test_desk_update_settings(qtbot, monkeypatch):
     assert store.setting("auto_update") == "0" and not window.updates.automatic()
     window.updates.check_button.click()  # by hand it checks anyway
     assert window.updates.state.text() == "YTKTV Desk is up to date."
+
+
+def test_desk_database_is_versioned_and_backed_up(tmp_path):
+    import sqlite3
+
+    from ytktv.desk import store as desk_store
+
+    path = tmp_path / "desk.sqlite3"
+    DeskStore(path)._db.close()
+    db = sqlite3.connect(path)
+    assert db.execute("PRAGMA user_version").fetchone()[0] == desk_store.SCHEMA_VERSION
+    db.close()
+
+    # A later step runs once on an existing file, after a copy of it is kept.
+    ran: list[int] = []
+    steps = [*desk_store.MIGRATIONS, lambda db: ran.append(1)]
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(desk_store, "MIGRATIONS", steps)
+        mp.setattr(desk_store, "SCHEMA_VERSION", len(steps))
+        DeskStore(path)._db.close()
+        DeskStore(path)._db.close()
+    assert ran == [1]
+    assert (tmp_path / f"desk.sqlite3.v{len(steps) - 1}.bak").exists()
+
+    # A database from a newer desk is refused rather than damaged.
+    with pytest.raises(RuntimeError, match="newer"):
+        DeskStore(path)
