@@ -173,6 +173,51 @@ def _extract_7z(archive: Path, member: str, dest: Path) -> None:
     raise RuntimeError("could not extract libmpv: " + ("; ".join(errors) or "no tar or 7z found"))
 
 
+def _windows_on_arm() -> bool:
+    return platform.system() == "Windows" and platform.machine().lower() in ("arm64", "aarch64")
+
+
+def install_windows_arm_ffmpeg() -> Path:
+    """ffmpeg.exe for Windows on ARM, from the same builds as libmpv; kept in data/bin."""
+    target = data_dir() / "bin" / "ffmpeg.exe"
+    if target.exists() and target.stat().st_size > 1_000_000:
+        return _on_path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    api = f"https://api.github.com/repos/{MPV_WINDOWS_REPO}/releases/latest"
+    request = urllib.request.Request(api, headers={"Accept": "application/vnd.github+json"})
+    with urlopen(request, timeout=30) as response:
+        release = json.load(response)
+    pattern = re.compile(r"^ffmpeg-aarch64-git-.*\.7z$")
+    asset = next((a for a in release.get("assets", []) if pattern.match(a["name"])), None)
+    if asset is None:
+        raise RuntimeError("no Windows on ARM ffmpeg in the latest build")
+    archive = target.parent / asset["name"]
+    try:
+        with (
+            urlopen(asset["browser_download_url"], timeout=60) as response,
+            archive.open("wb") as out,
+        ):
+            shutil.copyfileobj(response, out)
+        target.unlink(missing_ok=True)
+        _extract_7z(archive, target.name, target.parent)
+        if target.stat().st_size < 1_000_000:
+            raise RuntimeError("extracted ffmpeg is truncated")
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+    finally:
+        archive.unlink(missing_ok=True)
+    return _on_path(target)
+
+
+def _on_path(exe: Path) -> Path:
+    folder = str(exe.parent)
+    if folder not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = folder + os.pathsep + os.environ.get("PATH", "")
+    os.environ.setdefault("IMAGEIO_FFMPEG_EXE", str(exe))
+    return exe
+
+
 def install_windows_libmpv(report: Callable[[str], None]) -> None:
     api = f"https://api.github.com/repos/{MPV_WINDOWS_REPO}/releases/latest"
     request = urllib.request.Request(api, headers={"Accept": "application/vnd.github+json"})
@@ -245,6 +290,13 @@ def ensure_ffmpeg() -> str | None:
 
         source = Path(imageio_ffmpeg.get_ffmpeg_exe())
     except Exception:
+        if _windows_on_arm():
+            # imageio-ffmpeg has no Windows on ARM build: fetch the ARM64 one once.
+            try:
+                return str(install_windows_arm_ffmpeg())
+            except Exception:
+                log.warning("could not download ffmpeg for Windows on ARM", exc_info=True)
+                return None
         log.warning("no ffmpeg available", exc_info=True)
         return None
     # imageio's binary has a versioned file name; tools look for plain "ffmpeg".

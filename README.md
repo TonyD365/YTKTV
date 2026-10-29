@@ -228,7 +228,7 @@ Copies of YTKTV 1.4 and 1.5 that already downloaded mpv keep using it.
 | Windows | Downloaded on first run | NVIDIA GPU (CUDA), other GPUs (DirectML), or CPU |
 | Linux | Downloaded on first run | NVIDIA GPU (CUDA) or CPU |
 | Linux ARM | Downloaded on first run | CPU (a few minutes a song on a Raspberry Pi) |
-| Windows on ARM | Not available yet | Vocal Cut and L / R still work |
+| Windows on ARM | Downloaded on first run (about 500 MB) | CPU, through Windows' x64 emulation |
 | macOS, Intel | Not available | Vocal Cut and L / R still work |
 
 On Windows and Linux, YTKTV checks the graphics card the first time it starts and offers to

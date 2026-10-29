@@ -96,11 +96,21 @@ def supported(
     system = system or platform.system()
     machine = (machine if machine is not None else platform.machine()).lower()
     frozen = bootstrap.is_frozen() if frozen is None else frozen
-    if system == "Windows" and machine in ("arm64", "aarch64"):
-        # Some of the separation libraries have no Windows on ARM builds yet and would
-        # be compiled from source for a very long time; Vocal Cut and L / R still work.
-        return False
     return frozen and system in ("Windows", "Linux")
+
+
+def runtime_python(system: str | None = None, machine: str | None = None) -> str:
+    """The Python uv puts in the separation runtime.
+
+    On Windows on ARM it is the x64 one: some separation libraries have no ARM builds
+    for Windows yet, and Windows runs x64 programs under emulation. Only the separation
+    worker runs there; YTKTV itself stays native.
+    """
+    system = system or platform.system()
+    machine = (machine if machine is not None else platform.machine()).lower()
+    if system == "Windows" and machine in ("arm64", "aarch64"):
+        return f"cpython-{PYTHON_VERSION}-windows-x86_64-none"
+    return PYTHON_VERSION
 
 
 def _classify(name: str) -> str | None:
@@ -217,7 +227,14 @@ class Runtime:
         install = [*base, "pip", "install", "--python", str(self.python), *variant.packages]
         if variant.torch_backend:
             install += ["--torch-backend", variant.torch_backend]
-        venv = [*base, "venv", str(self.env_dir), "--python", PYTHON_VERSION, "--managed-python"]
+        venv = [
+            *base,
+            "venv",
+            str(self.env_dir),
+            "--python",
+            runtime_python(self.system),
+            "--managed-python",
+        ]
         return [
             (f"Downloading Python {PYTHON_VERSION}", venv),
             (f"Downloading the separation libraries ({variant.download_size})", install),

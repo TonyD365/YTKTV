@@ -48,7 +48,7 @@ jobs:
           - { name: windows-x64, os: windows-latest, separation: download, arch: x64 }
           - { name: linux-x86_64, os: ubuntu-24.04, separation: download }
           # ARM: Windows on ARM laptops, and Raspberry Pi-class Linux boxes as rooms.
-          - { name: windows-arm64, os: windows-11-arm, separation: none, arch: arm64 }
+          - { name: windows-arm64, os: windows-11-arm, separation: download, arch: arm64 }
           - { name: linux-aarch64, os: ubuntu-24.04-arm, separation: download }
     env:
       YTKTV_SEPARATION_MODE: ${{ matrix.separation }}
@@ -220,6 +220,7 @@ jobs:
 
       - name: Test the downloadable separation runtime (Windows)
         if: runner.os == 'Windows' && matrix.separation == 'download'
+        timeout-minutes: 40
         shell: pwsh
         env:
           YTKTV_SEPARATION_VARIANT: cpu
