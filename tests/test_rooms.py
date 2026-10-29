@@ -645,3 +645,30 @@ def test_windows_on_arm_gets_an_x64_separation_runtime(tmp_path):
     assert runtime_python("Linux", "aarch64") == "3.12"  # Linux ARM has native libraries
     commands = Runtime(tmp_path, system="Windows").install_commands(VARIANTS["cpu"], "uv")
     assert "--python" in commands[0][1]
+
+
+def test_desk_database_is_versioned_and_backed_up(tmp_path):
+    import sqlite3
+
+    from ytktv.desk import store as desk_store
+
+    path = tmp_path / "desk.sqlite3"
+    DeskStore(path)._db.close()
+    db = sqlite3.connect(path)
+    assert db.execute("PRAGMA user_version").fetchone()[0] == desk_store.SCHEMA_VERSION
+    db.close()
+
+    # A later step runs once on an existing file, after a copy of it is kept.
+    ran: list[int] = []
+    steps = [*desk_store.MIGRATIONS, lambda db: ran.append(1)]
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(desk_store, "MIGRATIONS", steps)
+        mp.setattr(desk_store, "SCHEMA_VERSION", len(steps))
+        DeskStore(path)._db.close()
+        DeskStore(path)._db.close()
+    assert ran == [1]
+    assert (tmp_path / f"desk.sqlite3.v{len(steps) - 1}.bak").exists()
+
+    # A database from a newer desk is refused rather than damaged.
+    with pytest.raises(RuntimeError, match="newer"):
+        DeskStore(path)

@@ -125,7 +125,7 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 - **Karaoke lyrics.** The **Lyrics** button in the control bar puts the words at the bottom of
   the MV screen, filling with colour line by line as the song plays. They come from the
   video's subtitles, or from YouTube's automatic captions when it has none (those are often
-  inaccurate for singing). The colour follows the singer word by word wherever YouTube's
+  inaccurate for singing), or, failing both, from the synced lyrics on [LRCLIB](https://lrclib.net). The colour follows the singer word by word wherever YouTube's
   captions say when each word was heard, and fills evenly otherwise. If the lyrics run ahead
   of or behind the singing, the two small arrows beside the button move them 0.1 s at a time;
   the shift is remembered for that song.
