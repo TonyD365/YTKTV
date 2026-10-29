@@ -125,7 +125,7 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 - **Karaoke lyrics.** The **Lyrics** button in the control bar puts the words at the bottom of
   the MV screen, filling with colour line by line as the song plays. They come from the
   video's subtitles, or from YouTube's automatic captions when it has none (those are often
-  inaccurate for singing). The colour follows the singer word by word wherever YouTube's
+  inaccurate for singing), or, failing both, from the synced lyrics on [LRCLIB](https://lrclib.net). The colour follows the singer word by word wherever YouTube's
   captions say when each word was heard, and fills evenly otherwise. If the lyrics run ahead
   of or behind the singing, the two small arrows beside the button move them 0.1 s at a time;
   the shift is remembered for that song.
@@ -147,6 +147,8 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 - **Danmaku and lights.** Anyone can send a short message from the console or a phone and it
   flies across the MV screen. A glow around the screen pulses with the music, and phones can
   join in as glow sticks that follow its colours.
+- **Downloads.** Press ⬇ on a song (or Download All Favorites) to keep it on the computer with
+  its lyrics and instrumental, then sing it without internet.
 - **PK battle.** Two microphones sing the same song, with two live score bars on the TV and a
   winner at the end.
 - **Party games.** Twelve games, each with its own screen on the console and the phones: dice,
@@ -277,7 +279,7 @@ microphone next to loud speakers will feed back, exactly like a real PA system.
 | Area | What it does |
 |---|---|
 | Top bar | Now playing, progress, next song, phone QR code |
-| Left | Search, Hot Songs, Favorites, Selected (queue), Sung (history), Mixer, Settings |
+| Left | Search, Hot Songs, Favorites, Downloads, Selected (queue), Sung (history), Mixer, Settings |
 | Bottom bar | Original / Instrumental / Vocal Cut / L / R, Replay, Play/Pause, Skip, Key, Tempo, Music and Mic volume, crowd effects |
 
 `F11` toggles full screen for the console. On the MV screen, double-click or press `F` to

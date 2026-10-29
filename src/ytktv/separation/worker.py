@@ -39,6 +39,8 @@ class StemManager:
         self._downloader = downloader
         self.on_change = on_change
         self.order = order
+        # Songs whose instrumentals must stay (downloaded to keep), even out of the queue.
+        self.pinned: Callable[[], set[str]] = set
         self._cond = threading.Condition()
         self._status: dict[str, StemStatus] = {}
         self._pending: list[str] = []
@@ -113,6 +115,7 @@ class StemManager:
         """
         dropped: list[str] = []
         abort = False
+        wanted = wanted | self.pinned()
         with self._cond:
             for video_id in list(self._pending):
                 if video_id not in wanted:
@@ -222,5 +225,5 @@ class StemManager:
             self._active = None
         shutil.rmtree(work, ignore_errors=True)
         keep = set(self.order()) if self.order else set()
-        self.cache.prune(keep | {video_id})
+        self.cache.prune(keep | self.pinned() | {video_id})
         self._set(video_id, StemStatus.READY)

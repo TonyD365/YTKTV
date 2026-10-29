@@ -321,6 +321,14 @@ def main(argv: list[str] | None = None) -> int:
     preloader = MediaPreloader(cache_dir() / "media", preload)
     preloader.start()
 
+    from ytktv.core.offline import OfflineSongs
+
+    def kept_lyrics(video_id: str) -> list[dict[str, Any]]:
+        return [line.to_dict() for line in youtube.lyrics(video_id, settings.max_height, True)]
+
+    offline = OfflineSongs(data_dir() / "offline", preload, kept_lyrics)
+    offline.start()
+
     controller = KTVController(
         store,
         player,
@@ -328,6 +336,7 @@ def main(argv: list[str] | None = None) -> int:
         library=Library(data_dir() / "library.json"),
         bus=bus,
         preloader=preloader,
+        offline=offline,
         stems=make_stem_manager(youtube, settings, ffmpeg, separator) if separator else None,
         audio=audio,
     )

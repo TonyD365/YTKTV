@@ -214,3 +214,29 @@ def test_initials_reach_the_phone(ktv):
     controller, _, _ = ktv
     with TestClient(create_app(controller, FakeSource())) as http:
         assert http.get("/api/suggest", params={"q": "yldb"}).json()[0].startswith("月亮代表我的心")
+
+
+def test_lrc_lyrics_for_videos_without_subtitles():
+    from ytktv.youtube.lyrics import parse_lrc, pick_lrc, search_terms
+
+    assert (
+        search_terms("周杰倫 Jay Chou【晴天 Sunny Day】Official MV")
+        == "周杰倫 Jay Chou 晴天 Sunny Day"
+    )
+    assert search_terms("Yesterday (Remastered 2009)", "The Beatles - Topic").endswith(
+        "The Beatles"
+    )
+    lines = parse_lrc("[ar:x]\n[00:01.50]first\n[00:04.00][01:00.00]twice\n[00:07.00]\n[00:09]last")
+    assert [(line.start, line.end, line.text) for line in lines] == [
+        (1.5, 4.0, "first"),
+        (4.0, 7.0, "twice"),
+        (9.0, 29.0, "last"),
+        (60.0, 65.0, "twice"),
+    ]
+    results = [
+        {"duration": 300, "syncedLyrics": "[00:01]far"},
+        {"duration": 241, "syncedLyrics": "[00:01]near"},
+        {"duration": 240, "syncedLyrics": None, "plainLyrics": "plain"},
+    ]
+    assert pick_lrc(results, 238) == "[00:01]near"
+    assert pick_lrc(results, 100) == ""

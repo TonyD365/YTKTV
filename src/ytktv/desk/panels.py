@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QTextDocument
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
@@ -28,6 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ytktv import __version__
 from ytktv.desk import lock, receipt
 from ytktv.desk.billing import DEFAULT_RATE, PAYMENTS, ROUNDING, Bill
 from ytktv.desk.server import Hub
@@ -666,3 +669,32 @@ class ReceiptSettings(QFrame):
         self.store.set_setting("receipt_footer", self.footer.text().strip())
         self.store.set_setting("receipt_auto", "1" if self.auto.isChecked() else "0")
         self.store.set_setting("receipt_copies", str(self.copies.value()))
+
+
+class UpdateSettings(QFrame):
+    """The desk's version, whether it updates itself, and a button to check right now."""
+
+    def __init__(self, store: DeskStore) -> None:
+        super().__init__()
+        self.store = store
+        self.check_now: Callable[[], None] | None = None
+        self.setObjectName("panel")
+        column = QVBoxLayout(self)
+        column.setContentsMargins(24, 20, 24, 20)
+        head = QLabel("UPDATES")
+        head.setObjectName("panelHead")
+        version = QLabel(f"YTKTV Desk {__version__}")
+        self.auto = QCheckBox("Check for updates automatically and download them in the background")
+        self.auto.setChecked(store.setting("auto_update", "1") == "1")
+        self.auto.toggled.connect(lambda on: store.set_setting("auto_update", "1" if on else "0"))
+        self.state = QLabel("Updates install only when you press Update, never by themselves.")
+        self.state.setObjectName("muted")
+        self.state.setWordWrap(True)
+        self.check_button = QPushButton("Check Now")
+        self.check_button.clicked.connect(lambda: self.check_now and self.check_now())
+        for widget in (head, version, self.auto, self.state):
+            column.addWidget(widget)
+        column.addWidget(self.check_button, alignment=Qt.AlignmentFlag.AlignLeft)
+
+    def automatic(self) -> bool:
+        return self.store.setting("auto_update", "1") == "1"
