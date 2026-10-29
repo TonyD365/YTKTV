@@ -2,7 +2,9 @@
 # Combine an Apple Silicon and an Intel package into one installer that puts
 # the right build of YTKTV on whichever Mac it runs on.
 #
-#   packaging/macos/build_universal_pkg.sh ARM64.pkg X86_64.pkg VERSION [OUT_DIR]
+#   packaging/macos/build_universal_pkg.sh ARM64.pkg X86_64.pkg VERSION [OUT_DIR] [APP]
+#
+# APP is YTKTV (default) or YTKTV-Desk.
 #
 # Optional environment (see build_pkg.sh): INSTALLER_IDENTITY, APPLE_ID,
 # APPLE_TEAM_ID, APPLE_APP_PASSWORD.
@@ -12,7 +14,13 @@ ARM_PKG="$1"
 INTEL_PKG="$2"
 VERSION="$3"
 OUT_DIR="${4:-dist}"
-OUT="$OUT_DIR/YTKTV-${VERSION}-macos-universal.pkg"
+APP="${5:-YTKTV}"
+case "$APP" in
+  YTKTV) TITLE="YTKTV"; ID="com.tonyd365.ytktv" ;;
+  YTKTV-Desk) TITLE="YTKTV Desk"; ID="com.tonyd365.ytktv.desk" ;;
+  *) echo "unknown app $APP" >&2; exit 1 ;;
+esac
+OUT="$OUT_DIR/${APP}-${VERSION}-macos-universal.pkg"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -24,7 +32,7 @@ cp "$INTEL_PKG" "$WORK/ytktv-x86_64.pkg"
 cat > "$WORK/distribution.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
-    <title>YTKTV</title>
+    <title>${TITLE}</title>
     <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
     <script>
     function isAppleSilicon() { return system.sysctl('hw.optional.arm64') == 1; }
@@ -33,16 +41,16 @@ cat > "$WORK/distribution.xml" <<XML
         <line choice="arm64"/>
         <line choice="x86_64"/>
     </choices-outline>
-    <choice id="arm64" title="YTKTV (Apple Silicon)" visible="false"
+    <choice id="arm64" title="${TITLE} (Apple Silicon)" visible="false"
             selected="isAppleSilicon()" enabled="isAppleSilicon()">
-        <pkg-ref id="com.tonyd365.ytktv.arm64"/>
+        <pkg-ref id="${ID}.arm64"/>
     </choice>
-    <choice id="x86_64" title="YTKTV (Intel)" visible="false"
+    <choice id="x86_64" title="${TITLE} (Intel)" visible="false"
             selected="!isAppleSilicon()" enabled="!isAppleSilicon()">
-        <pkg-ref id="com.tonyd365.ytktv.x86_64"/>
+        <pkg-ref id="${ID}.x86_64"/>
     </choice>
-    <pkg-ref id="com.tonyd365.ytktv.arm64" version="${VERSION}">ytktv-arm64.pkg</pkg-ref>
-    <pkg-ref id="com.tonyd365.ytktv.x86_64" version="${VERSION}">ytktv-x86_64.pkg</pkg-ref>
+    <pkg-ref id="${ID}.arm64" version="${VERSION}">ytktv-arm64.pkg</pkg-ref>
+    <pkg-ref id="${ID}.x86_64" version="${VERSION}">ytktv-x86_64.pkg</pkg-ref>
 </installer-gui-script>
 XML
 
