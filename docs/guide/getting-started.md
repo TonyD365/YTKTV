@@ -55,6 +55,19 @@ You can run the setup again at any time from **Settings → Setup**.
 Guests can queue songs from their phones by scanning the QR code in the top right corner of
 the console or on the TV while nothing plays. See [Phones](phones.md).
 
+## Singing without internet
+
+Press **⬇** on any song (or **Downloads → Download All Favorites**) to keep it on the computer:
+the video, its lyrics and its instrumental. Downloaded songs play from disk, so they work with
+no internet at all, and **Downloads** lists them with how much space they take. **Remove**
+deletes one.
+
+## Duets
+
+**Party → Duet** colours the lyrics on the TV by who sings each line: blue for one singer, pink
+for the other, gold when both sing. The parts come from the marks many duet lyrics have
+(男/女/合, or M/F); lyrics without marks switch singer at each verse.
+
 ## The control bar
 
 | Group | Buttons |

@@ -61,6 +61,10 @@ for drinks, snacks, help with the equipment or anything else, or to order from t
 Desk beeps, the room's tile turns pink and the call appears in the bar at the bottom. Click it
 when someone is on the way: the room is told **Staff is on the way**.
 
+When a product on the menu runs low, it shows in the same bar ("📦 Cola: 2 left", or "sold
+out"). Click it to go to Settings and restock. **Settings → Shop → Warn when stock is down to**
+sets the number (5 at first; 0 turns the warnings off).
+
 Orders appear in the room's panel. Mark them **Delivered** or **Cancel** them (cancelled items go
 back into stock). **🛒 Add Item** adds something the guests ordered at the counter.
 
@@ -118,8 +122,11 @@ room opens as booked. Or mark it **Cancelled** or **No-show**.
 
 ## Records and shift reports
 
-Every check-out is kept in **Records** with its bill and the songs sung; pick a day to see its
-sessions, hours, takings and most-sung songs. The top bar shows today's takings.
+Every check-out is kept in **Records** with its bill and the songs sung. Choose **Day**, **Week**
+or **Month** and a date to see the sessions, hours, takings and most-sung songs, with a bar chart
+of the takings per hour (for a day) or per day. **Export CSV** saves every session in that period
+as a spreadsheet that Excel opens, names in any language included. The top bar shows today's
+takings.
 
 **📋 Shift Report** adds up everything since the last hand-over: sessions, room fees, items,
 takings by payment method, items sold and rooms still open. Print it, then **Hand Over** to start
@@ -130,8 +137,10 @@ the next shift.
 **Settings → Desk password** turns on a password that is asked when the Desk starts, after it
 has been idle (5, 15 or 30 minutes, or never), and before a room is unbound.
 
-YTKTV Desk updates itself like YTKTV: when a new version is out, **⬆ Update to …** appears in the
-top bar.
+YTKTV Desk updates itself like YTKTV: it checks every six hours, downloads a new version in the
+background, and shows **⬆ Update to …** in the top bar; nothing installs until you press it.
+**Settings → Updates** shows the version, turns the automatic checks off or on, and has
+**Check Now**.
 
 ## Questions
 
