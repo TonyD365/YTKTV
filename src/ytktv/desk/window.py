@@ -34,6 +34,7 @@ from ytktv.desk.panels import (
     BillDialog,
     BroadcastDialog,
     OrdersBox,
+    ReceiptSettings,
     SecuritySettings,
     ShopSettings,
 )
@@ -342,6 +343,8 @@ class DeskWindow(QMainWindow):
         column.addWidget(panel, stretch=1)
         self.shop = ShopSettings(self.store, lambda: tell_all_products(self.store, self.hub))
         column.addWidget(self.shop, stretch=2)
+        self.receipts = ReceiptSettings(self.store)
+        column.addWidget(self.receipts)
         self.security = SecuritySettings(self.store)
         column.addWidget(self.security)
         return tab

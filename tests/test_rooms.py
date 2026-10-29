@@ -570,3 +570,43 @@ def test_updates_never_mix_up_ytktv_and_the_desk():
     desk = updater.pick_asset(assets, suffixes, "YTKTV-Desk")
     assert desk["name"] == "YTKTV-Desk-2.1.0-windows-x64-setup.exe"
     assert updater.pick_asset(assets, ["SHA256SUMS"], None)["name"] == "SHA256SUMS"
+
+
+def test_receipts(qtbot, tmp_path):
+    from PySide6.QtPrintSupport import QPrinter
+
+    from ytktv.desk import receipt
+    from ytktv.desk.billing import bill
+    from ytktv.desk.panels import BillDialog, ReceiptSettings
+    from ytktv.desk.store import Product
+
+    store = DeskStore()
+    room, _ = store.pair(store.new_code(), "101")
+    store.open_room(room.room_id, "Kim", 60)
+    cola = store.save_product(Product(0, "可樂", "Drinks", 7))
+    store.add_order(room.room_id, [(cola, 2)])
+    settings = ReceiptSettings(store)
+    qtbot.addWidget(settings)
+    settings.paper.setCurrentIndex(1)
+    settings.shop.setText("Tony's KTV")
+    settings.footer.setText("歡迎再來")
+    settings.save()
+    assert store.setting("receipt_width") == "80"
+
+    b = bill(store, room.room_id)
+    html = receipt.receipt_html(b, "Tony's KTV", "歡迎再來", 80)
+    assert (
+        "Tony&#x27;s KTV" in html and "可樂 × 2" in html and "TOTAL" in html and "歡迎再來" in html
+    )
+
+    printer = receipt.receipt_printer(receipt.ASK, 80)
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(str(tmp_path / "receipt.pdf"))
+    dialog = BillDialog(b, store=store)
+    qtbot.addWidget(dialog)
+    assert dialog.print_receipt(printer)
+    assert (tmp_path / "receipt.pdf").stat().st_size > 0
+    from PySide6.QtGui import QPageLayout
+
+    width_mm = printer.pageLayout().fullRect(QPageLayout.Unit.Millimeter).width()
+    assert abs(width_mm - 80) < 1

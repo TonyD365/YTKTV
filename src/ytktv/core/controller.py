@@ -450,7 +450,12 @@ class KTVController:
             self._last_position_emit = now
             self.bus.emit(
                 "position",
-                {"position": position, "duration": self.duration, "score": self.live_score()},
+                {
+                    "position": position,
+                    "duration": self.duration,
+                    "score": self.live_score(),
+                    "pk": self.live_pk(),
+                },
             )
 
     def _sync_preload(self) -> None:
@@ -572,6 +577,14 @@ class KTVController:
             if self._keeper is None or self.status != PlayStatus.PLAYING:
                 return None
             return self._keeper, self.position
+
+    def live_pk(self) -> list[dict[str, int]] | None:
+        """In a PK battle, each microphone's running score, for the bars on the TV."""
+        keeper = self._keeper
+        if not self.pk_mode or keeper is None:
+            return None
+        voices = keeper.voice_results()
+        return [{"mic": mic + 1, "points": s.points} for mic, s in sorted(voices.items())] or None
 
     def live_score(self) -> int | None:
         keeper = self._keeper
@@ -704,7 +717,7 @@ class KTVController:
         *value* is a guess for the number bomb; *player* names who is playing.
         """
         if game == "dice":
-            result = games.roll_dice()
+            result = games.roll_dice(max(1, min(6, value or 5)))
         elif game == "spin":
             result = games.spin(self._singers())
         elif game in ("truth", "dare"):

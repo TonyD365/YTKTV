@@ -163,3 +163,11 @@ def test_more_games_over_http(client):
     assert len(mine.split()) == 5
     assert "Phone" in http.post("/api/game/liar_reveal").json()["text"]
     assert http.post("/api/game/sevens").json()["text"] == "1"
+
+
+def test_phone_games_use_the_phone_name(client):
+    http, controller = client
+    reply = http.post("/api/game/liar_roll", json={"player": "Kim"}).json()
+    assert "Kim" in controller.liars.hands and len(reply["mine"].split()) == 5
+    dice = http.post("/api/game/dice", json={"value": 2}).json()
+    assert len(dice["text"].split()) == 2
