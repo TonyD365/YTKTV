@@ -146,6 +146,9 @@ class MainWindow(QMainWindow):
 
         self.mv_window.set_url(server_url)
         self.mv_window.level_source = controller.player.levels
+        self.mv_window.on_light = lambda level, hue: controller.bus.emit(
+            "glow", {"level": round(level, 2), "hue": round(hue, 3)}
+        )
         self._apply_state()
 
     # -- construction -----------------------------------------------------

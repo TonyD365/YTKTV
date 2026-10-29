@@ -928,3 +928,31 @@ def test_desk_messages_and_controls_reach_the_room(window, qtbot):
     Client.state.apply({"type": "unlock"})
     main._on_desk({"type": "unlock"})
     assert not main.room_closed_view.isVisible()
+
+
+def test_artist_filters_pk_battle_and_glow(window, qtbot):
+    main, controller = window
+    artists = main.pages["artists"]
+    artists.filters["language:Cantonese"].click()
+    artists.filters["kind:Group"].click()
+    assert "Beyond" in artists.buttons and "陳奕迅" not in artists.buttons
+
+    party = main.pages["party"]
+    party.pk_button.setChecked(True)
+    assert controller.pk_mode and controller.state()["pk"]
+    main.mv_window.show_score(
+        {
+            "points": 92,
+            "grade": "Great!",
+            "title": "Song",
+            "singer": "",
+            "board": [],
+            "pk": {"scores": [{"mic": 1, "points": 87}, {"mic": 2, "points": 92}], "winner": 2},
+        }
+    )
+    assert "Mic 2 wins" in main.mv_window.score_card._grade
+
+    glows = []
+    controller.bus.subscribe(lambda topic, data: glows.append(data) if topic == "glow" else None)
+    main.mv_window.on_light(0.5, 0.25)
+    assert glows == [{"level": 0.5, "hue": 0.25}]

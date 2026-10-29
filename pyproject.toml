@@ -31,6 +31,8 @@ dependencies = [
     "ecdsa>=0.19",
     # Finds the front desk on the local network even when its IP address changes.
     "zeroconf>=0.132",
+    # Pinyin initials for the song book: "yldb" finds 月亮代表我的心.
+    "pypinyin>=0.51",
 ]
 
 [project.optional-dependencies]
