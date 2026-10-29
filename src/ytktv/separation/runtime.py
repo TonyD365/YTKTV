@@ -87,12 +87,19 @@ def _run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, **kwargs)
 
 
-def supported(system: str | None = None, frozen: bool | None = None) -> bool:
+def supported(
+    system: str | None = None, frozen: bool | None = None, machine: str | None = None
+) -> bool:
     """Whether this build gets its separation runtime by download."""
     if os.environ.get("YTKTV_SEPARATION_RUNTIME") == "1":
         return True
     system = system or platform.system()
+    machine = (machine if machine is not None else platform.machine()).lower()
     frozen = bootstrap.is_frozen() if frozen is None else frozen
+    if system == "Windows" and machine in ("arm64", "aarch64"):
+        # Some of the separation libraries have no Windows on ARM builds yet and would
+        # be compiled from source for a very long time; Vocal Cut and L / R still work.
+        return False
     return frozen and system in ("Windows", "Linux")
 
 

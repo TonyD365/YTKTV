@@ -634,3 +634,11 @@ def test_receipts(qtbot, tmp_path):
 
     width_mm = printer.pageLayout().fullRect(QPageLayout.Unit.Millimeter).width()
     assert abs(width_mm - 80) < 1
+
+
+def test_windows_on_arm_does_not_offer_the_separation_download():
+    from ytktv.separation.runtime import supported
+
+    assert supported("Windows", frozen=True, machine="AMD64")
+    assert supported("Linux", frozen=True, machine="aarch64")
+    assert not supported("Windows", frozen=True, machine="ARM64")

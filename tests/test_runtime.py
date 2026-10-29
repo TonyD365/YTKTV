@@ -62,7 +62,7 @@ def test_linux_without_nvidia_uses_cpu():
 
 def test_supported_only_for_packaged_windows_and_linux(monkeypatch):
     monkeypatch.delenv("YTKTV_SEPARATION_RUNTIME", raising=False)
-    assert runtime.supported("Windows", frozen=True)
+    assert runtime.supported("Windows", frozen=True, machine="AMD64")
     assert runtime.supported("Linux", frozen=True)
     assert not runtime.supported("Darwin", frozen=True)
     assert not runtime.supported("Windows", frozen=False)
