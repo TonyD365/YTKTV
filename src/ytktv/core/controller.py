@@ -811,8 +811,10 @@ class KTVController:
 
         def work() -> None:
             try:
-                if kept is not None:  # downloaded with the song: no internet needed
-                    lines = [LyricLine.from_dict(line) for line in kept]
+                if (
+                    kept is not None or fetch is None
+                ):  # downloaded with the song: no internet needed
+                    lines = [LyricLine.from_dict(line) for line in kept or []]
                 else:
                     # The video's own subtitles when they exist, automatic captions otherwise.
                     lines = fetch(item.song.video_id, self.settings.max_height, True)

@@ -43,8 +43,11 @@ def main() -> None:
     store.book(Booking(0, ids[5], time.time() + 3600, 120, "Lee"))
     cola = store.save_product(Product(0, "Cola", "Drinks", 3.5, stock=20))
     store.add_order(ids[0], [(cola, 2)])
-    for room_id, song in ((ids[0], "Alexander's Ragtime Band"), (ids[4], "A Perfect Day"),
-                          (ids[7], "Happy Birthday")):
+    for room_id, song in (
+        (ids[0], "Alexander's Ragtime Band"),
+        (ids[4], "A Perfect Day"),
+        (ids[7], "Happy Birthday"),
+    ):
         store.note_song(room_id, song)
     hub = Hub()
     hub.channels = {i: None for i in ids if i != ids[3]}  # type: ignore[misc]
@@ -62,8 +65,11 @@ def main() -> None:
         return widget.mapTo(window, widget.rect().center())
 
     def tile(name: str) -> QPushButton:
-        return next(b for b in window.findChildren(QPushButton)
-                    if b.objectName() == "roomTile" and b.text().startswith(name) and b.isVisible())
+        return next(
+            b
+            for b in window.findChildren(QPushButton)
+            if b.objectName() == "roomTile" and b.text().startswith(name) and b.isVisible()
+        )
 
     def move(target: object) -> None:
         widget = target() if callable(target) else target
@@ -99,8 +105,15 @@ def main() -> None:
         (600, lambda: move(lambda: tile("103"))),
         (1500, lambda: press(lambda: window.select(room))),
         (2200, lambda: move(open_button)),
-        (3000, lambda: press(lambda: (store.set_state(room, "ready"),
-                                      window.open_room(guest="Alex", length="2 hours")))),
+        (
+            3000,
+            lambda: press(
+                lambda: (
+                    store.set_state(room, "ready"),
+                    window.open_room(guest="Alex", length="2 hours"),
+                )
+            ),
+        ),
         (4200, lambda: (store.add_call(ids[4], "Drinks", "more ice"), window.refresh())),
         (5000, lambda: move(lambda: window.call_chips.itemAt(0).widget())),
         (6000, lambda: press(lambda: window.finish_call(store.calls()[0].call_id))),
@@ -117,9 +130,23 @@ def main() -> None:
     QTimer.singleShot(11500, app.quit)
     app.exec()
     subprocess.run(
-        [imageio_ffmpeg.get_ffmpeg_exe(), "-v", "error", "-y", "-framerate", str(FPS),
-         "-i", str(FRAMES / "%05d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p",
-         "-crf", "18", "video/desk.mp4"],
+        [
+            imageio_ffmpeg.get_ffmpeg_exe(),
+            "-v",
+            "error",
+            "-y",
+            "-framerate",
+            str(FPS),
+            "-i",
+            str(FRAMES / "%05d.png"),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-crf",
+            "18",
+            "video/desk.mp4",
+        ],
         check=True,
     )
     print("desk frames:", count[0], "seconds:", round(count[0] / FPS, 1))
