@@ -645,3 +645,22 @@ def test_windows_on_arm_gets_an_x64_separation_runtime(tmp_path):
     assert runtime_python("Linux", "aarch64") == "3.12"  # Linux ARM has native libraries
     commands = Runtime(tmp_path, system="Windows").install_commands(VARIANTS["cpu"], "uv")
     assert "--python" in commands[0][1]
+
+
+def test_desk_update_settings(qtbot, monkeypatch):
+    from ytktv import updater
+    from ytktv.desk import update
+    from ytktv.desk.server import Hub
+    from ytktv.desk.window import DeskWindow
+
+    store = DeskStore()
+    window = DeskWindow(store, Hub(), "192.168.1.10:8770")
+    qtbot.addWidget(window)
+    monkeypatch.setattr(update, "run_async", lambda work, done, failed: done(work()))
+    monkeypatch.setattr(updater, "check_for_update", lambda app: None)
+    checks = update.DeskUpdater(window, automatic=window.updates.automatic)
+    window.watch_updates(checks)
+    window.updates.auto.setChecked(False)
+    assert store.setting("auto_update") == "0" and not window.updates.automatic()
+    window.updates.check_button.click()  # by hand it checks anyway
+    assert window.updates.state.text() == "YTKTV Desk is up to date."
