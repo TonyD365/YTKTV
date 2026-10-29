@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -27,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ytktv.desk.store import Booking, DeskStore
+from ytktv.desk.store import Booking, DeskStore, Member
 
 LENGTHS = {"1 hour": 60, "2 hours": 120, "3 hours": 180, "No time limit": None}
 STATUS_TEXT = {
@@ -315,6 +316,10 @@ def shift_report(store: DeskStore, now: float | None = None) -> str:
                 name, qty = text.rsplit(" × ", 1)
                 sold[name] += int(qty) if qty.isdigit() else 1
     open_now = [r.name for r in store.rooms() if r.is_open]
+    still_open = ", ".join(open_now) or "none"
+    by_payment: dict[str, float] = {}
+    for v in visits:
+        by_payment[v.payment] = by_payment.get(v.payment, 0.0) + v.total
     rows = "".join(
         f"<tr><td>{n}</td><td align='right'>{q}</td></tr>" for n, q in sold.most_common()
     )
@@ -330,7 +335,11 @@ def shift_report(store: DeskStore, now: float | None = None) -> str:
         f"{currency}{sum(v.total for v in visits) - rooms_fee:.2f}</td></tr>"
         f"<tr><td><b>Takings</b></td><td align='right'><b>{currency}"
         f"{sum(v.total for v in visits):.2f}</b></td></tr>"
-        f"<tr><td>Rooms still open</td><td align='right'>{', '.join(open_now) or 'none'}</td></tr>"
+        + "".join(
+            f"<tr><td>· {method}</td><td align='right'>{currency}{amount:.2f}</td></tr>"
+            for method, amount in sorted(by_payment.items())
+        )
+        + f"<tr><td>Rooms still open</td><td align='right'>{still_open}</td></tr>"
         "</table>"
         + (f"<h3>Items sold</h3><table width='100%' cellpadding='4'>{rows}</table>" if rows else "")
         + "</div>"
@@ -380,3 +389,87 @@ class ShiftDialog(QDialog):
     def hand_over(self) -> None:
         self.store.set_setting("shift_started", repr(time.time()))
         self.accept()
+
+
+class MembersPage(QWidget):
+    """Members: their stored balance and points. Members save at the till."""
+
+    COLUMNS = ("Name", "Phone", "Balance", "Points")
+
+    def __init__(self, store: DeskStore) -> None:
+        super().__init__()
+        self.store = store
+        column = QVBoxLayout(self)
+        column.setContentsMargins(24, 18, 24, 18)
+        top = QHBoxLayout()
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Find a member by name or phone")
+        self.search.textChanged.connect(self.refresh)
+        top.addWidget(self.search, stretch=1)
+        for text, handler in (("＋ New Member", self.new_member), ("💰 Top Up", self.top_up)):
+            button = QPushButton(text)
+            button.clicked.connect(handler)
+            top.addWidget(button)
+        column.addLayout(top)
+        self.table = QTableWidget(0, len(self.COLUMNS))
+        self.table.setHorizontalHeaderLabels(self.COLUMNS)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        column.addWidget(self.table, stretch=1)
+        self.note = QLabel()
+        self.note.setObjectName("muted")
+        column.addWidget(self.note)
+        self._shown: list[Member] = []
+        self.refresh()
+
+    def refresh(self) -> None:
+        currency = self.store.setting("currency", "$")
+        self._shown = self.store.members(self.search.text())
+        self.table.setRowCount(0)
+        for m in self._shown:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            for col, text in enumerate(
+                (m.name, m.phone, f"{currency}{m.balance:,.2f}", str(m.points))
+            ):
+                self.table.setItem(row, col, QTableWidgetItem(text))
+        off = self.store.setting("member_discount", "10")
+        self.note.setText(f"{len(self._shown)} members · members save {off}% at the till")
+
+    def selected(self) -> Member | None:
+        row = self.table.currentRow()
+        return self._shown[row] if 0 <= row < len(self._shown) else None
+
+    def new_member(
+        self, _checked: bool = False, name: str | None = None, phone: str | None = None
+    ) -> int:
+        if name is None:
+            name, ok = QInputDialog.getText(self, "New member", "Name:")
+            if not ok:
+                return 0
+        if phone is None:
+            phone, ok = QInputDialog.getText(self, "New member", "Phone number:")
+            if not ok:
+                return 0
+        try:
+            member_id = self.store.add_member(name, phone)
+        except ValueError as exc:
+            QMessageBox.warning(self, "New member", str(exc).capitalize() + ".")
+            return 0
+        self.refresh()
+        return member_id
+
+    def top_up(self, _checked: bool = False, amount: float | None = None) -> None:
+        member = self.selected()
+        if member is None:
+            return
+        if amount is None:
+            amount, ok = QInputDialog.getDouble(
+                self, "Top up", f"Add to {member.name}'s balance:", 100, 0.01, 99_999_999, 2
+            )
+            if not ok:
+                return
+        self.store.top_up(member.member_id, amount)
+        self.refresh()
