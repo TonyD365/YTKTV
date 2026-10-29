@@ -134,7 +134,7 @@ class DeskWindow(QMainWindow):
         self._call_count = 0
         self._locked: set[str] = set()
         self._reminded: set[int] = set()
-        self._calls_shown: list[int] = []
+        self._calls_shown: list[object] = []
         self._code_until = 0.0
         self.setWindowTitle("YTKTV Desk")
         self.setWindowIcon(QIcon(str(ICON)))
@@ -476,7 +476,9 @@ class DeskWindow(QMainWindow):
             QApplication.beep()
         self._call_count = len(calls)
         self.stat_calls.setText(str(len(calls)))
-        shown = [c.call_id for c in calls]
+        low = self.store.low_stock()
+        shown: list[object] = [c.call_id for c in calls]
+        shown += [(p.product_id, p.stock) for p in low]
         if shown == self._calls_shown:
             return
         self._calls_shown = shown
@@ -486,13 +488,20 @@ class DeskWindow(QMainWindow):
             if widget is not None:
                 widget.deleteLater()
         names = {r.room_id: r.name for r in rooms}
-        self.calls_label.setVisible(not calls)
+        self.calls_label.setVisible(not calls and not low)
         for call in calls[:6]:
             note = f": {call.note}" if call.note else ""
             chip = QPushButton(f"🛎 {names.get(call.room_id, '?')} · {call.kind}{note}  ✓")
             chip.setToolTip("Mark as handled; the room is told staff is on the way")
             chip.setStyleSheet("background: #9c2f45; color: white; border-radius: 14px;")
             chip.clicked.connect(lambda _c=False, c=call.call_id: self.finish_call(c))
+            self.call_chips.addWidget(chip)
+        for product in low[:4]:
+            left = "sold out" if product.stock == 0 else f"{product.stock} left"
+            chip = QPushButton(f"📦 {product.name}: {left}")
+            chip.setToolTip("Running low: open Settings to restock it")
+            chip.setStyleSheet("background: #8a6a1c; color: white; border-radius: 14px;")
+            chip.clicked.connect(lambda: self.show_tab(self.stack.count() - 1))
             self.call_chips.addWidget(chip)
 
     # -- remote control -------------------------------------------------------
