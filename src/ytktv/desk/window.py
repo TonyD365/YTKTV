@@ -519,7 +519,7 @@ class DeskWindow(QMainWindow):
             tile = QPushButton()
             tile.setObjectName("roomTile")
             tile.setProperty("selected", room.room_id == self.selected)
-            tile.setFixedHeight(170)  # one size, like a real room board
+            tile.setFixedHeight(204)  # one size, like a real room board
             extra = f"\n{room.guest}" if room.is_open and room.guest else ""
             if room.is_open:
                 spend = bill(self.store, room.room_id)
@@ -533,11 +533,10 @@ class DeskWindow(QMainWindow):
             if booked is not None and not room.is_open:
                 at = time.strftime("%H:%M", time.localtime(booked.starts))
                 extra += f"\n{at} · {booked.guest}"
-            tile.setText(
-                f"{room.name}\n{room.room_type} · {room.capacity} seats\n\n{dot}  {label}{extra}"
-            )
+            text = f"{room.name}\n{room.room_type} · {room.capacity} seats\n\n{dot}  {label}{extra}"
+            tile.setText(text.replace("&", "&&"))  # a lone & would become a shortcut
             tile.setStyleSheet(
-                f"#roomTile {{ background: {colour}; color: white; font-size: 16px;"
+                f"#roomTile {{ background: {colour}; color: white; font-size: 15px;"
                 " font-weight: 700; text-align: left; padding: 12px 16px; }"
             )
             tile.clicked.connect(lambda _c=False, r=room.room_id: self.select(r))

@@ -304,7 +304,8 @@ def shift_report(store: DeskStore, now: float | None = None) -> str:
     """Everything since the last hand-over, as HTML for the screen or the printer."""
     now = time.time() if now is None else now
     started = float(store.setting("shift_started", "0") or 0) or day_bounds(QDate.currentDate())[0]
-    visits = store.history(started, now + 1)
+    # Strictly after the hand-over: Windows' clock can give both the same time.
+    visits = [v for v in store.history(started, now + 1) if v.closed_at > started]
     currency = store.setting("currency", "$")
     rooms_fee = sum(a for v in visits for t, a in v.lines if t.startswith("Room ·"))
     sold: Counter[str] = Counter()
