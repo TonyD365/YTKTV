@@ -539,3 +539,60 @@ class MembersPage(QWidget):
                 return
         self.store.top_up(member.member_id, amount)
         self.refresh()
+
+
+class LogPage(QWidget):
+    """Who did what, on which machine: this Desk and every staff terminal working on it."""
+
+    COLUMNS = ("Time", "Machine", "Action")
+
+    def __init__(self, store: DeskStore) -> None:
+        super().__init__()
+        self.store = store
+        column = QVBoxLayout(self)
+        column.setContentsMargins(24, 18, 24, 18)
+        top = QHBoxLayout()
+        self.day = QDateEdit(QDate.currentDate())
+        self.day.setCalendarPopup(True)
+        self.day.dateChanged.connect(self.refresh)
+        self.machine = QComboBox()
+        self.machine.currentIndexChanged.connect(self.refresh)
+        self.summary = QLabel()
+        self.summary.setObjectName("muted")
+        top.addWidget(QLabel("Day"))
+        top.addWidget(self.day)
+        top.addSpacing(16)
+        top.addWidget(QLabel("Machine"))
+        top.addWidget(self.machine)
+        top.addSpacing(16)
+        top.addWidget(self.summary, stretch=1)
+        column.addLayout(top)
+        self.table = QTableWidget(0, len(self.COLUMNS))
+        self.table.setHorizontalHeaderLabels(self.COLUMNS)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.verticalHeader().setVisible(False)
+        column.addWidget(self.table, stretch=1)
+
+    def refresh(self) -> None:
+        entries = self.store.oplog(*day_bounds(self.day.date()))
+        machines = ["Every machine", *sorted({e.machine for e in entries})]
+        chosen = self.machine.currentText()
+        self.machine.blockSignals(True)
+        self.machine.clear()
+        self.machine.addItems(machines)
+        self.machine.setCurrentText(chosen if chosen in machines else machines[0])
+        self.machine.blockSignals(False)
+        if self.machine.currentIndex() > 0:
+            entries = [e for e in entries if e.machine == self.machine.currentText()]
+        self.summary.setText(f"{len(entries)} actions")
+        self.table.setRowCount(0)
+        for entry in entries:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            cells = (
+                time.strftime("%H:%M:%S", time.localtime(entry.at)),
+                entry.machine,
+                entry.action,
+            )
+            for col, text in enumerate(cells):
+                self.table.setItem(row, col, QTableWidgetItem(text))

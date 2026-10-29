@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, QUrl
@@ -28,7 +29,7 @@ from PySide6.QtWidgets import (
 
 from ytktv.desk import lock
 from ytktv.desk.billing import bill
-from ytktv.desk.pages import BookingsPage, MembersPage, RecordsPage, ShiftDialog
+from ytktv.desk.pages import BookingsPage, LogPage, MembersPage, RecordsPage, ShiftDialog
 from ytktv.desk.panels import (
     MAX_PRICE,
     BillDialog,
@@ -39,8 +40,10 @@ from ytktv.desk.panels import (
     ShopSettings,
     UpdateSettings,
 )
+from ytktv.desk.remote import DeskOffline, MainDesk, NotPaired
 from ytktv.desk.server import Hub, tell, tell_all_products, unbind
 from ytktv.desk.store import CODE_SECONDS, Booking, DeskStore, Room
+from ytktv.desk.terminals import TerminalSettings
 from ytktv.desk.update import DeskUpdater
 from ytktv.rooms.state import format_left
 
@@ -127,9 +130,13 @@ def stat(value_label: QLabel, title: str) -> QFrame:
 
 
 class DeskWindow(QMainWindow):
-    def __init__(self, store: DeskStore, hub: Hub, address: str) -> None:
+    def __init__(
+        self, store: DeskStore, hub: Hub, address: str, terminal: MainDesk | None = None
+    ) -> None:
+        """*terminal* is set when this Desk is a staff terminal working on another one."""
         super().__init__()
         self.store, self.hub, self.address = store, hub, address
+        self.terminal = terminal
         self.selected: str | None = None
         self._call_count = 0
         self._locked: set[str] = set()
@@ -182,6 +189,11 @@ class DeskWindow(QMainWindow):
         money.addWidget(today_label, alignment=Qt.AlignmentFlag.AlignRight)
         bar.addLayout(money)
         bar.addSpacing(16)
+        self.offline_label = QLabel("⚠  Main Desk offline: reconnecting…")
+        self.offline_label.setStyleSheet("color: #ff6b81; font-weight: 700;")
+        self.offline_label.hide()
+        bar.addWidget(self.offline_label)
+        bar.addSpacing(16)
         self.update_button = QPushButton()
         self.update_button.setObjectName("accent")
         self.update_button.hide()
@@ -206,6 +218,8 @@ class DeskWindow(QMainWindow):
         self.stack.addWidget(self.records)
         self.members = MembersPage(self.store)
         self.stack.addWidget(self.members)
+        self.log_page = LogPage(self.store)
+        self.stack.addWidget(self.log_page)
         settings = QScrollArea()  # taller than a laptop screen: let it scroll
         settings.setWidgetResizable(True)
         settings.setWidget(self._settings_tab())
@@ -220,7 +234,12 @@ class DeskWindow(QMainWindow):
         head.setObjectName("panelHead")
         self.calls_label = QLabel("No calls right now")
         self.calls_label.setObjectName("muted")
-        hint = QLabel(f"Rooms connect to this desk at {address} · {store.fingerprint}")
+        where = (
+            f"Staff terminal of {address}"
+            if terminal is not None
+            else f"Rooms connect to this desk at {address}"
+        )
+        hint = QLabel(f"{where} · {store.fingerprint}")
         hint.setObjectName("muted")
         call_row.addWidget(head)
         call_row.addSpacing(16)
@@ -348,6 +367,8 @@ class DeskWindow(QMainWindow):
         column.addWidget(self.receipts)
         self.security = SecuritySettings(self.store)
         column.addWidget(self.security)
+        self.terminals = TerminalSettings(self.store, self.address, self.terminal)
+        column.addWidget(self.terminals)
         self.updates = UpdateSettings(self.store)
         column.addWidget(self.updates)
         return tab
@@ -406,6 +427,7 @@ class DeskWindow(QMainWindow):
                 ("Bookings", "📅"),
                 ("Records", "📊"),
                 ("Members", "💳"),
+                ("Log", "📜"),
                 ("Settings", "⚙️"),
             )
         ):
@@ -430,6 +452,8 @@ class DeskWindow(QMainWindow):
 
     def show_tab(self, index: int) -> None:
         self.stack.setCurrentIndex(index)
+        if self.stack.currentWidget() is self.log_page:
+            self._guarded(self.log_page.refresh)
         for i, item in enumerate(self.nav.values()):
             item.setChecked(i == index)
 
@@ -448,8 +472,26 @@ class DeskWindow(QMainWindow):
         self._code_until = 0.0
         self.refresh()
 
+    def _guarded(self, work: Callable[[], None]) -> bool:
+        """Run *work*; while the main Desk cannot be reached, say so instead of failing."""
+        try:
+            work()
+        except NotPaired as exc:
+            self.offline_label.setText(f"⚠  {exc}")
+            self.offline_label.show()
+            return False
+        except DeskOffline:
+            self.offline_label.setText("⚠  Main Desk offline: reconnecting…")
+            self.offline_label.show()
+            return False
+        self.offline_label.hide()
+        return True
+
     def refresh(self) -> None:
         self.clock.setText(time.strftime("%H:%M"))
+        self._guarded(self._refresh)
+
+    def _refresh(self) -> None:
         rooms = self.store.rooms()
         online = self.hub.online()
         self.stat_rooms.setText(str(len(rooms)))

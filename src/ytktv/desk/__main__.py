@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from typing import Any, cast
 
 from ytktv.config import data_dir
 
@@ -75,30 +76,79 @@ def main() -> int:
 
     app.setWindowIcon(QIcon(str(ICON)))
     app.setStyleSheet(theme.STYLESHEET)
+    from ytktv.desk import remote
+
+    config = remote.load_config()
+    if config is not None:
+        return run_terminal(app, config)
     store = DeskStore(data_dir() / "desk.sqlite3")
     hub = Hub()
+    from ytktv.desk import staff
     from ytktv.rooms.discovery import Announcer
     from ytktv.server.tls import ensure_certificate
 
     ip = lan_ip()
     certificate = ensure_certificate(data_dir() / "desk-tls", ip)
-    server = ServerThread(create_desk_app(store, hub), DESK_PORT, certificate=certificate)
+    desk_app = create_desk_app(store, hub, staff.certificate_hash(certificate[0]))
+    server = ServerThread(desk_app, DESK_PORT, certificate=certificate)
     server.start()
     try:
-        announcer: Announcer | None = Announcer(store.desk_id, "YTKTV Desk", ip, DESK_PORT)
+        announcer: Announcer | None = Announcer(
+            store.desk_id, staff.machine_name(store), ip, DESK_PORT
+        )
     except Exception:  # no multicast here; rooms can still type the address
         announcer = None
-    window = DeskWindow(store, hub, f"{ip}:{DESK_PORT}")
-    from ytktv.desk.update import DeskUpdater
-
-    window.watch_updates(DeskUpdater(window, automatic=window.updates.automatic))
-    window.show()
+    # What is done here is logged under this Desk's name, like a terminal's under its own.
+    name = lambda: staff.machine_name(store)  # noqa: E731 - read again at every change
+    window = DeskWindow(
+        cast(DeskStore, staff.LoggedStore(store, name)),
+        cast(Hub, staff.LoggedHub(hub, store, name)),
+        f"{ip}:{DESK_PORT}",
+    )
     try:
-        return app.exec()
+        return show(app, window)
     finally:
         if announcer is not None:
             announcer.close()
         server.stop()
+
+
+def run_terminal(app: Any, config: Any) -> int:
+    """This Desk is a staff terminal: the same window, working on the main Desk's records."""
+    from ytktv.desk import remote
+    from ytktv.desk.server import Hub
+    from ytktv.desk.store import DeskStore
+    from ytktv.desk.window import DeskWindow
+
+    main = remote.MainDesk(config)
+    window = DeskWindow(
+        cast(DeskStore, remote.RemoteStore(main)),
+        cast(Hub, remote.RemoteHub(main)),
+        f"the main Desk, {config.main_name or config.address}",
+        terminal=main,
+    )
+    previous = sys.excepthook
+
+    def offline(kind: Any, value: Any, trace: Any) -> None:
+        # A button pressed while the main Desk is unreachable: say so, do not crash.
+        if isinstance(value, (remote.DeskOffline, remote.NotPaired)):
+            window.refresh()
+            return
+        previous(kind, value, trace)
+
+    sys.excepthook = offline
+    try:
+        return show(app, window)
+    finally:
+        main.close()
+
+
+def show(app: Any, window: Any) -> int:
+    from ytktv.desk.update import DeskUpdater
+
+    window.watch_updates(DeskUpdater(window, automatic=window.updates.automatic))
+    window.show()
+    return int(app.exec())
 
 
 if __name__ == "__main__":

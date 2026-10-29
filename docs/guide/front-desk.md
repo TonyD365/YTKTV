@@ -132,6 +132,27 @@ takings.
 takings by payment method, items sold and rooms still open. Print it, then **Hand Over** to start
 the next shift.
 
+## Several staff terminals
+
+One Desk keeps the records (the main Desk); other computers running YTKTV Desk can work on it as
+**staff terminals**, at the bar or upstairs, and see the same rooms, bookings, members and records.
+
+1. On the main Desk open **Settings → Staff Terminals**, give it a name (it is shown in the log),
+   tick **Let other Desks connect as staff terminals** and press **Add Terminal**. A six-digit
+   code and four pictures appear.
+2. On the other computer open YTKTV Desk → **Settings → Staff Terminals → Make This Desk a Staff
+   Terminal…**, pick the main Desk (or type its address), enter the code and a name for this
+   terminal, and press **Connect**. Check that the four pictures match the main Desk's, then
+   open YTKTV Desk again.
+
+A terminal keeps nothing of its own: everything it does happens on the main Desk. If the main
+Desk cannot be reached, the terminal says so at the top and tries again on its own. **Remove**
+on the main Desk, or **Disconnect** on the terminal, ends the pairing.
+
+**📜 Log** lists everything done on the main Desk and its terminals by day: the time, the
+machine's name and what was done ("Bar: Closed Kids, $60.00 by Card"). Choose a machine to see
+only its actions. Passwords are never written into the log.
+
 ## Settings and the desk password
 
 **Settings → Desk password** turns on a password that is asked when the Desk starts, after it

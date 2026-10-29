@@ -64,10 +64,14 @@ class Hub:
             asyncio.run_coroutine_threadsafe(self.send(room_id, message), self.loop)
 
 
-def create_desk_app(store: DeskStore, hub: Hub | None = None) -> FastAPI:
+def create_desk_app(store: DeskStore, hub: Hub | None = None, cert_hash: str = "") -> FastAPI:
+    """The Desk's server. *cert_hash* is its TLS certificate's, which staff terminals check."""
+    from ytktv.desk.staff import add_staff_routes
+
     hub = hub or Hub()
     app = FastAPI(title="YTKTV Desk")
     app.state.hub = hub
+    add_staff_routes(app, store, hub, cert_hash)
 
     @app.get("/api/desk")
     def desk() -> dict[str, str]:
