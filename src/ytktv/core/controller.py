@@ -96,6 +96,7 @@ class KTVController:
         self.preloader = preloader
         self.offline = offline
         self.local = local
+        self.ai_lyrics: Any = None  # lyrics_ai.AiLyrics, set by the app when available
         if local is not None:
             local.on_change = lambda: self.bus.emit("local", None)  # a scan finished
         self.local_only = False  # set by the staff terminal: this room sings local files only
@@ -890,7 +891,12 @@ class KTVController:
                     lines = fetch(item.song.video_id, self.settings.max_height, True)
             except Exception:
                 log.info("no lyrics for %s", item.song.video_id, exc_info=True)
-                return
+                lines = []
+            if not lines and self.ai_lyrics is not None and self.settings.ai_lyrics:
+                # None anywhere: AI writes them (from its cache, or in the background).
+                lines = self.ai_lyrics.cached(item.song.video_id) or []
+                if not lines:
+                    self.ai_lyrics.request(item.song.video_id)
             with self._lock:
                 if self.current is not item or not self.settings.show_lyrics:
                     return
@@ -899,6 +905,18 @@ class KTVController:
             self._emit_state()
 
         self._prefetcher.submit(work)
+
+    def ai_lyrics_ready(self, video_id: str, lines: list[LyricLine]) -> None:
+        """AI finished a song's lyrics: show them if that song is on and has none yet."""
+        with self._lock:
+            item = self.current
+            if item is None or item.song.video_id != video_id or self.lyrics:
+                return
+            if not self.settings.show_lyrics:
+                return
+            self.lyrics = lines
+        self.bus.emit("lyrics", {"id": item.id, "lines": [line.to_dict() for line in lines]})
+        self._emit_state()
 
     def set_pitch(self, semitones: int) -> None:
         self.pitch = max(-PITCH_RANGE, min(PITCH_RANGE, int(semitones)))

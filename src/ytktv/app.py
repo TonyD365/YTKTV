@@ -376,6 +376,18 @@ def main(argv: list[str] | None = None) -> int:
         local=local,
         audio=audio,
     )
+    from ytktv import lyrics_ai
+    from ytktv.core.local import is_local
+
+    def song_audio(video_id: str, dest: Path) -> Path:
+        if is_local(video_id):
+            return Path(local.extract_audio(video_id, dest))
+        return youtube.download_audio(video_id, dest, ffmpeg=ffmpeg)
+
+    # Lyrics written by Whisper for songs that have none (an optional download).
+    controller.ai_lyrics = lyrics_ai.AiLyrics(
+        lyrics_ai.runtime(), song_audio, controller.ai_lyrics_ready
+    )
     from ytktv.smart_lights import SmartLights
 
     smart_lights = SmartLights(settings)  # room lights follow the TV's edge lights

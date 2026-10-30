@@ -821,6 +821,26 @@ class SettingsPage(Page):
             "wait_for_instrumental",
         )
 
+        # Lyrics written by AI
+        ai = card("AI Lyrics", admin=True)
+        ai_note = QLabel(
+            "When a song has no lyrics anywhere, Whisper listens to it and writes them, with"
+            " the timing. The first time it downloads about 300 MB (1.3 GB with an NVIDIA"
+            " card, which makes it much faster). The lyrics are kept for next time."
+        )
+        ai_note.setWordWrap(True)
+        ai.addWidget(ai_note)
+        check(ai, "Write lyrics with AI for songs that have none", "ai_lyrics")
+        self.ai_status = QLabel()
+        self.ai_status.setObjectName("muted")
+        self.ai_button = QPushButton("Download AI Lyrics")
+        self.ai_button.clicked.connect(lambda: self.install_ai_lyrics())
+        ai_row = QHBoxLayout()
+        ai_row.addWidget(self.ai_button)
+        ai_row.addWidget(self.ai_status, stretch=1)
+        ai.addLayout(ai_row)
+        self._show_ai_lyrics()
+
         # HD unlock for restricted videos
         self.hd_card = card("Restricted Videos", admin=True)
         self.hd_label = QLabel("Not available in this build.")
@@ -915,6 +935,31 @@ class SettingsPage(Page):
         self.release_button.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(self._release_url))
         )
+
+    def _show_ai_lyrics(self, text: str = "") -> None:
+        writer = self.ctx.controller.ai_lyrics
+        installed = writer is not None and writer.installed
+        self.ai_button.setVisible(writer is not None and not installed)
+        self.ai_status.setText(text or ("Ready" if installed else "Not downloaded yet"))
+
+    def install_ai_lyrics(self) -> None:
+        from ytktv import lyrics_ai
+
+        writer = self.ctx.controller.ai_lyrics
+        if writer is None:
+            return
+        self.ai_button.setEnabled(False)
+        self._show_ai_lyrics("Downloading… (this takes a while)")
+
+        def done(_key: str) -> None:
+            self.ai_button.setEnabled(True)
+            self._show_ai_lyrics()
+
+        def failed(exc: Exception) -> None:
+            self.ai_button.setEnabled(True)
+            self._show_ai_lyrics(f"Could not download: {exc}"[:160])
+
+        run_async(lambda: lyrics_ai.install(writer.env), done, failed)
 
     def set_low_power(self, on: bool) -> None:
         from ytktv import low_power

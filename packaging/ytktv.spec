@@ -68,6 +68,7 @@ datas = [
     (str(PACKAGE / "ui" / "assets"), "ytktv/ui/assets"),  # the window icon
     # Run as a plain script by the downloaded runtime, so it must exist as a file.
     (str(PACKAGE / "separation" / "sep_worker.py"), "ytktv/separation"),
+    (str(PACKAGE / "lyrics_ai" / "whisper_worker.py"), "ytktv/lyrics_ai"),
     (str(PACKAGE / "separation" / "pitch_core.py"), "ytktv/separation"),
 ]
 datas += collect_data_files("imageio_ffmpeg")
@@ -98,10 +99,11 @@ if SEPARATION_MODE == "bundle":
 else:
     excludes += ["audio_separator", "torch", "torchvision", "onnxruntime", "onnx", "librosa",
                  "onnx2torch", "numba", "llvmlite", "sklearn", "pydub"]
-if SEPARATION_MODE == "download":
-    from uv import find_uv_bin
+# uv installs the downloadable runtimes: vocal separation (in "download" builds) and AI
+# lyrics (everywhere, macOS included).
+from uv import find_uv_bin
 
-    binaries.append((find_uv_bin(), "."))
+binaries.append((find_uv_bin(), "."))
 
 analysis = Analysis(
     [str(ROOT / "packaging" / "launcher.py")],
