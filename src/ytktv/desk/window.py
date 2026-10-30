@@ -30,7 +30,14 @@ from PySide6.QtWidgets import (
 from ytktv.desk import lock
 from ytktv.desk.billing import bill
 from ytktv.desk.deals import DealsSettings
-from ytktv.desk.pages import BookingsPage, LogPage, MembersPage, RecordsPage, ShiftDialog
+from ytktv.desk.pages import (
+    BookingsPage,
+    InsightsPage,
+    LogPage,
+    MembersPage,
+    RecordsPage,
+    ShiftDialog,
+)
 from ytktv.desk.panels import (
     MAX_PRICE,
     BillDialog,
@@ -219,6 +226,8 @@ class DeskWindow(QMainWindow):
         self.stack.addWidget(self.records)
         self.members = MembersPage(self.store)
         self.stack.addWidget(self.members)
+        self.insights = InsightsPage(self.store)
+        self.stack.addWidget(self.insights)
         self.log_page = LogPage(self.store)
         self.stack.addWidget(self.log_page)
         settings = QScrollArea()  # taller than a laptop screen: let it scroll
@@ -436,6 +445,7 @@ class DeskWindow(QMainWindow):
                 ("Bookings", "📅"),
                 ("Records", "📊"),
                 ("Members", "💳"),
+                ("Insights", "📈"),
                 ("Log", "📜"),
                 ("Settings", "⚙️"),
             )
@@ -461,6 +471,8 @@ class DeskWindow(QMainWindow):
 
     def show_tab(self, index: int) -> None:
         self.stack.setCurrentIndex(index)
+        if self.stack.currentWidget() is self.insights:
+            self._guarded(self.insights.refresh)
         if self.stack.currentWidget() is self.log_page:
             self._guarded(self.log_page.refresh)
         for i, item in enumerate(self.nav.values()):

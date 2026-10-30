@@ -145,6 +145,10 @@ of the takings per hour (for a day) or per day. **Export CSV** saves every sessi
 as a spreadsheet that Excel opens, names in any language included. The top bar shows today's
 takings.
 
+**📈 Insights** shows the last 7, 30 or 90 days at a glance: takings, sessions, spend per session
+and hours sung; the busy hours of the day and the takings per weekday as charts; and the top
+songs, best-selling items, takings per room and how guests paid.
+
 **📋 Shift Report** adds up everything since the last hand-over: sessions, room fees, items,
 takings by payment method, items sold and rooms still open. Print it, then **Hand Over** to start
 the next shift.

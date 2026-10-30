@@ -6,6 +6,7 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
+from html import escape
 
 from PySide6.QtCore import QDate, QDateTime, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPaintEvent
@@ -621,3 +622,95 @@ class LogPage(QWidget):
             )
             for col, text in enumerate(cells):
                 self.table.setItem(row, col, QTableWidgetItem(text))
+
+
+class InsightsPage(QWidget):
+    """How business is going: takings, busy hours and days, and what sells."""
+
+    def __init__(self, store: DeskStore) -> None:
+        super().__init__()
+        self.store = store
+        column = QVBoxLayout(self)
+        column.setContentsMargins(24, 18, 24, 18)
+        top = QHBoxLayout()
+        self.range = QComboBox()
+        self.range.addItems(list(reports.RANGES))
+        self.range.currentIndexChanged.connect(self.refresh)
+        top.addWidget(self.range)
+        top.addStretch()
+        column.addLayout(top)
+        tiles = QHBoxLayout()
+        self.tiles: dict[str, QLabel] = {}
+        for name in ("Takings", "Sessions", "Per session", "Hours sung"):
+            box = QVBoxLayout()
+            value = QLabel("0")
+            value.setStyleSheet("color: white; font-size: 26px; font-weight: 800;")
+            label = QLabel(name.upper())
+            label.setObjectName("muted")
+            box.addWidget(value)
+            box.addWidget(label)
+            tiles.addLayout(box)
+            self.tiles[name] = value
+        column.addLayout(tiles)
+        charts = QHBoxLayout()
+        self.hours = TakingsChart()
+        self.days = TakingsChart()
+        for title, chart in (
+            ("BUSY HOURS (rooms in use)", self.hours),
+            ("TAKINGS BY WEEKDAY", self.days),
+        ):
+            box = QVBoxLayout()
+            head = QLabel(title)
+            head.setObjectName("panelHead")
+            box.addWidget(head)
+            box.addWidget(chart)
+            charts.addLayout(box, stretch=1)
+        column.addLayout(charts)
+        lists = QHBoxLayout()
+        self.lists: dict[str, QLabel] = {}
+        for title in ("TOP SONGS", "BEST-SELLING ITEMS", "ROOMS", "PAID BY"):
+            box = QVBoxLayout()
+            head = QLabel(title)
+            head.setObjectName("panelHead")
+            body = QLabel()
+            body.setTextFormat(Qt.TextFormat.RichText)
+            body.setAlignment(Qt.AlignmentFlag.AlignTop)
+            body.setWordWrap(True)
+            box.addWidget(head)
+            box.addWidget(body, stretch=1)
+            lists.addLayout(box, stretch=1)
+            self.lists[title] = body
+        column.addLayout(lists, stretch=1)
+
+    def refresh(self) -> None:
+        days = reports.RANGES[self.range.currentText()]
+        found = reports.insights(reports.last_days(self.store, days))
+        c = self.store.setting("currency", "$")
+        self.tiles["Takings"].setText(f"{c}{found.takings:,.2f}")
+        self.tiles["Sessions"].setText(str(found.sessions))
+        self.tiles["Per session"].setText(f"{c}{found.per_session:,.2f}")
+        self.tiles["Hours sung"].setText(f"{found.hours:.1f}")
+        self.hours.set_bars([(f"{h:02d}", v) for h, v in enumerate(found.busy_hours)])
+        self.days.set_bars(list(zip(reports.WEEKDAYS, found.weekdays, strict=True)))
+
+        def table(rows: list[tuple[str, str]]) -> str:
+            if not rows:
+                return "<span style='color:#9a93b8'>Nothing yet</span>"
+            cells = "".join(
+                f"<tr><td>{escape(a)}</td><td align='right'>{escape(b)}</td></tr>" for a, b in rows
+            )
+            return f"<table width='100%' cellpadding='3'>{cells}</table>"
+
+        self.lists["TOP SONGS"].setText(table([(s, f"{n}×") for s, n in found.top_songs]))
+        self.lists["BEST-SELLING ITEMS"].setText(
+            table([(n, f"{q} · {c}{a:,.0f}") for n, q, a in found.top_items])
+        )
+        self.lists["ROOMS"].setText(table([(r, f"{c}{a:,.0f}") for r, a in found.rooms]))
+        self.lists["PAID BY"].setText(
+            table(
+                [
+                    (p, f"{a / found.takings:.0%}" if found.takings else "")
+                    for p, a in found.payments
+                ]
+            )
+        )
