@@ -995,3 +995,39 @@ def test_duet_toggle_reaches_the_state(tmp_path):
         assert controller.state()["duet"] is True
     finally:
         controller.close()
+
+
+def test_keyboard_and_remote_keys(window, qtbot):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QKeyEvent
+    from PySide6.QtWidgets import QApplication, QLineEdit
+
+    from ytktv.ui.remote_keys import RemoteKeys, key_help
+
+    main, controller = window
+    keys = RemoteKeys(controller)
+    none = Qt.KeyboardModifier.NoModifier
+    volume = controller.settings.music_volume
+    assert keys.handle(Qt.Key.Key_Up, none)
+    assert controller.settings.music_volume == min(100, volume + 5)
+    assert keys.handle(Qt.Key.Key_BracketRight, none) and controller.pitch == 1
+    before = controller.vocal_mode
+    keys.handle(Qt.Key.Key_V, none)
+    assert controller.vocal_mode != before
+    keys.handle(Qt.Key.Key_V, none)
+    assert controller.vocal_mode == before
+    lyrics = controller.settings.show_lyrics
+    keys.handle(Qt.Key.Key_L, none)
+    assert controller.settings.show_lyrics is not lyrics
+    assert not keys.handle(Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)  # Ctrl+S: not ours
+    assert not keys.handle(Qt.Key.Key_Q, none)
+
+    # While a text box has the focus, keys type into it.
+    box = QLineEdit()
+    qtbot.addWidget(box)
+    box.show()
+    box.setFocus()
+    qtbot.waitUntil(lambda: QApplication.focusWidget() is box)
+    press = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_N, none, "n")
+    assert keys.eventFilter(box, press) is False
+    assert any(action == "Next song" for _keys, action in key_help())
