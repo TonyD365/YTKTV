@@ -62,6 +62,9 @@ class Settings:
     # Lyrics shown earlier (+) or later (-) than their subtitles say, in seconds, per video.
     lyrics_offsets: dict[str, float] = field(default_factory=dict)
     local_folders: list[str] = field(default_factory=list)  # folders of video files to sing
+    smart_lights: str = "off"  # off, wled or hue (see smart_lights.KINDS)
+    smart_lights_host: str = ""  # the WLED controller's or the Hue bridge's address
+    hue_key: str = ""  # what the Hue bridge gave when paired
     text_size: str = "Normal"  # Normal, Large or Extra large (see theme.TEXT_SIZES)
     mic_preset: str = ""  # the preset the channels currently match, if any
 

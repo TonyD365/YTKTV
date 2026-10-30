@@ -38,6 +38,7 @@ from ytktv.ui.diagnostics_dialog import save_diagnostics
 from ytktv.ui.front_desk_card import FrontDeskCard
 from ytktv.ui.local_songs_card import LocalSongsCard
 from ytktv.ui.remote_keys import key_help
+from ytktv.ui.smart_lights_card import SmartLightsCard
 from ytktv.ui.song_list import STEM_TAGS, Action, SongList, SongRow, tag
 from ytktv.ui.support import ThumbnailLoader, run_async
 from ytktv.youtube.search import HOT_CATEGORIES, YouTube
@@ -827,6 +828,7 @@ class SettingsPage(Page):
         column.addWidget(FrontDeskCard(ctx.controller.store, ctx.room_client))
         self.local_card = LocalSongsCard(ctx.controller)
         column.addWidget(self.local_card)
+        column.addWidget(SmartLightsCard(ctx.controller))
 
         remote = card("Keyboard and Remote")
         keys = QLabel(
