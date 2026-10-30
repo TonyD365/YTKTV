@@ -92,35 +92,76 @@
 
 ## 安装
 
-| 系统 | 文件 |
-|---|---|
-| macOS（Apple 芯片和 Intel） | `YTKTV-<版本>-macos-universal.pkg` |
-| Windows 10/11（64 位） | `YTKTV-<版本>-windows-x64-setup.exe` |
-| Linux（x86-64） | `YTKTV-<版本>-linux-x86_64.AppImage` |
-| Windows ARM 电脑 | `YTKTV-<版本>-windows-arm64-setup.exe` |
-| Linux ARM（64 位，比如树莓派 4/5） | `YTKTV-<版本>-linux-aarch64.AppImage` |
-| 管理终端 YTKTV Desk，macOS（Apple 芯片和 Intel） | `YTKTV-Desk-<版本>-macos-universal.pkg` |
-| 管理终端 YTKTV Desk，Windows | `YTKTV-Desk-<版本>-windows-x64-setup.exe` |
-| 管理终端 YTKTV Desk，Linux | `YTKTV-Desk-<版本>-linux-x86_64.AppImage` |
-| 管理终端 YTKTV Desk，ARM | `YTKTV-Desk-<版本>-windows-arm64-setup.exe` 或 `-linux-aarch64.AppImage` |
+### 一行命令安装（推荐）
 
-**Windows 最省事的装法**：在终端里运行 `winget install TonyD365.YTKTV`（管理终端：`winget install TonyD365.YTKTVDesk`）。不会弹 SmartScreen 警告，以后用 `winget upgrade` 更新。
+最快、而且不会弹安全警告：一行命令自动下载最新版本、校验、安装。之后的更新由 YTKTV 自己完成（设置 → Updates）。
 
-**macOS 和 Linux 最省事的装法**：在"终端"里粘贴下面这一行。它会下载最新版本、校验后安装（macOS 会问一次开机密码），不会出现"已损坏"的提示：
+#### Windows 10 / 11（x64 和 ARM）
 
-```bash
-curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash
-```
+1. 右键点「开始」按钮，选 **终端**（或者搜索 **PowerShell** 打开）。
+2. 粘贴下面这一行，按回车：
 
-装管理终端 YTKTV Desk 的话，在 `bash` 后面加上 `-s -- --desk`。
+   ```powershell
+   winget install TonyD365.YTKTV
+   ```
 
-安装包没有付费签名。如果是在浏览器里下载的 macOS 安装包，打开前先在"终端"里去掉下载隔离标记：
+   安装管理终端：`winget install TonyD365.YTKTVDesk`。
+3. 从「开始」菜单打开 **YTKTV**。
 
-```bash
-xattr -d com.apple.quarantine ~/Downloads/YTKTV-<版本>-macos-universal.pkg
-```
+Windows 10（1809 及以后）和 Windows 11 都自带 winget。手动更新：`winget upgrade TonyD365.YTKTV`；卸载：`winget uninstall TonyD365.YTKTV`。
 
-装好后如果仍提示"已损坏"或"无法打开"，再执行 `sudo xattr -dr com.apple.quarantine /Applications/YTKTV.app`。**Windows** 上如果 SmartScreen 拦截，点"更多信息 → 仍要运行"。
+#### macOS（Apple 芯片和 Intel）
+
+1. 打开 **终端**（按 ⌘ 空格，输入 `终端` 或 `Terminal`，回车）。
+2. 粘贴下面这一行，按回车：
+
+   ```bash
+   curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash
+   ```
+
+   安装管理终端：`curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash -s -- --desk`。
+3. 提示输入密码时，输入你的开机密码（输入时屏幕上不显示，这是正常的），按回车。
+4. 从「应用程序」或启动台打开 **YTKTV**。
+
+脚本会从最新 Release 下载通用安装包，用 Release 里的 SHA256 校验值核对，再用 macOS 自带的安装程序安装。因为不是浏览器下载的，macOS 不会把它标记成「已损坏」，也不需要 `xattr`。卸载：把「应用程序」里的 YTKTV 拖进废纸篓。
+
+#### Linux（x86-64 和 ARM，比如树莓派 4/5）
+
+1. 打开终端。
+2. 粘贴下面这一行，按回车：
+
+   ```bash
+   curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash
+   ```
+
+   安装管理终端：在 `bash` 后面加上 `-s -- --desk`。
+3. 用 `~/Applications/YTKTV.AppImage` 启动。
+
+脚本会按你的处理器选对应的 AppImage，校验后放到 `~/Applications`。卸载：删掉这个文件。
+
+### 从 Release 页面手动下载
+
+也可以自己从[最新 Release](https://github.com/TonyD365/YTKTV/releases/latest) 下载安装包：
+
+| 系统 | YTKTV | 管理终端 YTKTV Desk |
+|---|---|---|
+| macOS（Apple 芯片和 Intel） | `YTKTV-<版本>-macos-universal.pkg` | `YTKTV-Desk-<版本>-macos-universal.pkg` |
+| Windows 10/11（64 位） | `YTKTV-<版本>-windows-x64-setup.exe` | `YTKTV-Desk-<版本>-windows-x64-setup.exe` |
+| Windows ARM 电脑 | `YTKTV-<版本>-windows-arm64-setup.exe` | `YTKTV-Desk-<版本>-windows-arm64-setup.exe` |
+| Linux（x86-64） | `YTKTV-<版本>-linux-x86_64.AppImage` | `YTKTV-Desk-<版本>-linux-x86_64.AppImage` |
+| Linux ARM（64 位） | `YTKTV-<版本>-linux-aarch64.AppImage` | `YTKTV-Desk-<版本>-linux-aarch64.AppImage` |
+
+安装包没有付费签名，所以用浏览器下载的要多做一步：
+
+- **macOS**：打开安装包前，先在终端里去掉下载标记：
+
+  ```bash
+  xattr -d com.apple.quarantine ~/Downloads/YTKTV-*-macos-universal.pkg
+  ```
+
+  装好后如果还提示「已损坏」或「无法打开」，再执行一次 `sudo xattr -dr com.apple.quarantine /Applications/YTKTV.app`。
+- **Windows**：如果 SmartScreen 提示「Windows 已保护你的电脑」，点 **更多信息 → 仍要运行**。
+- **Linux**：先用 `chmod +x YTKTV-*.AppImage` 让它可以运行，再打开。
 
 **YTKTV 会提示安装 mpv。** YTKTV 用 [mpv](https://mpv.io) 播放视频，它是另一个以 GPL 发布的免费软件，不属于 YTKTV，也不在 Release 里。启动时如果找不到 mpv，程序会提示用你系统惯用的方式安装：macOS 用 [Homebrew](https://brew.sh) 执行 `brew install mpv`（没有 Homebrew 会告诉你怎么装，装好后点"Check Again"）；Windows 从 [mpv.io](https://mpv.io/installation/) 列出的 Windows 版下载；Linux 用系统的包管理器安装（会要求输入密码）。已经下载过 mpv 的 1.4、1.5 版用户不受影响。
 
