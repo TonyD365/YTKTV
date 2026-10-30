@@ -10,11 +10,26 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+  # yt-dlp has to keep up with YouTube, so it is checked every day on its own, and the
+  # minimum version is raised: the next release then ships the newest one.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: daily
+    versioning-strategy: increase
+    allow:
+      - dependency-name: "yt-dlp*"
+    labels: [dependencies, youtube]
+    groups:
+      yt-dlp:
+        patterns: ["yt-dlp*"]
   - package-ecosystem: pip
     directory: /
     schedule:
       interval: weekly
     labels: [dependencies]
+    ignore:
+      - dependency-name: "yt-dlp*"
     groups:
       python:
         patterns: ["*"]
