@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from ytktv.desk.store import DeskStore
+from ytktv.desk.store import DeskStore, Room
 from ytktv.rooms import crypto
 
 DESK_PORT = 8770
@@ -122,6 +122,8 @@ def create_desk_app(store: DeskStore, hub: Hub | None = None, cert_hash: str = "
         if room is not None:  # a room that restarted learns whether it is open
             await channel.send(room.message())
         await channel.send(products_message(store))
+        if room is not None:
+            await channel.send(folders_message(room))
         try:
             while True:
                 message = json.loads(await ws.receive_text())
@@ -179,6 +181,10 @@ def products_message(store: DeskStore) -> dict[str, Any]:
             for p in store.products(active_only=True)
         ],
     }
+
+
+def folders_message(room: Room) -> dict[str, Any]:
+    return {"type": "local_folders", "folders": room.local_folders}
 
 
 def tell_all_products(store: DeskStore, hub: Hub) -> None:

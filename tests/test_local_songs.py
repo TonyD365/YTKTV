@@ -144,3 +144,36 @@ def test_desk_marks_a_room_local_only():
     assert state.local_only
     state.apply({"type": "close"})
     assert not state.local_only
+
+
+def test_staff_terminal_sets_a_rooms_local_folders(tmp_path, qtbot):
+    from ytktv.config import SettingsStore
+    from ytktv.desk.server import folders_message
+    from ytktv.desk.store import DeskStore
+    from ytktv.rooms.client import RoomClient
+    from ytktv.ui.local_songs_card import LocalSongsCard
+
+    desk = DeskStore()
+    room, _ = desk.pair(desk.new_code(), "Kids")
+    desk.set_local_folders(room.room_id, ["/songs/a", " ", "D:\\Karaoke"])
+    message = folders_message(desk.room(room.room_id))
+    assert message == {"type": "local_folders", "folders": ["/songs/a", "D:\\Karaoke"]}
+
+    store = SettingsStore(tmp_path / "settings.json")
+    client = RoomClient.__new__(RoomClient)
+    client.store, client.on_event = store, lambda *_: None
+    from ytktv.rooms.state import RoomState
+
+    client.state = RoomState()
+    client._handle(message)
+    assert store.settings.local_folders == ["/songs/a", "D:\\Karaoke"]
+
+    store.settings.desk_url = "https://desk:8770"
+    controller, _player, _ = make_controller(tmp_path)
+    try:
+        controller.settings.desk_url = "https://desk:8770"
+        card = LocalSongsCard(controller)
+        qtbot.addWidget(card)
+        assert not card.add_button.isEnabled() and not card.remove_button.isEnabled()
+    finally:
+        controller.close()

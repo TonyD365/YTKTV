@@ -593,6 +593,10 @@ class MainWindow(QMainWindow):
     def _on_desk(self, message: dict[str, Any]) -> None:
         """Everything the desk sends has been verified by the room client already."""
         kind = message.get("type")
+        if kind == "local_folders":
+            if self.controller.local is not None:
+                self.controller.local.scan_soon()
+            self.settings_page.local_card.load()
         if kind == "unbind":
             self.room_closed_view.hide()
         elif kind == "call_done":
