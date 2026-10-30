@@ -280,6 +280,10 @@ def main(argv: list[str] | None = None) -> int:
 
     store = SettingsStore()
     settings = store.settings
+    from ytktv import low_power
+
+    if low_power.first_start(settings):  # a Raspberry Pi or an old computer
+        store.save()
     app.setStyleSheet(theme.stylesheet(settings.text_size))
 
     player: Any
