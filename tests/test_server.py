@@ -171,3 +171,34 @@ def test_phone_games_use_the_phone_name(client):
     assert "Kim" in controller.liars.hands and len(reply["mine"].split()) == 5
     dice = http.post("/api/game/dice", json={"value": 2}).json()
     assert len(dice["text"].split()) == 2
+
+
+def test_local_songs_in_search_and_queue(client, tmp_path):
+    from ytktv.core.local import LocalSongs
+
+    http, controller = client
+    (tmp_path / "Love Song.mp4").write_bytes(b"x")
+    controller.local = LocalSongs(lambda: [str(tmp_path)], None)
+    controller.local.scan()
+    found = http.get("/api/search", params={"q": "love"}).json()
+    assert found[0]["video_id"].startswith("local-")
+    controller.set_local_only(True)
+    only = http.get("/api/search", params={"q": "love"}).json()
+    assert [s["video_id"] for s in only] == [found[0]["video_id"]]
+    assert http.post("/api/queue", json={"song": found[0]}).status_code == 200
+    youtube = next(s for s in found if not s["video_id"].startswith("local-"))
+    assert http.post("/api/queue", json={"song": youtube}).status_code == 423
+
+
+def test_tournament_and_birthday_over_http(client):
+    http, controller = client
+    assert http.post("/api/game/tournament").status_code == 404  # nobody in the queue yet
+    controller.tournament.start(["Kim", "Alex"])
+    assert "vs" in http.post("/api/game/tournament_status").json()["text"]
+    http.post("/api/game/tournament_score", json={"value": 70, "player": "Kim"})
+    done = http.post("/api/game/tournament_score", json={"value": 90, "player": "alex"}).json()
+    assert done["text"] == "👑 Alex" and controller.tournament.champion == "Alex"
+    party = http.post("/api/game/birthday", json={"text": "Mia", "player": "Kim"}).json()
+    assert party["text"] == "🎉 Mia 🎉"
+    queued = [*controller.state()["queue"], controller.state()["current"]]
+    assert any(item and item.get("singer") == "Mia" for item in queued)

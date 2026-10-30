@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from ytktv import catalog
 from ytktv.audio.sfx import SFX_NAMES
 from ytktv.core.controller import KTVController
+from ytktv.core.games import BIRTHDAY_SEARCH
 from ytktv.core.models import Song, VocalMode
 from ytktv.youtube.parse import extract_video_id
 from ytktv.youtube.search import ARTISTS, HOT_CATEGORIES
@@ -39,7 +40,8 @@ class SongSource(Protocol):
 
 
 class SongIn(BaseModel):
-    video_id: str = Field(min_length=11, max_length=11, pattern=r"^[A-Za-z0-9_-]+$")
+    # A YouTube id, or a song from this computer's folders.
+    video_id: str = Field(pattern=r"^([A-Za-z0-9_-]{11}|local-[0-9a-f]{16})$")
     title: str = Field(default="", max_length=300)
     channel: str = Field(default="", max_length=200)
     duration: int = Field(default=0, ge=0)
@@ -160,6 +162,7 @@ class _Broadcaster:
 class GameIn(BaseModel):
     value: int | None = Field(default=None, ge=1, le=100)
     player: str = Field(default="", max_length=30)
+    text: str = Field(default="", max_length=30)  # e.g. whose birthday it is
 
 
 class OrderItem(BaseModel):
@@ -200,13 +203,17 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
 
     @app.get("/api/search")
     def search(q: str, limit: int = 24) -> list[dict[str, Any]]:
-        try:
-            songs = source.search(q[:200], max(1, min(limit, 50)))
-        except Exception as exc:
-            log.warning("search failed: %s", exc)
-            raise HTTPException(502, "YouTube search failed") from exc
+        local = controller.local_matches(q[:200])[:20]
+        songs: list[Song] = []
+        if not controller.local_only:
+            try:
+                songs = source.search(q[:200], max(1, min(limit, 50)))
+            except Exception as exc:
+                log.warning("search failed: %s", exc)
+                if not local:
+                    raise HTTPException(502, "YouTube search failed") from exc
         controller.remember_search(q)
-        return [{**song.to_dict(), **controller.song_marks(song)} for song in songs]
+        return [{**song.to_dict(), **controller.song_marks(song)} for song in local + songs]
 
     @app.get("/api/suggest")
     def suggest(q: str) -> list[str]:
@@ -331,6 +338,11 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         if name == "countdown":
             controller.countdown(10)
             return {"title": "⏱ Countdown", "text": "10", "detail": ""}
+        if name == "birthday":
+            found = source.search(BIRTHDAY_SEARCH, 5)
+            return controller.birthday(
+                (body.text if body else "") or player, found[0] if found else None
+            )
         if name == "random":
             category = random.choice(list(HOT_CATEGORIES))
             result = controller.random_song(source.hot(category), who=player)

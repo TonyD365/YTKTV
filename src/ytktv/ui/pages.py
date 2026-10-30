@@ -33,6 +33,7 @@ from ytktv.core.controller import KTVController
 from ytktv.core.models import Song, StemStatus
 from ytktv.rooms.client import RoomClient
 from ytktv.ui.front_desk_card import FrontDeskCard
+from ytktv.ui.local_songs_card import LocalSongsCard
 from ytktv.ui.remote_keys import key_help
 from ytktv.ui.song_list import STEM_TAGS, Action, SongList, SongRow, tag
 from ytktv.ui.support import ThumbnailLoader, run_async
@@ -308,16 +309,26 @@ class SearchPage(Page):
         self.browse_list.show_message("Searching...")
         self.ctx.controller.remember_search(query)
 
+        controller = self.ctx.controller
+        local = controller.local_matches(query)[:20]  # songs from this computer come first
+
         def done(songs: list[Song]) -> None:
             if request == self._request:
-                self.show_songs(songs, "No results.")
+                self.show_songs(local + songs, "No results.")
 
         def failed(_exc: Exception) -> None:
-            if request == self._request:
+            if request == self._request and local:
+                self.show_songs(local)
+            elif request == self._request:
                 self.browse_list.show_message(
                     "Search failed. Check the internet connection and try again."
                 )
 
+        if controller.local_only:
+            self.show_songs(
+                local, "No songs on this computer match. This room plays local songs only."
+            )
+            return
         run_async(lambda: self.ctx.youtube.search(query), done, failed)
 
 
@@ -429,6 +440,26 @@ class FavoritesPage(Page):
 
     def on_favorites(self) -> None:
         self.show_songs(self.ctx.controller.library.favorites())
+
+
+class LocalPage(Page):
+    """Songs from video files on this computer (Settings → Local Songs)."""
+
+    def __init__(self, ctx: Context) -> None:
+        super().__init__("Local Songs", ctx)
+        self.filter = QLineEdit()
+        self.filter.setPlaceholderText("Filter by title or artist")
+        self.filter.setClearButtonEnabled(True)
+        self.filter.textChanged.connect(lambda _text: self.on_local())
+        self.body.addWidget(self.filter)
+        self.browse_list = SongList(
+            "No local songs yet. Add a folder of video files in Settings → Local Songs."
+        )
+        self.body.addWidget(self.browse_list, stretch=1)
+        self.on_local()
+
+    def on_local(self) -> None:
+        self.show_songs(self.ctx.controller.local_matches(self.filter.text()))
 
 
 class DownloadsPage(Page):
@@ -773,6 +804,8 @@ class SettingsPage(Page):
         phone.addWidget(url)
 
         column.addWidget(FrontDeskCard(ctx.controller.store, ctx.room_client))
+        self.local_card = LocalSongsCard(ctx.controller)
+        column.addWidget(self.local_card)
 
         remote = card("Keyboard and Remote")
         keys = QLabel(

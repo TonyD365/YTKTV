@@ -55,6 +55,20 @@ You can run the setup again at any time from **Settings → Setup**.
 Guests can queue songs from their phones by scanning the QR code in the top right corner of
 the console or on the TV while nothing plays. See [Phones](phones.md).
 
+## Songs from your own files
+
+**Settings → Local Songs → Add Folder…** adds a folder of video files (MP4, MKV, WebM, AVI, MOV,
+MPG, VOB and more, in subfolders too). They show first when you search, and the **Local** page
+lists them all. A file named `Artist - Title.mkv` shows the artist under the title.
+
+- **Two audio tracks** (most karaoke MKVs): the instrumental track is copied out of the file, so
+  **Instrumental** works at once, even on a computer without vocal separation. A track titled
+  伴奏, karaoke or instrumental is taken as the instrumental; otherwise the second one is.
+- **One audio track**: the vocals are removed by the vocal separation, like a YouTube song.
+- **Lyrics**: put an `.lrc` file with the same name next to the video.
+
+Press **Look Again** after adding files to a folder.
+
 ## Singing without internet
 
 Press **⬇** on any song (or **Downloads → Download All Favorites**) to keep it on the computer:

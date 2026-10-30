@@ -11,7 +11,7 @@ import socket
 import sys
 import threading
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ytktv import __version__, bootstrap, children
 from ytktv.config import SettingsStore, cache_dir, data_dir
@@ -20,6 +20,9 @@ from ytktv.core.events import EventBus
 from ytktv.core.library import Library
 from ytktv.player.fake import FakePlayer
 from ytktv.youtube.search import YouTube
+
+if TYPE_CHECKING:
+    from ytktv.separation.worker import StemManager
 
 log = logging.getLogger("ytktv")
 
@@ -155,13 +158,19 @@ def _install_libmpv_with_progress(app: Any, dialog_class: Any) -> bool:
     return bool(result.get("ok"))
 
 
-def make_stem_manager(youtube: YouTube, settings: Any, ffmpeg: str | None, separator: Any) -> Any:
+def make_stem_manager(
+    youtube: YouTube, settings: Any, ffmpeg: str | None, separator: Any, local: Any = None
+) -> Any:
     from ytktv.separation.cache import StemCache
     from ytktv.separation.worker import StemManager
 
     cache = StemCache(cache_dir() / "stems", int(settings.stem_cache_gb * 1024**3))
 
     def download(video_id: str, dest: Path) -> Path:
+        from ytktv.core.local import is_local
+
+        if local is not None and is_local(video_id):
+            return Path(local.extract_audio(video_id, dest))
         return youtube.download_audio(video_id, dest, ffmpeg=ffmpeg)
 
     manager = StemManager(cache, separator, download)
@@ -313,7 +322,14 @@ def main(argv: list[str] | None = None) -> int:
         if runtime.installed_variant():
             separator = make_separator(settings, runtime)
 
+    from ytktv.core.local import LocalSongs, StemRouter, make_track_stems
     from ytktv.core.preload import MediaPreloader
+
+    local = LocalSongs(lambda: list(settings.local_folders), ffmpeg)
+    local.scan_soon()
+    track_stems = make_track_stems(
+        local, cache_dir() / "local-stems", int(settings.stem_cache_gb * 1024**3)
+    )
 
     def preload(video_id: str, dest: Path) -> Path:
         return youtube.download_media(video_id, dest, settings.max_height, ffmpeg=ffmpeg)
@@ -337,7 +353,18 @@ def main(argv: list[str] | None = None) -> int:
         bus=bus,
         preloader=preloader,
         offline=offline,
-        stems=make_stem_manager(youtube, settings, ffmpeg, separator) if separator else None,
+        # Looks like a StemManager: local instrumental tracks, or vocal separation.
+        stems=cast(
+            "StemManager",
+            StemRouter(
+                local,
+                track_stems,
+                make_stem_manager(youtube, settings, ffmpeg, separator, local)
+                if separator
+                else None,
+            ),
+        ),
+        local=local,
         audio=audio,
     )
 
@@ -415,7 +442,9 @@ def main(argv: list[str] | None = None) -> int:
         from ytktv.ui.separation_setup import SeparationSetup
 
         def enable(new_separator: Any) -> None:
-            controller.attach_stems(make_stem_manager(youtube, settings, ffmpeg, new_separator))
+            controller.attach_stems(
+                make_stem_manager(youtube, settings, ffmpeg, new_separator, local)
+            )
             describe_device(new_separator)
 
         setup = SeparationSetup(
