@@ -171,3 +171,17 @@ def test_phone_games_use_the_phone_name(client):
     assert "Kim" in controller.liars.hands and len(reply["mine"].split()) == 5
     dice = http.post("/api/game/dice", json={"value": 2}).json()
     assert len(dice["text"].split()) == 2
+
+
+def test_tournament_and_birthday_over_http(client):
+    http, controller = client
+    assert http.post("/api/game/tournament").status_code == 404  # nobody in the queue yet
+    controller.tournament.start(["Kim", "Alex"])
+    assert "vs" in http.post("/api/game/tournament_status").json()["text"]
+    http.post("/api/game/tournament_score", json={"value": 70, "player": "Kim"})
+    done = http.post("/api/game/tournament_score", json={"value": 90, "player": "alex"}).json()
+    assert done["text"] == "👑 Alex" and controller.tournament.champion == "Alex"
+    party = http.post("/api/game/birthday", json={"text": "Mia", "player": "Kim"}).json()
+    assert party["text"] == "🎉 Mia 🎉"
+    queued = [*controller.state()["queue"], controller.state()["current"]]
+    assert any(item and item.get("singer") == "Mia" for item in queued)
