@@ -72,6 +72,7 @@ FIELDS: dict[str, tuple[str, Callable[[Any], Any]]] = {
     "preload_queue": ("Download the next songs ahead of time", _bool),
     "output_device": ("Sound output", _device),
     "auto_separate": ("Prepare an instrumental for every selected song", _bool),
+    "ai_lyrics": ("Write lyrics with AI for songs that have none", _bool),
     "wait_for_instrumental": ("Wait for the instrumental before a song starts", _bool),
     "local_folders": ("Local song folders", _folders),
     "smart_lights": ("Smart lights", _lights),

@@ -197,9 +197,15 @@ def find_uv() -> str | None:
 class Runtime:
     """Installs and locates the separation environment under *root*."""
 
-    def __init__(self, root: Path | None = None, system: str | None = None) -> None:
+    def __init__(
+        self,
+        root: Path | None = None,
+        system: str | None = None,
+        variants: dict[str, Variant] | None = None,
+    ) -> None:
         self.root = root or data_dir() / "separation-runtime"
         self.system = system or platform.system()
+        self.variants = variants or VARIANTS  # what can be installed (AI lyrics has its own)
 
     @property
     def env_dir(self) -> Path:
@@ -219,7 +225,7 @@ class Runtime:
         if marker.get("revision") != RUNTIME_REVISION or not self.python.exists():
             return None
         variant = marker.get("variant")
-        return variant if variant in VARIANTS else None
+        return variant if variant in self.variants else None
 
     def install_commands(self, variant: Variant, uv: str) -> list[tuple[str, list[str]]]:
         """(description, command) pairs, in order."""
@@ -237,12 +243,12 @@ class Runtime:
         ]
         return [
             (f"Downloading Python {PYTHON_VERSION}", venv),
-            (f"Downloading the separation libraries ({variant.download_size})", install),
+            (f"Downloading the {variant.title} libraries ({variant.download_size})", install),
         ]
 
     def install(self, key: str, report: Report = lambda _line: None, run: Runner = _run) -> None:
         """Download and install *key*. Raises on failure and leaves nothing half-installed."""
-        variant = VARIANTS[key]
+        variant = self.variants[key]
         uv = find_uv()
         if uv is None:
             raise RuntimeError("the uv installer is missing from this build")

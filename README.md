@@ -161,6 +161,8 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 - **Local songs.** Add folders of video files (MP4, MKV and more) in Settings: they show first in
   Search and on the Local page. Karaoke MKVs with two audio tracks switch between original and
   instrumental straight away, and an .lrc file next to a video gives its lyrics.
+- **AI lyrics.** A song with no lyrics anywhere gets them written by Whisper, with the timing
+  (Settings → AI Lyrics, a one-time download; GPU on Apple Silicon and NVIDIA).
 - **Downloads.** Press ⬇ on a song (or Download All Favorites) to keep it on the computer with
   its lyrics and instrumental, then sing it without internet.
 - **PK battle.** Two microphones sing the same song, with two live score bars on the TV and a
