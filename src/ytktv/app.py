@@ -222,6 +222,10 @@ def main(argv: list[str] | None = None) -> int:
         # Windowed builds have no console; YTKTV_LOG_FILE captures the log instead.
         filename=os.environ.get("YTKTV_LOG_FILE") or None,
     )
+    from ytktv import diagnostics
+
+    # Also kept on disk, so Settings → Save Diagnostics has something to show.
+    diagnostics.keep_log("ytktv", logging.DEBUG if args.debug else logging.INFO)
 
     if args.hd_unlock_self_test:
         from ytktv.youtube import hd_unlock
