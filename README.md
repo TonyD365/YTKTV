@@ -83,6 +83,7 @@ way a real KTV's staff terminal runs its rooms: the adults in one room, the kids
 - **Run the floor**: bookings with a calendar and timeline, room types and seats, cleaning and
   maintenance, change room, broadcasts to every room, remote skip, pause and volume, a shift
   report, and records by day, week or month with a chart and a CSV export for Excel.
+- **Local songs only**: a room can be limited to the video files on its own computer.
 - **Several staff terminals**: other computers running YTKTV Desk can pair with the main one and
   work on the same rooms; the Log shows which machine did what, and when.
 - **Stock alerts**: a product running low shows in the service bar ("Cola: 2 left").
@@ -151,6 +152,9 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 - **Danmaku and lights.** Anyone can send a short message from the console or a phone and it
   flies across the MV screen. A glow around the screen pulses with the music, and phones can
   join in as glow sticks that follow its colours.
+- **Local songs.** Add folders of video files (MP4, MKV and more) in Settings: they show first in
+  Search and on the Local page. Karaoke MKVs with two audio tracks switch between original and
+  instrumental straight away, and an .lrc file next to a video gives its lyrics.
 - **Downloads.** Press ⬇ on a song (or Download All Favorites) to keep it on the computer with
   its lyrics and instrumental, then sing it without internet.
 - **PK battle.** Two microphones sing the same song, with two live score bars on the TV and a

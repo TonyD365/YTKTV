@@ -11,7 +11,7 @@ import random
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from ytktv import __version__
 from ytktv.audio import presets
@@ -19,6 +19,7 @@ from ytktv.config import SettingsStore
 from ytktv.core import games
 from ytktv.core.events import EventBus
 from ytktv.core.library import Library
+from ytktv.core.local import is_local
 from ytktv.core.models import PlayStatus, QueueItem, Song, StemStatus, VocalMode
 from ytktv.core.queue import SongQueue
 from ytktv.core.scoring import Melody, Scoreboard, ScoreKeeper, ScoringLoop
@@ -28,6 +29,7 @@ from ytktv.youtube.parse import MediaSource
 
 if TYPE_CHECKING:
     from ytktv.audio.engine import AudioEngine
+    from ytktv.core.local import LocalSongs
     from ytktv.core.offline import OfflineSongs
     from ytktv.core.preload import MediaPreloader
     from ytktv.separation.worker import StemManager
@@ -70,6 +72,7 @@ class KTVController:
         accelerator: str = "",
         preloader: MediaPreloader | None = None,
         offline: OfflineSongs | None = None,
+        local: LocalSongs | None = None,
     ) -> None:
         self.store = store
         self.room_closed = False  # set by the staff terminal; a closed room takes no songs
@@ -91,6 +94,10 @@ class KTVController:
         self.accelerator = accelerator
         self.preloader = preloader
         self.offline = offline
+        self.local = local
+        if local is not None:
+            local.on_change = lambda: self.bus.emit("local", None)  # a scan finished
+        self.local_only = False  # set by the staff terminal: this room sings local files only
 
         self.queue = SongQueue()
         self.queue.load_history(self.library.history)
@@ -154,6 +161,7 @@ class KTVController:
     ) -> QueueItem:
         if self.room_closed:
             raise PermissionError("This room is closed")
+        self.check_allowed(song)
         item = self.queue.add(song, singer=singer, priority=priority, owner=owner)
         if self.stems is not None and self.settings.auto_separate:
             self.stems.request(song.video_id)
@@ -176,6 +184,9 @@ class KTVController:
         songs = list(songs)
         if shuffle:
             random.shuffle(songs)
+        if not songs:
+            return 0
+        songs = [song for song in songs if not self.local_only or is_local(song.video_id)]
         if not songs:
             return 0
         for song in songs:
@@ -239,6 +250,20 @@ class KTVController:
     def open_room(self) -> None:
         self.room_closed = False
         self._emit_state()
+
+    def set_local_only(self, enabled: bool) -> None:
+        """The staff terminal allows this room only songs from the local folders."""
+        if enabled != self.local_only:
+            self.local_only = enabled
+            self._emit_state()
+
+    def local_matches(self, query: str) -> list[Song]:
+        return self.local.songs(query) if self.local is not None else []
+
+    def check_allowed(self, song: Song) -> None:
+        """Raise PermissionError for a song this room may not play."""
+        if self.local_only and not is_local(song.video_id):
+            raise PermissionError("This room plays songs from this computer only")
 
     def clear_queue(self) -> None:
         self.queue.clear()
@@ -335,13 +360,7 @@ class KTVController:
                 continue
             try:
                 video_id = item.song.video_id
-                local = self.offline.path(video_id) if self.offline else None
-                if local is None and self.preloader:
-                    local = self.preloader.path(video_id)
-                if local is not None:
-                    source = MediaSource(video_url=str(local))
-                else:
-                    source = self.resolver.resolve(video_id, self.settings.max_height)
+                source = self._source(video_id)
                 is_limited = getattr(self.resolver, "is_limited", None)
                 if is_limited is not None and is_limited(video_id):
                     self.toast("YouTube limits this video to 360p. See Settings to unlock HD.")
@@ -422,13 +441,27 @@ class KTVController:
             self.toast(f"Playback error: {item.song.title}", error=True)
         self._executor.submit(self._advance, item.id)
 
+    def _source(self, video_id: str) -> MediaSource:
+        """Where to play a song from: a kept or local file, a preloaded one, or YouTube."""
+        if self.local is not None and is_local(video_id):
+            path = self.local.path(video_id)
+            if path is None:
+                raise FileNotFoundError("the file is no longer in the local folders")
+            return MediaSource(video_url=str(path))
+        kept = self.offline.path(video_id) if self.offline else None
+        if kept is None and self.preloader:
+            kept = self.preloader.path(video_id)
+        if kept is not None:
+            return MediaSource(video_url=str(kept))
+        return self.resolver.resolve(video_id, self.settings.max_height)
+
     def _restart(self, item_id: str) -> None:
         with self._lock:
             item = self.current
         if item is None or item.id != item_id:
             return
         try:
-            source = self.resolver.resolve(item.song.video_id, self.settings.max_height)
+            source = self._source(item.song.video_id)
             stem = self.stems.path(item.song.video_id) if self.stems else None
             self._awaiting_start = True
             self.player.play(
@@ -482,7 +515,7 @@ class KTVController:
             self.preloader.sync([], keep)
             return
         upcoming = [item.song.video_id for item in self.queue.snapshot()[:_PRELOAD_AHEAD]]
-        self.preloader.sync(upcoming, keep)
+        self.preloader.sync([v for v in upcoming if not is_local(v)], keep)
 
     def _prefetch_next(self) -> None:
         self._sync_preload()
@@ -490,6 +523,8 @@ class KTVController:
         if upcoming is None:
             return
         video_id = upcoming.song.video_id
+        if is_local(video_id):
+            return  # nothing to look up for a file on this computer
 
         def work() -> None:
             try:
@@ -815,6 +850,8 @@ class KTVController:
     def _load_lyrics(self, item: QueueItem) -> None:
         fetch = getattr(self.resolver, "lyrics", None)
         kept = self.offline.lyrics(item.song.video_id) if self.offline else None
+        if self.local is not None and is_local(item.song.video_id):
+            kept = [line.to_dict() for line in self.local.lyrics(item.song.video_id)]
         if (fetch is None and kept is None) or not self.settings.show_lyrics:
             return
 
@@ -987,6 +1024,10 @@ class KTVController:
     def attach_stems(self, stems: StemManager) -> None:
         """Enable separation after start-up (the runtime was just downloaded)."""
         previous = self.stems
+        attach = getattr(previous, "attach_ai", None)
+        if attach is not None:  # a StemRouter: keep it, and its local-track copier
+            attach(stems)
+            stems, previous = cast("StemManager", self.stems), None
         stems.on_change = self._on_stem_change
         stems.order = self._stem_order
         self.stems = stems
@@ -1214,7 +1255,8 @@ class KTVController:
             "music_volume": settings.music_volume,
             "mic_volume": settings.mic_volume,
             "master_volume": settings.master_volume,
-            "separation": self.stems is not None,
+            "separation": self.stems is not None and getattr(self.stems, "separating", True),
+            "local_only": self.local_only,
             "accelerator": self.accelerator,
         }
 

@@ -171,3 +171,20 @@ def test_phone_games_use_the_phone_name(client):
     assert "Kim" in controller.liars.hands and len(reply["mine"].split()) == 5
     dice = http.post("/api/game/dice", json={"value": 2}).json()
     assert len(dice["text"].split()) == 2
+
+
+def test_local_songs_in_search_and_queue(client, tmp_path):
+    from ytktv.core.local import LocalSongs
+
+    http, controller = client
+    (tmp_path / "Love Song.mp4").write_bytes(b"x")
+    controller.local = LocalSongs(lambda: [str(tmp_path)], None)
+    controller.local.scan()
+    found = http.get("/api/search", params={"q": "love"}).json()
+    assert found[0]["video_id"].startswith("local-")
+    controller.set_local_only(True)
+    only = http.get("/api/search", params={"q": "love"}).json()
+    assert [s["video_id"] for s in only] == [found[0]["video_id"]]
+    assert http.post("/api/queue", json={"song": found[0]}).status_code == 200
+    youtube = next(s for s in found if not s["video_id"].startswith("local-"))
+    assert http.post("/api/queue", json={"song": youtube}).status_code == 423

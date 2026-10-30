@@ -116,12 +116,18 @@ class Room:
     room_type: str = "Medium"
     capacity: int = 6
     state: str = "ready"  # ready, cleaning or maintenance (while closed)
+    local_only: bool = False  # the room may sing only files from its own computer
 
     def message(self) -> dict[str, object]:
         """What the room is told about itself."""
         if not self.is_open:
             return {"type": "close"}
-        return {"type": "open", "guest": self.guest, "ends_at": self.ends_at}
+        return {
+            "type": "open",
+            "guest": self.guest,
+            "ends_at": self.ends_at,
+            "local_only": self.local_only,
+        }
 
 
 class DeskStore:
@@ -273,13 +279,19 @@ class DeskStore:
         with self._lock:
             rows = self._db.execute(
                 "SELECT r.id, r.name, r.last_seen, s.room_id IS NOT NULL, COALESCE(s.guest, ''),"
-                " s.ends_at, COALESCE(s.opened_at, 0), r.rate, r.room_type, r.capacity, r.state"
-                " FROM rooms r LEFT JOIN sessions s ON s.room_id = r.id ORDER BY r.rowid"
+                " s.ends_at, COALESCE(s.opened_at, 0), r.rate, r.room_type, r.capacity, r.state,"
+                " r.local_only FROM rooms r LEFT JOIN sessions s ON s.room_id = r.id"
+                " ORDER BY r.rowid"
             )
             return [
-                Room(a, b, c, bool(d), e, f, g, h, i, j, k)
-                for a, b, c, d, e, f, g, h, i, j, k in rows
+                Room(a, b, c, bool(d), e, f, g, h, i, j, k, bool(m))
+                for a, b, c, d, e, f, g, h, i, j, k, m in rows
             ]
+
+    def set_local_only(self, room_id: str, local_only: bool) -> None:
+        with self._lock:
+            self._db.execute("UPDATE rooms SET local_only=? WHERE id=?", (int(local_only), room_id))
+            self._db.commit()
 
     def room(self, room_id: str) -> Room | None:
         return next((r for r in self.rooms() if r.room_id == room_id), None)
@@ -752,5 +764,13 @@ def _staff_terminals(db: sqlite3.Connection) -> None:
     )
 
 
-MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [_baseline, _staff_terminals]
+def _local_only_rooms(db: sqlite3.Connection) -> None:
+    db.execute("ALTER TABLE rooms ADD COLUMN local_only INTEGER NOT NULL DEFAULT 0")
+
+
+MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
+    _baseline,
+    _staff_terminals,
+    _local_only_rooms,
+]
 SCHEMA_VERSION = len(MIGRATIONS)

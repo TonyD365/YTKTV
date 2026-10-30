@@ -52,6 +52,7 @@ CHANGES = frozenset(
         "top_up", "pay_from_balance", "add_points", "book", "set_booking_status", "set_state",
         "set_type", "change_room", "set_rate", "set_setting", "save_product", "remove_product",
         "add_order", "set_order_status", "finish_call", "remove_terminal", "rename_terminal",
+        "set_local_only",
     }
 )  # fmt: skip
 STORE_METHODS = READS | CHANGES
@@ -138,6 +139,9 @@ def describe(store: DeskStore, method: str, args: tuple[Any, ...], kwargs: dict[
         booking = arg(0, "booking")
         when = getattr(booking, "guest", "")
         return f"Booked {room(getattr(booking, 'room_id', ''))}" + (f" for {when}" if when else "")
+    if method == "set_local_only":
+        rule = "only local songs" if arg(1, "local_only") else "any song"
+        return f"{room(arg(0, 'room_id'))} may now play {rule}"
     if method == "new_code":
         return "Showed a code to bind a room"
     words = method.replace("_", " ")
