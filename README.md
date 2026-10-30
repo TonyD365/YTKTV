@@ -220,6 +220,9 @@ Download the installer for your system from the
 | YTKTV Desk, Linux | `YTKTV-Desk-<version>-linux-x86_64.AppImage` |
 | YTKTV Desk, ARM | `YTKTV-Desk-<version>-windows-arm64-setup.exe` or `-linux-aarch64.AppImage` |
 
+**Easiest on Windows**: in a terminal, run `winget install TonyD365.YTKTV` (YTKTV Desk:
+`winget install TonyD365.YTKTVDesk`). No SmartScreen prompt, and `winget upgrade` updates it.
+
 **Easiest on macOS and Linux**: paste this into Terminal. It downloads the latest release,
 checks it and installs it (macOS asks for your password once), with no quarantine warning:
 
