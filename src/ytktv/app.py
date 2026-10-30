@@ -372,6 +372,11 @@ def main(argv: list[str] | None = None) -> int:
         local=local,
         audio=audio,
     )
+    from ytktv.smart_lights import SmartLights
+
+    smart_lights = SmartLights(settings)  # room lights follow the TV's edge lights
+    bus.subscribe(smart_lights.on_event)
+    smart_lights.start()
 
     def describe_device(active: Any) -> None:
         """Find out (off the GUI thread) which device separation runs on."""
