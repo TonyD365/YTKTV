@@ -719,3 +719,39 @@ def test_desk_database_is_versioned_and_backed_up(tmp_path):
     # A database from a newer desk is refused rather than damaged.
     with pytest.raises(RuntimeError, match="newer"):
         DeskStore(path)
+
+
+def test_insights_dashboard(qtbot):
+    from datetime import datetime
+
+    from ytktv.desk import reports
+    from ytktv.desk.billing import Bill
+    from ytktv.desk.server import Hub
+    from ytktv.desk.window import DeskWindow
+
+    store = DeskStore()
+    kids, _ = store.pair(store.new_code(), "Kids")
+    vip, _ = store.pair(store.new_code(), "VIP")
+    evening = datetime.now().replace(hour=19, minute=30, second=0, microsecond=0).timestamp()
+    for room, total, payment, items in (
+        (kids, 50.0, "Cash", [("Cola × 2", 10.0)]),
+        (vip, 150.0, "Card", [("Cola × 1", 5.0), ("Beer tower × 1", 40.0)]),
+    ):
+        store.open_room(room.room_id, "", None, now=evening)
+        store.note_song(room.room_id, "A Perfect Day")
+        bill = Bill(room.name, "", "$", [("Room · 2h 00m at $20/h", total), *items])
+        bill.payment = payment
+        store.close_room(room.room_id, bill, now=evening + 2 * 3600)
+    found = reports.insights(reports.last_days(store, 7, now=evening + 3 * 3600))
+    assert found.sessions == 2 and found.top_songs == [("A Perfect Day", 2)]
+    assert (
+        found.busy_hours[19] == 1.0 and found.busy_hours[20] == 2.0 and found.busy_hours[21] == 1.0
+    )
+    assert found.top_items[0] == ("Cola", 3, 15.0)
+    assert found.rooms[0][0] == "VIP" and dict(found.payments)["Card"] > 0
+
+    window = DeskWindow(store, Hub(), "192.168.1.10:8770")
+    qtbot.addWidget(window)
+    window.show_tab(window.stack.indexOf(window.insights))
+    assert window.insights.tiles["Sessions"].text() == "2"
+    assert "Cola" in window.insights.lists["BEST-SELLING ITEMS"].text()

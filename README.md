@@ -85,6 +85,8 @@ way a real KTV's staff terminal runs its rooms: the adults in one room, the kids
   report, and records by day, week or month with a chart and a CSV export for Excel.
 - **Several staff terminals**: other computers running YTKTV Desk can pair with the main one and
   work on the same rooms; the Log shows which machine did what, and when.
+- **Insights**: takings, busy hours and weekdays, top songs, best-selling items and rooms for the
+  last 7, 30 or 90 days.
 - **Stock alerts**: a product running low shows in the service bar ("Cola: 2 left").
 - **Updates**: Settings → Updates checks for a new Desk on its own or when you ask.
 - **Safe by design**: rooms bind with a one-time code and a four-picture security code, obey only
