@@ -106,7 +106,7 @@ The [YTKTV Desk guide](docs/guide/front-desk.md) walks through all of it.
 
 1. **Download** the installer for your computer from the
    [latest release](https://github.com/TonyD365/YTKTV/releases/latest) and install it
-   (macOS needs one `xattr` command first, see [Install](#install)).
+   (on macOS the one-line `curl` install in [Install](#install) is easiest).
 2. **Connect the TV** as a second display, with an HDMI cable if you can (see the
    [FAQ](#faq) on why), and start YTKTV. A short setup asks for the speakers, the screen and a
    microphone.
@@ -220,8 +220,17 @@ Download the installer for your system from the
 | YTKTV Desk, Linux | `YTKTV-Desk-<version>-linux-x86_64.AppImage` |
 | YTKTV Desk, ARM | `YTKTV-Desk-<version>-windows-arm64-setup.exe` or `-linux-aarch64.AppImage` |
 
-The installers are not code-signed yet. On macOS, remove the download quarantine with `xattr`
-before opening the package:
+**Easiest on macOS and Linux**: paste this into Terminal. It downloads the latest release,
+checks it and installs it (macOS asks for your password once), with no quarantine warning:
+
+```bash
+curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash
+```
+
+Add `-s -- --desk` after `bash` for YTKTV Desk.
+
+The installers are not code-signed. If you download the macOS package in a browser instead,
+remove the download quarantine with `xattr` before opening it:
 
 ```bash
 xattr -d com.apple.quarantine ~/Downloads/YTKTV-<version>-macos-universal.pkg
