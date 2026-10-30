@@ -36,7 +36,9 @@ def test_priority_add(benchmark, big_queue):
 
 def test_prioritize_last(benchmark, big_queue):
     queue, _ = big_queue
-    benchmark(lambda: queue.prioritize(queue.snapshot()[-1].id))
+    # Only prioritize() is timed: finding the last item copied the whole queue every round,
+    # and that copy's run-to-run noise kept failing the comparison on shared CI machines.
+    benchmark.pedantic(queue.prioritize, setup=lambda: ((queue.snapshot()[-1].id,), {}), rounds=300)
 
 
 def test_move_middle(benchmark, big_queue):
