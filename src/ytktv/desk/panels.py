@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 
 from PySide6.QtCore import QEvent, QObject, Qt
@@ -165,6 +166,16 @@ class BillDialog(QDialog):
             form.addRow("Member", member_row)
             form.addRow("", self.member_label)
         form.addRow("Discount", self.discount)
+        if store is not None:
+            coupon_row = QHBoxLayout()
+            self.coupon = QLineEdit()
+            self.coupon.setPlaceholderText("Coupon code")
+            self.coupon.returnPressed.connect(self.apply_coupon)
+            apply = QPushButton("Apply")
+            apply.clicked.connect(self.apply_coupon)
+            coupon_row.addWidget(self.coupon, stretch=1)
+            coupon_row.addWidget(apply)
+            form.addRow("Coupon", coupon_row)
         form.addRow("Drop small change", self.round_to)
         form.addRow("Paid by", self.payment)
         column.addLayout(form)
@@ -218,10 +229,36 @@ class BillDialog(QDialog):
         self.member = self.store.member_by_phone(self.phone.text())
         self.update_bill()
 
+    def apply_coupon(self, code: str | None = None) -> bool:
+        """Take a coupon off the bill; False (and the reason shown) when it cannot be used."""
+        if self.store is None:
+            return False
+        code = (self.coupon.text() if code is None else code).strip()
+        self.bill.coupon, self.bill.coupon_percent, self.bill.coupon_amount = "", 0.0, 0.0
+        if code:
+            try:
+                coupon = self.store.coupon(code)
+            except ValueError as exc:
+                self.update_bill()
+                self.error.setText(str(exc))
+                return False
+            self.bill.coupon = coupon.code
+            if coupon.kind == "percent":
+                self.bill.coupon_percent = coupon.value
+            else:
+                self.bill.coupon_amount = coupon.value
+        self.update_bill()
+        return bool(code)
+
     def update_bill(self) -> None:
         bill, store, member = self.bill, self.store, self.member
         bill.member = member.name if member else ""
         bill.member_off = float(store.setting("member_discount", "10")) if member and store else 0
+        today = time.strftime("%m-%d")
+        birthday = member is not None and store is not None and member.birthday == today
+        bill.birthday_off = (
+            float(store.setting("birthday_discount", "0")) if birthday and store else 0
+        )
         bill.discount = float(self.discount.value())
         bill.round_to = float(self.round_to.currentData() or 0)
         bill.payment = self.payment.currentText()

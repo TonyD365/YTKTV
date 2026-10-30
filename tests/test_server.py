@@ -188,3 +188,17 @@ def test_local_songs_in_search_and_queue(client, tmp_path):
     assert http.post("/api/queue", json={"song": found[0]}).status_code == 200
     youtube = next(s for s in found if not s["video_id"].startswith("local-"))
     assert http.post("/api/queue", json={"song": youtube}).status_code == 423
+
+
+def test_tournament_and_birthday_over_http(client):
+    http, controller = client
+    assert http.post("/api/game/tournament").status_code == 404  # nobody in the queue yet
+    controller.tournament.start(["Kim", "Alex"])
+    assert "vs" in http.post("/api/game/tournament_status").json()["text"]
+    http.post("/api/game/tournament_score", json={"value": 70, "player": "Kim"})
+    done = http.post("/api/game/tournament_score", json={"value": 90, "player": "alex"}).json()
+    assert done["text"] == "👑 Alex" and controller.tournament.champion == "Alex"
+    party = http.post("/api/game/birthday", json={"text": "Mia", "player": "Kim"}).json()
+    assert party["text"] == "🎉 Mia 🎉"
+    queued = [*controller.state()["queue"], controller.state()["current"]]
+    assert any(item and item.get("singer") == "Mia" for item in queued)

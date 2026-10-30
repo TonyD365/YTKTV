@@ -90,7 +90,22 @@ A minimum spend can apply.
 
 The **Members** tab lists members with their stored balance and points. **＋ New Member** needs a
 name and a phone number; **💰 Top Up** adds to the balance. Set the members' discount and the
-points per unit spent in **Settings → Menu and prices**.
+points per unit spent in **Settings → Menu and prices**. **🎂 Birthday** saves a member's
+birthday (MM-DD): on that day they also get the birthday discount set in **Settings → Packages
+and coupons**.
+
+## Packages and coupons
+
+**Settings → Packages and coupons**:
+
+- **Packages** sell room time and items at one price, for example *Party, 3 hours, 1 × Beer
+  tower, $99*. When you open a room, the packages are offered under **How long?**. The bill
+  charges the package; time beyond it is charged by the hour. Hand the included items over
+  yourself (they are printed on the bill).
+- **Coupons** take a percent or an amount off a bill. Each has a code, an optional number of uses
+  and an optional last day. At the till type the code under **Coupon** and press **Apply**; the
+  bill shows it, and a use is counted when the room closes.
+- **Members' birthday discount**: an extra percent off for a member on their birthday.
 
 ## Receipts
 
@@ -150,6 +165,14 @@ One Desk keeps the records (the main Desk); other computers running YTKTV Desk c
 A terminal keeps nothing of its own: everything it does happens on the main Desk. If the main
 Desk cannot be reached, the terminal says so at the top and tries again on its own. **Remove**
 on the main Desk, or **Disconnect** on the terminal, ends the pairing.
+
+**On a phone**: Settings → Staff Terminals shows a link and a QR code (`https://<desk address>/staff`).
+Open it on a phone on the same Wi-Fi, accept the browser's security warning once (the Desk's
+certificate is its own, not from a public authority), then enter a code from **Add Terminal**
+and your name. The phone shows the rooms (open with a guest and a length, +30 / +60 minutes,
+check out with the payment method at the usual prices, mark cleaned), the service calls (**On my
+way**) and the orders waiting (**Delivered** or **Cancel**). Discounts and members stay on the
+Desk's till.
 
 **📜 Log** lists everything done on the main Desk and its terminals by day: the time, the
 machine's name and what was done ("Bar: Closed Kids, $60.00 by Card"). Choose a machine to see

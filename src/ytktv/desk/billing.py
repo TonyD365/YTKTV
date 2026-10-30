@@ -32,6 +32,10 @@ class Bill:
     discount: float = 0.0  # a discount given at the till, percent
     round_to: float = 0.0  # drop the small change: 0 (keep), 1 or 10
     payment: str = "Cash"
+    birthday_off: float = 0.0  # the member's birthday discount, percent
+    coupon: str = ""  # its code
+    coupon_percent: float = 0.0
+    coupon_amount: float = 0.0
 
     @property
     def subtotal(self) -> float:
@@ -43,7 +47,10 @@ class Bill:
 
     @property
     def total(self) -> float:
-        amount = self.before_discounts * (1 - self.member_off / 100) * (1 - self.discount / 100)
+        amount = self.before_discounts
+        for percent in (self.member_off, self.birthday_off, self.discount, self.coupon_percent):
+            amount *= 1 - percent / 100
+        amount = max(0.0, amount - self.coupon_amount)
         if self.round_to:
             amount = math.floor(amount / self.round_to + 1e-9) * self.round_to
         return round(amount, 2)
@@ -60,10 +67,17 @@ class Bill:
             )
         for label, percent in (
             (f"Member {self.member}", self.member_off),
+            ("Happy birthday!", self.birthday_off),
             ("Discount", self.discount),
+            (f"Coupon {self.coupon}", self.coupon_percent),
         ):
-            if percent and (self.member or label == "Discount"):
+            if percent and (self.member or label in ("Discount",) or label.startswith("Coupon")):
                 rows += f"<tr><td>{escape(label)} −{percent:g}%</td><td></td></tr>"
+        if self.coupon_amount:
+            rows += (
+                f"<tr><td>Coupon {escape(self.coupon)}</td><td align='right'>"
+                f"−{self.currency}{self.coupon_amount:.2f}</td></tr>"
+            )
         if self.round_to:
             rows += "<tr><td>Small change dropped</td><td></td></tr>"
         rows += f"<tr><td>Paid by</td><td align='right'>{escape(self.payment)}</td></tr>"
@@ -104,10 +118,18 @@ def bill(store: DeskStore, room_id: str, now: float | None = None) -> Bill:
         store.setting("currency", "$"),
         minimum=float(store.setting("minimum", "0")),
     )
-    hours = f"{int(minutes // 60)}h {int(minutes % 60):02d}m"
-    result.lines.append(
-        (f"Room · {hours} at {result.currency}{rate:g}/h", round(rate * minutes / 60, 2))
-    )
+    package = store.session_package(room_id)
+    if package is not None:
+        # The package pays for its own time; only time beyond it is charged by the hour.
+        includes = f" · {package.includes}" if package.includes else ""
+        result.lines.append((f"Package · {package.name}{includes}", round(package.price, 2)))
+        minutes = max(0.0, minutes - package.minutes)
+    if minutes or package is None:
+        hours = f"{int(minutes // 60)}h {int(minutes % 60):02d}m"
+        label = "Extra time" if package is not None else "Room"
+        result.lines.append(
+            (f"{label} · {hours} at {result.currency}{rate:g}/h", round(rate * minutes / 60, 2))
+        )
     for order in store.orders(room_id):
         if order.status != "cancelled":
             result.lines.append((f"{order.name} × {order.qty}", round(order.price * order.qty, 2)))

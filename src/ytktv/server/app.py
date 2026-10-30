@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from ytktv import catalog
 from ytktv.audio.sfx import SFX_NAMES
 from ytktv.core.controller import KTVController
+from ytktv.core.games import BIRTHDAY_SEARCH
 from ytktv.core.models import Song, VocalMode
 from ytktv.youtube.parse import extract_video_id
 from ytktv.youtube.search import ARTISTS, HOT_CATEGORIES
@@ -161,6 +162,7 @@ class _Broadcaster:
 class GameIn(BaseModel):
     value: int | None = Field(default=None, ge=1, le=100)
     player: str = Field(default="", max_length=30)
+    text: str = Field(default="", max_length=30)  # e.g. whose birthday it is
 
 
 class OrderItem(BaseModel):
@@ -336,6 +338,11 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         if name == "countdown":
             controller.countdown(10)
             return {"title": "⏱ Countdown", "text": "10", "detail": ""}
+        if name == "birthday":
+            found = source.search(BIRTHDAY_SEARCH, 5)
+            return controller.birthday(
+                (body.text if body else "") or player, found[0] if found else None
+            )
         if name == "random":
             category = random.choice(list(HOT_CATEGORIES))
             result = controller.random_song(source.hot(category), who=player)

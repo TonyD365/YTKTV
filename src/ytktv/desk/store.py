@@ -69,6 +69,32 @@ class Member:
     phone: str
     balance: float
     points: int
+    birthday: str = ""  # "MM-DD", or empty when not known
+
+
+@dataclass
+class Package:
+    """A bundle sold at one price: room time and a few items, e.g. 3 hours + a beer tower."""
+
+    package_id: int
+    name: str
+    price: float
+    minutes: int
+    includes: str = ""  # what comes with it, as staff hand it over ("1 × Beer tower")
+    active: bool = True
+
+
+@dataclass
+class Coupon:
+    code: str
+    kind: str  # "percent" off the bill, or an "amount" off it
+    value: float
+    uses_left: int | None = None  # None = any number of times
+    expires: float | None = None  # end of its last day; None = never
+    active: bool = True
+
+    def label(self, currency: str = "") -> str:
+        return f"−{self.value:g}%" if self.kind == "percent" else f"−{currency}{self.value:g}"
 
 
 @dataclass
@@ -392,6 +418,106 @@ class DeskStore:
             for a, b, c, d, e, f, g, h, i in rows
         ]
 
+    # -- packages and coupons ----------------------------------------------------
+
+    def packages(self, active_only: bool = False) -> list[Package]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, name, price, minutes, includes, active FROM packages"
+                + (" WHERE active=1" if active_only else "")
+                + " ORDER BY price"
+            ).fetchall()
+        return [Package(a, b, c, d, e, bool(f)) for a, b, c, d, e, f in rows]
+
+    def save_package(self, package: Package) -> int:
+        with self._lock:
+            values = (package.name, package.price, package.minutes, package.includes,
+                      int(package.active))  # fmt: skip
+            if package.package_id:
+                self._db.execute(
+                    "UPDATE packages SET name=?, price=?, minutes=?, includes=?, active=?"
+                    " WHERE id=?",
+                    (*values, package.package_id),
+                )
+                package_id = package.package_id
+            else:
+                cursor = self._db.execute(
+                    "INSERT INTO packages (name, price, minutes, includes, active)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    values,
+                )
+                package_id = int(cursor.lastrowid or 0)
+            self._db.commit()
+        return package_id
+
+    def remove_package(self, package_id: int) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM packages WHERE id=?", (package_id,))
+            self._db.commit()
+
+    def set_session_package(self, room_id: str, package_id: int | None) -> None:
+        """The open room was sold *package_id*: its bill charges the package's price."""
+        with self._lock:
+            self._db.execute(
+                "UPDATE sessions SET package_id=? WHERE room_id=?", (package_id, room_id)
+            )
+            self._db.commit()
+
+    def session_package(self, room_id: str) -> Package | None:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT p.id, p.name, p.price, p.minutes, p.includes, p.active FROM sessions s"
+                " JOIN packages p ON p.id = s.package_id WHERE s.room_id=?",
+                (room_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return Package(row[0], row[1], row[2], row[3], row[4], bool(row[5]))
+
+    def coupons(self) -> list[Coupon]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT code, kind, value, uses_left, expires, active FROM coupons ORDER BY code"
+            ).fetchall()
+        return [Coupon(a, b, c, d, e, bool(f)) for a, b, c, d, e, f in rows]
+
+    def save_coupon(self, coupon: Coupon) -> None:
+        if coupon.kind not in ("percent", "amount") or coupon.value <= 0:
+            raise ValueError("a coupon takes a percent or an amount off")
+        with self._lock:
+            self._db.execute(
+                "INSERT OR REPLACE INTO coupons VALUES (?, ?, ?, ?, ?, ?)",
+                (coupon.code.strip().upper(), coupon.kind, coupon.value, coupon.uses_left,
+                 coupon.expires, int(coupon.active)),
+            )  # fmt: skip
+            self._db.commit()
+
+    def remove_coupon(self, code: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM coupons WHERE code=?", (code.strip().upper(),))
+            self._db.commit()
+
+    def coupon(self, code: str, now: float | None = None) -> Coupon:
+        """A coupon that can be used now. Raises ValueError saying why it cannot."""
+        now = time.time() if now is None else now
+        found = next((c for c in self.coupons() if c.code == code.strip().upper()), None)
+        if found is None or not found.active:
+            raise ValueError("No such coupon")
+        if found.expires is not None and found.expires < now:
+            raise ValueError("This coupon has expired")
+        if found.uses_left is not None and found.uses_left <= 0:
+            raise ValueError("This coupon has been used up")
+        return found
+
+    def use_coupon(self, code: str) -> None:
+        with self._lock:
+            self._db.execute(
+                "UPDATE coupons SET uses_left = uses_left - 1"
+                " WHERE code=? AND uses_left IS NOT NULL",
+                (code.strip().upper(),),
+            )
+            self._db.commit()
+
     # -- members ----------------------------------------------------------------
 
     def add_member(self, name: str, phone: str, now: float | None = None) -> int:
@@ -410,11 +536,23 @@ class DeskStore:
             self._db.commit()
             return int(cursor.lastrowid or 0)
 
+    def set_birthday(self, member_id: int, birthday: str) -> None:
+        """*birthday* as "MM-DD" (any year), or empty to forget it."""
+        birthday = birthday.strip()
+        if birthday:
+            try:
+                time.strptime(f"2000-{birthday}", "%Y-%m-%d")
+            except ValueError as exc:
+                raise ValueError("a birthday is written MM-DD, e.g. 07-21") from exc
+        with self._lock:
+            self._db.execute("UPDATE members SET birthday=? WHERE id=?", (birthday, member_id))
+            self._db.commit()
+
     def members(self, query: str = "") -> list[Member]:
         like = f"%{query.strip()}%"
         with self._lock:
             rows = self._db.execute(
-                "SELECT id, name, phone, balance, points FROM members"
+                "SELECT id, name, phone, balance, points, birthday FROM members"
                 " WHERE name LIKE ? OR phone LIKE ? ORDER BY name",
                 (like, like),
             ).fetchall()
@@ -424,7 +562,8 @@ class DeskStore:
         phone = "".join(ch for ch in phone if ch.isdigit() or ch == "+")
         with self._lock:
             row = self._db.execute(
-                "SELECT id, name, phone, balance, points FROM members WHERE phone=?", (phone,)
+                "SELECT id, name, phone, balance, points, birthday FROM members WHERE phone=?",
+                (phone,),
             ).fetchone()
         return None if row is None else Member(*row)
 
@@ -764,6 +903,19 @@ def _staff_terminals(db: sqlite3.Connection) -> None:
     )
 
 
+def _packages_and_coupons(db: sqlite3.Connection) -> None:
+    db.executescript(
+        "CREATE TABLE IF NOT EXISTS packages (id INTEGER PRIMARY KEY, name TEXT NOT NULL,"
+        " price REAL NOT NULL, minutes INTEGER NOT NULL, includes TEXT NOT NULL DEFAULT '',"
+        " active INTEGER NOT NULL DEFAULT 1);"
+        "CREATE TABLE IF NOT EXISTS coupons (code TEXT PRIMARY KEY, kind TEXT NOT NULL,"
+        " value REAL NOT NULL, uses_left INTEGER, expires REAL,"
+        " active INTEGER NOT NULL DEFAULT 1);"
+        "ALTER TABLE sessions ADD COLUMN package_id INTEGER;"
+        "ALTER TABLE members ADD COLUMN birthday TEXT NOT NULL DEFAULT '';"
+    )
+
+
 def _local_only_rooms(db: sqlite3.Connection) -> None:
     db.execute("ALTER TABLE rooms ADD COLUMN local_only INTEGER NOT NULL DEFAULT 0")
 
@@ -771,6 +923,7 @@ def _local_only_rooms(db: sqlite3.Connection) -> None:
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _baseline,
     _staff_terminals,
+    _packages_and_coupons,
     _local_only_rooms,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
