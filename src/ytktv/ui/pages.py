@@ -780,6 +780,10 @@ class SettingsPage(Page):
             "Download the next songs in the queue ahead of time (smoother playback)",
             "preload_queue",
         )
+        low = QCheckBox("Low-power mode: 720p video, no light effects (Raspberry Pi, old PCs)")
+        low.setChecked(settings.low_power)
+        low.toggled.connect(self.set_low_power)
+        display.addWidget(low)
 
         # Vocals
         vocals = card("Vocal Separation")
@@ -887,6 +891,15 @@ class SettingsPage(Page):
         self.release_button.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(self._release_url))
         )
+
+    def set_low_power(self, on: bool) -> None:
+        from ytktv import low_power
+
+        settings = self.ctx.controller.settings
+        low_power.apply(settings, on)
+        self.quality.setCurrentIndex(max(0, self.quality.findData(settings.max_height)))
+        self.ctx.controller.set_lights(settings.lights)
+        self.ctx.controller.store.save()
 
     def _fill_screens(self) -> None:
         self.screen_combo.clear()
