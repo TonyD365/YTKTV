@@ -862,6 +862,7 @@ def test_a_closed_room_takes_no_songs_and_times_up_after_the_song(window, qtbot)
 
 def test_service_from_the_console_and_the_phone(window, qtbot):
     from fastapi.testclient import TestClient
+    from PySide6.QtWidgets import QPushButton
 
     from tests.helpers import FakeSource
     from ytktv.rooms.state import RoomState
@@ -890,8 +891,15 @@ def test_service_from_the_console_and_the_phone(window, qtbot):
     dialog = ServiceDialog(client)
     qtbot.addWidget(dialog)
     dialog.note.setText("two straws")
-    dialog.call("Drinks")
-    assert sent[-1] == ("call", "Drinks", "two straws")
+    dialog.call("Other")
+    assert sent[-1] == ("call", "Other", "two straws")
+    buttons = [b.text() for b in dialog.findChildren(QPushButton)]
+    assert "Drinks" not in buttons and "Other" in buttons  # drinks come from the menu
+    stepper = next(iter(dialog.quantities.values()))
+    stepper.more.click()
+    stepper.more.click()
+    stepper.less.click()
+    assert stepper.value() == 1
 
     controller.front_desk = client
     assert controller.state()["service"]["products"][0]["name"] == "Cola"
