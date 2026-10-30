@@ -130,6 +130,8 @@ room opens as booked. Or mark it **Cancelled** or **No-show**.
   for a moment (its queue and time are kept).
 - **📢 Broadcast**: a message to every open room, or some of them, for 10 or 30 seconds or until
   someone presses **Got it**, optionally pausing the music with a sound.
+- **Local songs only** (**Settings → Room settings**): the room may sing only video files from its
+  own computer's local folders, not YouTube. An open room changes at once.
 - **Room types** (Small, Medium, Large, VIP, Party) with seats, and a price per hour for each
   room if they differ: **Settings → Room settings**.
 - **Menu and stock**: items with a category, price and stock (empty means it never runs out).

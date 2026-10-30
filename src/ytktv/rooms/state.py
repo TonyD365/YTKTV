@@ -15,6 +15,7 @@ class RoomState:
     guest: str = ""
     ends_at: float | None = None  # desk clock; None = no time limit
     locked: bool = False  # the desk paused the room for a while; the session goes on
+    local_only: bool = False  # only songs from this computer's folders, not YouTube
 
     def apply(self, message: dict[str, Any]) -> bool:
         """Take a (verified) desk message; True when it changed the room."""
@@ -24,9 +25,11 @@ class RoomState:
             self.closed = False
             self.guest = str(message.get("guest") or "")
             self.ends_at = float(ends) if ends is not None else None
+            self.local_only = bool(message.get("local_only"))
             return True
         if kind == "close":
             self.closed, self.guest, self.ends_at, self.locked = True, "", None, False
+            self.local_only = False
             return True
         if kind in ("lock", "unlock"):
             self.locked = kind == "lock"

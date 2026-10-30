@@ -165,7 +165,12 @@ def test_the_desk_opens_extends_and_closes_rooms(qtbot):
     window.close_room(confirm=False)
     assert not store.room(room.room_id).is_open
     store.open_room(room.room_id, "", None)
-    assert store.room(room.room_id).message() == {"type": "open", "guest": "", "ends_at": None}
+    assert store.room(room.room_id).message() == {
+        "type": "open",
+        "guest": "",
+        "ends_at": None,
+        "local_only": False,
+    }
 
 
 def test_calls_orders_and_the_bill():
