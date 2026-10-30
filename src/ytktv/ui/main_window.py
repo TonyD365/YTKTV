@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from functools import partial
 from typing import Any
 
 from PySide6.QtCore import QDateTime, Qt, QTimer
-from PySide6.QtGui import QAction, QCloseEvent, QKeyEvent, QResizeEvent
+from PySide6.QtGui import QAction, QCloseEvent, QGuiApplication, QKeyEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -22,9 +23,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ytktv import __version__
 from ytktv.core.controller import PITCH_RANGE, SPEEDS, KTVController
 from ytktv.core.models import PlayStatus, VocalMode
-from ytktv.rooms import binding
+from ytktv.rooms import admin, binding
 from ytktv.rooms.client import RoomClient
 from ytktv.rooms.state import WARN_AT, format_left
 from ytktv.ui.games_page import GamesPage
@@ -76,6 +78,8 @@ NAV = (
     ("mixer", "Mixer"),
     ("settings", "Settings"),
 )
+
+log = logging.getLogger(__name__)
 
 
 _MORE_MODES = "More ▾"
@@ -581,7 +585,49 @@ class MainWindow(QMainWindow):
             room_client.on_event = lambda kind, data: self.controller.bus.emit(
                 "room", data if isinstance(data, dict) else {"type": kind}
             )
+            # Read on the client's thread: only plain settings and lists made here.
+            self._admin_extra = self._admin_details()
+            room_client.admin_report = lambda: admin.report(
+                self.controller.settings, self._admin_extra
+            )
             self.apply_room()
+
+    def _admin_details(self) -> dict[str, Any]:
+        """What the staff terminal needs to offer choices: screens, sound outputs, version."""
+        from ytktv.audio.devices import list_outputs
+
+        try:
+            outputs = list_outputs()
+        except Exception:  # no sound devices to list here
+            outputs = []
+        separation = getattr(self.settings_page, "_runtime_text", "") or ""
+        return {
+            "version": __version__,
+            "screens": [screen.name() for screen in QGuiApplication.screens()],
+            "outputs": outputs,
+            "separation": separation,
+        }
+
+    def _apply_admin(self, values: Any) -> None:
+        """The staff terminal changed this room's admin settings (a signed desk message)."""
+        settings = self.controller.settings
+        try:
+            changed = admin.apply(settings, values)
+        except ValueError as exc:
+            log.warning("ignored admin settings from the staff terminal: %s", exc)
+            return
+        if not changed:
+            return
+        self.controller.store.save()
+        if "output_device" in changed:
+            self.controller.set_output_device(settings.output_device)
+        if {"mv_screen", "mv_fullscreen"} & set(changed):
+            self.place_mv()
+        if "local_folders" in changed and self.controller.local is not None:
+            self.controller.local.scan_soon()
+        self.settings_page.refresh_from_settings()
+        self._admin_extra = self._admin_details()
+        self.show_toast("The staff terminal changed this room's settings")
 
     def open_service(self) -> None:
         if self.room_client is None:
@@ -593,6 +639,8 @@ class MainWindow(QMainWindow):
     def _on_desk(self, message: dict[str, Any]) -> None:
         """Everything the desk sends has been verified by the room client already."""
         kind = message.get("type")
+        if kind == "admin_settings":
+            self._apply_admin(message.get("values"))
         if kind == "local_folders":
             if self.controller.local is not None:
                 self.controller.local.scan_soon()

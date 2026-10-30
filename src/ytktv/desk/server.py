@@ -46,10 +46,15 @@ class Hub:
 
     def __init__(self) -> None:
         self.channels: dict[str, Channel] = {}
+        self.reports: dict[str, dict[str, Any]] = {}
         self.loop: asyncio.AbstractEventLoop | None = None
 
     def online(self) -> set[str]:
         return set(self.channels)
+
+    def report(self, room_id: str) -> dict[str, Any] | None:
+        """The room's admin settings as it last reported them, while it is connected."""
+        return self.reports.get(room_id) if room_id in self.channels else None
 
     async def send(self, room_id: str, message: dict[str, Any]) -> bool:
         channel = self.channels.get(room_id)
@@ -128,7 +133,9 @@ def create_desk_app(store: DeskStore, hub: Hub | None = None, cert_hash: str = "
             while True:
                 message = json.loads(await ws.receive_text())
                 store.seen(room_id)
-                if isinstance(message, dict):
+                if isinstance(message, dict) and message.get("type") == "admin_report":
+                    hub.reports[room_id] = clean_report(message)
+                elif isinstance(message, dict):
                     receive(store, room_id, message)
         except WebSocketDisconnect:
             pass
@@ -181,6 +188,16 @@ def products_message(store: DeskStore) -> dict[str, Any]:
             for p in store.products(active_only=True)
         ],
     }
+
+
+def clean_report(message: dict[str, Any]) -> dict[str, Any]:
+    """Keep a room's report small and plain: it is shown to staff, never executed."""
+    raw = json.dumps(message)[:20_000]
+    try:
+        report = json.loads(raw)
+    except ValueError:
+        return {}
+    return report if isinstance(report, dict) else {}
 
 
 def folders_message(room: Room) -> dict[str, Any]:

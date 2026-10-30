@@ -235,5 +235,9 @@ class RemoteHub:
     def online(self) -> set[str]:
         return set(self.main.call("hub", "online"))
 
+    def report(self, room_id: str) -> dict[str, Any] | None:
+        result = self.main.call("hub", "report", room_id)
+        return result if isinstance(result, dict) else None
+
     def send_soon(self, room_id: str, message: dict[str, Any]) -> None:
         self.main.call("hub", "send_soon", room_id, message)

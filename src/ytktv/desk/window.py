@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon
@@ -28,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv.desk import lock
+from ytktv.desk.admin_dialog import AdminSettingsDialog
 from ytktv.desk.billing import bill
 from ytktv.desk.deals import DealsSettings
 from ytktv.desk.pages import (
@@ -366,13 +368,9 @@ class DeskWindow(QMainWindow):
             "On or off: the room may sing only video files from its own computer, not YouTube"
         )
         local_only.clicked.connect(self.toggle_local_only)
-        folders = QPushButton("Local Folders…")
-        folders.setToolTip("Folders of video files on the room's own computer, one per line")
-        folders.clicked.connect(lambda: self.set_local_folders())
         buttons.addWidget(rename)
         buttons.addWidget(kind)
         buttons.addWidget(local_only)
-        buttons.addWidget(folders)
         buttons.addWidget(price)
         buttons.addWidget(self.unbind_button)
         buttons.addStretch()
@@ -465,6 +463,11 @@ class DeskWindow(QMainWindow):
             "close": button("💳  Check Out", self.close_room, "Show the bill and close the room"),
             "cleaned": button("🧹  Cleaned", self.mark_cleaned, "The room is ready again"),
             "repair": button("🔧  Maintenance", self.toggle_maintenance),
+            "admin": button(
+                "⚙  Admin Settings",
+                lambda: self.admin_settings(),
+                "The room's video, sound, vocal separation, local songs, lights and updates",
+            ),
         }
         head("STAFF TERMINAL")
         button("📢  Broadcast", self.broadcast)
@@ -725,6 +728,7 @@ class DeskWindow(QMainWindow):
             "close": room.is_open,
             "cleaned": not room.is_open and room.state == "cleaning",
             "repair": not room.is_open,
+            "admin": up,  # the room applies them, so it must be connected
         }
         for key, action in self.room_actions.items():
             action.setEnabled(enabled[key])
@@ -886,6 +890,32 @@ class DeskWindow(QMainWindow):
         if ok:
             self.store.set_type(room.room_id, kind, seats)
             self.refresh()
+
+    def admin_settings(self, values: dict[str, Any] | None = None) -> bool:
+        """Edit the selected room's admin settings; the room applies them. False if it cannot."""
+        room = self.store.room(self.selected) if self.selected else None
+        if room is None:
+            return False
+        report = self.hub.report(room.room_id)
+        if report is None:
+            if values is not None:  # called with the values already (no one to tell)
+                return False
+            QMessageBox.information(
+                self, "Admin Settings", f"{room.name} is offline. Its settings can be changed"
+                " while it is connected."
+            )  # fmt: skip
+            return False
+        if values is None:
+            dialog = AdminSettingsDialog(room.name, report, self)
+            if not dialog.exec():
+                return False
+            values = dialog.values()
+        if not values:
+            return True
+        if "local_folders" in values:  # kept here too, so the room gets them when it reconnects
+            self.store.set_local_folders(room.room_id, values["local_folders"])
+        self.hub.send_soon(room.room_id, {"type": "admin_settings", "values": values})
+        return True
 
     def set_local_folders(self, folders: list[str] | None = None) -> None:
         room_id = self._selected_setting()

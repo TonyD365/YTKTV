@@ -726,8 +726,13 @@ class SettingsPage(Page):
         scroll.setWidget(holder)
         self.body.addWidget(scroll, stretch=1)
 
-        def card(title: str) -> QVBoxLayout:
+        self.admin_cards: list[QWidget] = []  # with a staff terminal, it sets these
+        self._checks: dict[str, QCheckBox] = {}
+
+        def card(title: str, admin: bool = False) -> QVBoxLayout:
             frame = QFrame()
+            if admin:
+                self.admin_cards.append(frame)
             frame.setObjectName("settingsCard")
             layout = QVBoxLayout(frame)
             layout.setContentsMargins(20, 16, 20, 16)
@@ -760,10 +765,20 @@ class SettingsPage(Page):
 
             box.toggled.connect(changed)
             layout.addWidget(box)
+            self._checks[attr] = box
             return box
 
+        self.managed_note = card("Admin Settings")
+        managed = QLabel(
+            "This room is bound to a staff terminal. Video, sound output, vocal separation,"
+            " local songs, smart lights and updates are set there: select this room and press"
+            " ⚙ Admin Settings."
+        )
+        managed.setWordWrap(True)
+        self.managed_note.addWidget(managed)
+
         # MV screen
-        display = card("MV Screen")
+        display = card("MV Screen", admin=True)
         self.screen_combo = QComboBox()
         self._fill_screens()
         self.screen_combo.activated.connect(self._screen_chosen)
@@ -782,7 +797,7 @@ class SettingsPage(Page):
         )
 
         # Vocals
-        vocals = card("Vocal Separation")
+        vocals = card("Vocal Separation", admin=True)
         self.separation_label = QLabel()
         self.separation_label.setWordWrap(True)
         vocals.addWidget(self.separation_label)
@@ -803,7 +818,7 @@ class SettingsPage(Page):
         )
 
         # HD unlock for restricted videos
-        self.hd_card = card("Restricted Videos")
+        self.hd_card = card("Restricted Videos", admin=True)
         self.hd_label = QLabel("Not available in this build.")
         self.hd_label.setWordWrap(True)
         self.hd_card.addWidget(self.hd_label)
@@ -828,7 +843,9 @@ class SettingsPage(Page):
         column.addWidget(FrontDeskCard(ctx.controller.store, ctx.room_client))
         self.local_card = LocalSongsCard(ctx.controller)
         column.addWidget(self.local_card)
-        column.addWidget(SmartLightsCard(ctx.controller))
+        lights = SmartLightsCard(ctx.controller)
+        column.addWidget(lights)
+        self.admin_cards += [self.local_card, lights]
 
         remote = card("Keyboard and Remote")
         keys = QLabel(
@@ -846,7 +863,7 @@ class SettingsPage(Page):
         self.text_size.currentTextChanged.connect(self.set_text_size)
         labelled(display, "Text on the console", self.text_size)
 
-        setup = card("Setup")
+        setup = card("Setup", admin=True)
         again = QPushButton("Run Setup Again")
         again.setToolTip(
             "Choose the sound output, the MV screen and the first microphone step by step"
@@ -864,7 +881,7 @@ class SettingsPage(Page):
         help_card.addWidget(diagnose, alignment=Qt.AlignmentFlag.AlignLeft)
 
         # Updates
-        updates = card("Updates")
+        updates = card("Updates", admin=True)
         self.update_label = QLabel(f"YTKTV {__version__}")
         updates.addWidget(self.update_label)
         check(updates, "Install new releases automatically", "auto_update")
@@ -887,6 +904,31 @@ class SettingsPage(Page):
         self.release_button.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(self._release_url))
         )
+
+    def apply_role(self) -> None:
+        """Bound to a staff terminal, this page keeps only the guests' settings."""
+        bound = bool(self.ctx.controller.settings.desk_url)
+        for frame in self.admin_cards:
+            frame.setVisible(not bound)
+        note = self.managed_note.parentWidget()
+        if note is not None:
+            note.setVisible(bound)
+
+    def refresh_from_settings(self) -> None:
+        """Show settings that were changed elsewhere (by the staff terminal)."""
+        settings = self.ctx.controller.settings
+        for attr, box in self._checks.items():
+            box.blockSignals(True)
+            box.setChecked(bool(getattr(settings, attr)))
+            box.blockSignals(False)
+        self.quality.setCurrentIndex(max(0, self.quality.findData(settings.max_height)))
+        self._fill_screens()
+        self.local_card.load()
+        self.apply_role()
+
+    def showEvent(self, event: Any) -> None:  # noqa: N802 - Qt's name
+        self.apply_role()
+        super().showEvent(event)
 
     def _fill_screens(self) -> None:
         self.screen_combo.clear()
