@@ -205,45 +205,86 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 
 ## Install
 
-### Installers
+### Install with one command (recommended)
 
-Download the installer for your system from the
+The quickest way, and the one without security warnings: one command downloads the latest
+version, checks it and installs it. Later updates come by themselves from inside YTKTV
+(Settings → Updates).
+
+#### Windows 10 / 11 (x64 and ARM)
+
+1. Right-click the Start button and choose **Terminal** (or search for **PowerShell**).
+2. Paste this line and press Enter:
+
+   ```powershell
+   winget install TonyD365.YTKTV
+   ```
+
+   For the staff terminal: `winget install TonyD365.YTKTVDesk`.
+3. Open **YTKTV** from the Start menu.
+
+winget comes with Windows 10 (1809 and later) and Windows 11. To update by hand:
+`winget upgrade TonyD365.YTKTV`; to remove: `winget uninstall TonyD365.YTKTV`.
+
+#### macOS (Apple Silicon and Intel)
+
+1. Open **Terminal** (press ⌘ Space, type `Terminal`, press Enter).
+2. Paste this line and press Enter:
+
+   ```bash
+   curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash
+   ```
+
+   For the staff terminal: `curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash -s -- --desk`.
+3. Type your Mac's login password when asked (nothing shows while you type; that is normal),
+   then press Enter.
+4. Open **YTKTV** from Applications or Launchpad.
+
+The script downloads the universal package from the latest release, checks it against the
+release's SHA256 checksums and installs it with macOS's own installer. Because it is not
+downloaded by a browser, macOS does not mark it as "damaged", and no `xattr` step is needed.
+To remove YTKTV, drag it from Applications to the Trash.
+
+#### Linux (x86-64 and ARM, e.g. Raspberry Pi 4/5)
+
+1. Open a terminal.
+2. Paste this line and press Enter:
+
+   ```bash
+   curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash
+   ```
+
+   For the staff terminal, add `-s -- --desk` after `bash`.
+3. Start it with `~/Applications/YTKTV.AppImage`.
+
+The script picks the AppImage for your processor, checks it and puts it in
+`~/Applications`. To remove it, delete that file.
+
+### Install from the release page
+
+You can also download the installer yourself from the
 [latest release](https://github.com/TonyD365/YTKTV/releases/latest):
 
-| System | File |
-|---|---|
-| macOS (Apple Silicon and Intel) | `YTKTV-<version>-macos-universal.pkg` |
-| Windows 10/11 (64-bit) | `YTKTV-<version>-windows-x64-setup.exe` |
-| Linux (x86-64) | `YTKTV-<version>-linux-x86_64.AppImage` |
-| Windows on ARM | `YTKTV-<version>-windows-arm64-setup.exe` |
-| Linux ARM (64-bit, e.g. Raspberry Pi 4/5) | `YTKTV-<version>-linux-aarch64.AppImage` |
-| YTKTV Desk, macOS (Apple Silicon and Intel) | `YTKTV-Desk-<version>-macos-universal.pkg` |
-| YTKTV Desk, Windows | `YTKTV-Desk-<version>-windows-x64-setup.exe` |
-| YTKTV Desk, Linux | `YTKTV-Desk-<version>-linux-x86_64.AppImage` |
-| YTKTV Desk, ARM | `YTKTV-Desk-<version>-windows-arm64-setup.exe` or `-linux-aarch64.AppImage` |
+| System | YTKTV | YTKTV Desk |
+|---|---|---|
+| macOS (Apple Silicon and Intel) | `YTKTV-<version>-macos-universal.pkg` | `YTKTV-Desk-<version>-macos-universal.pkg` |
+| Windows 10/11 (64-bit) | `YTKTV-<version>-windows-x64-setup.exe` | `YTKTV-Desk-<version>-windows-x64-setup.exe` |
+| Windows on ARM | `YTKTV-<version>-windows-arm64-setup.exe` | `YTKTV-Desk-<version>-windows-arm64-setup.exe` |
+| Linux (x86-64) | `YTKTV-<version>-linux-x86_64.AppImage` | `YTKTV-Desk-<version>-linux-x86_64.AppImage` |
+| Linux ARM (64-bit) | `YTKTV-<version>-linux-aarch64.AppImage` | `YTKTV-Desk-<version>-linux-aarch64.AppImage` |
 
-**Easiest on Windows**: in a terminal, run `winget install TonyD365.YTKTV` (YTKTV Desk:
-`winget install TonyD365.YTKTVDesk`). No SmartScreen prompt, and `winget upgrade` updates it.
+The installers are not code-signed, so downloads from a browser need one extra step:
 
-**Easiest on macOS and Linux**: paste this into Terminal. It downloads the latest release,
-checks it and installs it (macOS asks for your password once), with no quarantine warning:
+- **macOS**: before opening the package, remove the download mark in Terminal:
 
-```bash
-curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash
-```
+  ```bash
+  xattr -d com.apple.quarantine ~/Downloads/YTKTV-*-macos-universal.pkg
+  ```
 
-Add `-s -- --desk` after `bash` for YTKTV Desk.
-
-The installers are not code-signed. If you download the macOS package in a browser instead,
-remove the download quarantine with `xattr` before opening it:
-
-```bash
-xattr -d com.apple.quarantine ~/Downloads/YTKTV-<version>-macos-universal.pkg
-```
-
-If macOS still refuses to open the app after installing, run
-`sudo xattr -dr com.apple.quarantine /Applications/YTKTV.app`. On Windows, choose
-**More info → Run anyway** in the SmartScreen prompt.
+  If the installed app still says it "is damaged" or "cannot be opened", run
+  `sudo xattr -dr com.apple.quarantine /Applications/YTKTV.app` once.
+- **Windows**: if SmartScreen says "Windows protected your PC", choose **More info → Run anyway**.
+- **Linux**: make the AppImage runnable with `chmod +x YTKTV-*.AppImage`, then run it.
 
 **YTKTV asks to install mpv.** YTKTV plays video with [mpv](https://mpv.io), a separate free
 program under the GPL, which is not part of YTKTV or its releases. When YTKTV starts and finds
