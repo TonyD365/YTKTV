@@ -104,6 +104,8 @@
 | 管理终端 YTKTV Desk，Linux | `YTKTV-Desk-<版本>-linux-x86_64.AppImage` |
 | 管理终端 YTKTV Desk，ARM | `YTKTV-Desk-<版本>-windows-arm64-setup.exe` 或 `-linux-aarch64.AppImage` |
 
+**Windows 最省事的装法**：在终端里运行 `winget install TonyD365.YTKTV`（管理终端：`winget install TonyD365.YTKTVDesk`）。不会弹 SmartScreen 警告，以后用 `winget upgrade` 更新。
+
 **macOS 和 Linux 最省事的装法**：在"终端"里粘贴下面这一行。它会下载最新版本、校验后安装（macOS 会问一次开机密码），不会出现"已损坏"的提示：
 
 ```bash
