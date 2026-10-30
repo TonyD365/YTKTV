@@ -479,6 +479,9 @@ def main(argv: list[str] | None = None) -> int:
 
     keys = RemoteKeys(controller, app)  # media keys and remotes work in every window
     app.installEventFilter(keys)
+    from ytktv.ui.feedback import install_crash_handler
+
+    install_crash_handler(window)
     window.show()
     window.place_mv()
     if not settings.setup_done:

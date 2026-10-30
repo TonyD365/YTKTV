@@ -33,3 +33,19 @@ def test_log_is_kept_and_zipped_without_secrets(tmp_path, monkeypatch):
     assert saved["music_volume"] == 70 and saved["mics"][0]["api_token"] == diagnostics.HIDDEN
     assert about["app"] == "YTKTV" and about["version"]
     assert diagnostics.default_name("YTKTV Desk").startswith("ytktv-desk-diagnostics-")
+
+
+def test_crash_report_link_has_the_error_and_no_upload():
+    import sys
+    import urllib.parse
+
+    from ytktv.ui import feedback
+
+    try:
+        raise ValueError("the song would not load")
+    except ValueError:
+        kind, error, trace = sys.exc_info()
+    url = feedback.crash_report_url(kind, error, trace)
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+    assert url.startswith(feedback.ISSUES) and len(url) <= feedback.MAX_URL
+    assert "ValueError" in query["title"][0] and "would not load" in query["body"][0]
