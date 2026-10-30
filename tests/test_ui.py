@@ -1119,3 +1119,92 @@ def test_room_window_applies_desk_settings_and_hides_admin_cards(window):
     controller.settings.desk_url = ""
     page.apply_role()
     assert not any(frame.isHidden() for frame in page.admin_cards)
+
+
+# -- look checks: every page, no white boxes on the dark theme ---------------------------
+
+LOOK_TYPES = ("QLineEdit", "QListWidget", "QTableWidget", "QComboBox", "QPlainTextEdit",
+              "QSpinBox", "QDoubleSpinBox", "QDateEdit", "QTextEdit")  # fmt: skip
+WHITE_SHARE = 0.5  # a box more than half white stands out on the dark theme
+
+
+@pytest.fixture
+def themed():
+    """The app's dark style sheet, as YTKTV sets it at start (tests run without it)."""
+    from PySide6.QtWidgets import QApplication
+
+    from ytktv.ui import theme
+
+    app = QApplication.instance()
+    before = app.styleSheet()
+    app.setStyleSheet(theme.STYLESHEET)
+    yield
+    app.setStyleSheet(before)
+
+
+def white_boxes(root, allowed=()):
+    """Visible input boxes and lists that are drawn mostly white."""
+    import os
+
+    from PySide6.QtWidgets import QWidget
+
+    bad = []
+    for widget in root.findChildren(QWidget):
+        kind = type(widget).__name__
+        if kind not in LOOK_TYPES or not widget.isVisible() or widget.objectName() in allowed:
+            continue
+        if widget.width() < 20 or widget.height() < 12:
+            continue
+        image = widget.grab().toImage()
+        step = max(1, min(image.width(), image.height()) // 12)
+        samples = [
+            image.pixelColor(x, y)
+            for x in range(0, image.width(), step)
+            for y in range(0, image.height(), step)
+        ]
+        white = sum(1 for c in samples if min(c.red(), c.green(), c.blue()) > 225)
+        if samples and white / len(samples) > WHITE_SHARE:
+            bad.append(f"{kind} {widget.objectName() or ''} in {type(widget.parent()).__name__}")
+    folder = os.environ.get("YTKTV_SCREENSHOTS")
+    if folder:  # CI keeps the pictures for people to look at
+        os.makedirs(folder, exist_ok=True)
+        root.grab().save(
+            os.path.join(folder, f"{root.property('shot') or type(root).__name__}.png")
+        )
+    return bad
+
+
+def test_console_pages_have_no_white_boxes(themed, window, qtbot):
+    main, _ = window
+    main.resize(1400, 900)
+    problems = {}
+    for key in main.pages:
+        main.show_page(key)
+        qtbot.wait(20)
+        main.setProperty("shot", f"console-{key}")
+        found = white_boxes(main)
+        if found:
+            problems[key] = found
+    assert problems == {}
+
+
+def test_desk_pages_have_no_white_boxes(themed, qtbot):
+    from ytktv.desk.server import Hub
+    from ytktv.desk.store import DeskStore
+    from ytktv.desk.window import DeskWindow
+
+    store = DeskStore()
+    store.pair(store.new_code(), "Kids")
+    desk = DeskWindow(store, Hub(), "192.168.1.10:8770")
+    qtbot.addWidget(desk)
+    desk.resize(1400, 900)
+    desk.show()
+    problems = {}
+    for index in range(desk.stack.count()):
+        desk.show_tab(index)
+        qtbot.wait(20)
+        desk.setProperty("shot", f"desk-{index}")
+        found = white_boxes(desk)
+        if found:
+            problems[index] = found
+    assert problems == {}
