@@ -40,6 +40,9 @@ STATUS_TEXT = {
     "no_show": "No-show",
 }
 
+# Bill lines that pay for the room itself, not for items.
+ROOM_LINES = ("Room ·", "Package ·", "Extra time ·")
+
 
 def day_bounds(day: QDate) -> tuple[float, float]:
     start = datetime(day.year(), day.month(), day.day())
@@ -374,11 +377,11 @@ def shift_report(store: DeskStore, now: float | None = None) -> str:
     # Strictly after the hand-over: Windows' clock can give both the same time.
     visits = [v for v in store.history(started, now + 1) if v.closed_at > started]
     currency = store.setting("currency", "$")
-    rooms_fee = sum(a for v in visits for t, a in v.lines if t.startswith("Room ·"))
+    rooms_fee = sum(a for v in visits for t, a in v.lines if t.startswith(ROOM_LINES))
     sold: Counter[str] = Counter()
     for v in visits:
         for text, _amount in v.lines:
-            if not text.startswith("Room ·") and " × " in text:
+            if not text.startswith(ROOM_LINES) and " × " in text:
                 name, qty = text.rsplit(" × ", 1)
                 sold[name] += int(qty) if qty.isdigit() else 1
     open_now = [r.name for r in store.rooms() if r.is_open]
@@ -460,7 +463,7 @@ class ShiftDialog(QDialog):
 class MembersPage(QWidget):
     """Members: their stored balance and points. Members save at the till."""
 
-    COLUMNS = ("Name", "Phone", "Balance", "Points")
+    COLUMNS = ("Name", "Phone", "Balance", "Points", "Birthday")
 
     def __init__(self, store: DeskStore) -> None:
         super().__init__()
@@ -472,7 +475,11 @@ class MembersPage(QWidget):
         self.search.setPlaceholderText("Find a member by name or phone")
         self.search.textChanged.connect(self.refresh)
         top.addWidget(self.search, stretch=1)
-        for text, handler in (("＋ New Member", self.new_member), ("💰 Top Up", self.top_up)):
+        for text, handler in (
+            ("＋ New Member", self.new_member),
+            ("💰 Top Up", self.top_up),
+            ("🎂 Birthday", self.set_birthday),
+        ):
             button = QPushButton(text)
             button.clicked.connect(handler)
             top.addWidget(button)
@@ -498,7 +505,7 @@ class MembersPage(QWidget):
             row = self.table.rowCount()
             self.table.insertRow(row)
             for col, text in enumerate(
-                (m.name, m.phone, f"{currency}{m.balance:,.2f}", str(m.points))
+                (m.name, m.phone, f"{currency}{m.balance:,.2f}", str(m.points), m.birthday)
             ):
                 self.table.setItem(row, col, QTableWidgetItem(text))
         off = self.store.setting("member_discount", "10")
@@ -526,6 +533,24 @@ class MembersPage(QWidget):
             return 0
         self.refresh()
         return member_id
+
+    def set_birthday(self, _checked: bool = False, birthday: str | None = None) -> None:
+        member = self.selected()
+        if member is None:
+            return
+        if birthday is None:
+            birthday, ok = QInputDialog.getText(
+                self, "Birthday", f"{member.name}'s birthday, as MM-DD (e.g. 07-21):",
+                text=member.birthday,
+            )  # fmt: skip
+            if not ok:
+                return
+        try:
+            self.store.set_birthday(member.member_id, birthday)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Birthday", str(exc).capitalize() + ".")
+            return
+        self.refresh()
 
     def top_up(self, _checked: bool = False, amount: float | None = None) -> None:
         member = self.selected()

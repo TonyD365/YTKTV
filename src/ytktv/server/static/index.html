@@ -621,6 +621,14 @@ const GAMES = [
   {key: "coin", icon: "🪙", title: "Flip a Coin", color: "#a16207", blurb: "Heads or tails",
    rules: "Call it, then flip.", start: "Flip!",
    async go() { const r = await playGame("coin"); flash(Array.from({length: 12}, (_, i) => ["🪙", i % 2 ? "Tails" : "Heads", 80]), () => showResult(r, 64), 90); }},
+  {key: "tournament", icon: "👑", title: "King of Singers", color: "#b45309", blurb: "Knockout rounds",
+   rules: "Everyone in the queue, two per match. Sing a song with your name on it: the score card decides who goes through.", start: "Start Tournament",
+   setup() { return [gameButton("🔄 Bracket", async () => { const r = await playGame("tournament_status"); gameStage(r.text, r.detail, 30); })]; },
+   async go() { const r = await playGame("tournament"); flash(Array(6).fill(["👑", "Drawing the matches…", 80]), () => gameStage(r.text, r.detail, 30)); }},
+  {key: "birthday", icon: "🎂", title: "Birthday", color: "#db2777", blurb: "Name on the TV, then the song",
+   rules: "Type whose birthday it is: their name goes up on the TV and the birthday song plays next.", start: "Celebrate!",
+   setup() { this.input = el("input", {placeholder: "Whose birthday?", maxlength: "30"}); return [this.input]; },
+   async go() { gameStage("🎂", "Finding the birthday song…"); const r = await playGame("birthday", {text: this.input.value.trim()}); flash(["🎈", "🎁", "🎉", "🎂"].flatMap((c) => [[c, "", 90]]).concat([["🎉", "", 90]]), () => showResult(r, 40), 150); }},
 ];
 let currentGame = null;
 function openGame(game) {

@@ -182,3 +182,103 @@ class LiarsDice:
         totals = "  ".join(f"{DICE[f]}×{counts[f] + (counts[0] if f else 0)}" for f in range(6))
         self.hands = {}
         return {"title": "🎲 Liar's dice — reveal", "text": hands, "detail": totals}
+
+
+class Tournament:
+    """King of Singers: knockout rounds of one-on-one songs; the higher score goes through.
+
+    Scores come from the score card when a match's singer finishes a song (or are typed in).
+    """
+
+    TITLE = "👑 King of Singers"
+
+    def __init__(self, rng: random.Random | None = None) -> None:
+        self.rng = rng or random.Random()
+        self.round = 0
+        self.matches: list[tuple[str, str]] = []
+        self.index = 0
+        self.scores: dict[str, int] = {}
+        self.winners: list[str] = []
+        self.champion = ""
+
+    @property
+    def active(self) -> bool:
+        return bool(self.matches) and not self.champion
+
+    def start(self, names: list[str]) -> dict[str, str]:
+        players = [n for n in dict.fromkeys(n.strip() for n in names) if n]
+        if len(players) < 2:
+            raise ValueError("a tournament needs at least two singers")
+        self.rng.shuffle(players)
+        self.round, self.champion = 0, ""
+        return self._next_round(players)
+
+    def _next_round(self, players: list[str]) -> dict[str, str]:
+        self.round += 1
+        self.matches = [(players[i], players[i + 1]) for i in range(0, len(players) - 1, 2)]
+        # With an odd number, the last singer goes through to the next round without a match.
+        self.winners = [players[-1]] if len(players) % 2 else []
+        self.index, self.scores = 0, {}
+        return self.public()
+
+    def current(self) -> tuple[str, str] | None:
+        return self.matches[self.index] if self.active else None
+
+    def public(self) -> dict[str, str]:
+        if self.champion:
+            return {"title": self.TITLE, "text": f"👑 {self.champion}", "detail": "Champion!"}
+        match = self.current()
+        if match is None:
+            return {"title": self.TITLE, "text": "Add singers and start", "detail": ""}
+        scored = "  ·  ".join(f"{n} {self.scores[n]}" for n in match if n in self.scores)
+        bye = f"  ·  {self.winners[0]} goes through" if self.winners and self.index == 0 else ""
+        return {
+            "title": f"{self.TITLE} · Round {self.round}",
+            "text": f"{match[0]}  vs  {match[1]}",
+            "detail": f"Match {self.index + 1} of {len(self.matches)}"
+            + (f"  ·  {scored}" if scored else "  ·  each sings one song")
+            + bye,
+        }
+
+    def record(self, name: str, points: int) -> dict[str, str] | None:
+        """Note *name*'s score if they are in the current match; the result when it is decided."""
+        match = self.current()
+        if match is None:
+            return None
+        who = next((n for n in match if n.casefold() == name.strip().casefold()), None)
+        if who is None or who in self.scores:
+            return None
+        self.scores[who] = int(points)
+        if len(self.scores) < 2:
+            return self.public()
+        a, b = match
+        if self.scores[a] == self.scores[b]:
+            winner, how = self.rng.choice(match), "A tie! A coin decides"
+        else:
+            winner = a if self.scores[a] > self.scores[b] else b
+            how = f"{a} {self.scores[a]} – {self.scores[b]} {b}"
+        self.winners.append(winner)
+        self.index, self.scores = self.index + 1, {}
+        if self.index < len(self.matches):
+            following = self.public()
+            return {"title": self.TITLE, "text": f"🏆 {winner} wins",
+                    "detail": f"{how}  ·  Next: {following['text']}"}  # fmt: skip
+        if len(self.winners) == 1:
+            self.champion = winner
+            return {"title": self.TITLE, "text": f"👑 {winner}", "detail": f"{how}  ·  Champion!"}
+        survivors = list(self.winners)
+        self._next_round(survivors)
+        return {"title": self.TITLE, "text": f"🏆 {winner} wins",
+                "detail": f"{how}  ·  Round {self.round}: {self.public()['text']}"}  # fmt: skip
+
+
+BIRTHDAY_SEARCH = "Happy Birthday to You karaoke"  # the song queued for the birthday singer
+
+
+def birthday(name: str) -> dict[str, str]:
+    name = name.strip() or "you"
+    return {
+        "title": "🎂 Happy Birthday!",
+        "text": f"🎉 {name} 🎉",
+        "detail": "Everyone sing along!",
+    }

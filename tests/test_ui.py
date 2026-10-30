@@ -997,6 +997,38 @@ def test_duet_toggle_reaches_the_state(tmp_path):
         controller.close()
 
 
+def test_king_of_singers_and_birthday(window, qtbot):
+    import random
+
+    from ytktv.core import games
+
+    tour = games.Tournament(random.Random(2))
+    tour.start(["A", "B", "C", "D"])
+    for _ in range(3):  # two semi-finals and a final
+        first, second = tour.current()
+        tour.record(first, 90)
+        result = tour.record(second, 60)
+    assert tour.champion and result["detail"].endswith("Champion!")
+    assert tour.record("A", 99) is None  # it is over
+
+    main, controller = window
+    page = main.pages["games"]
+    page.animate = False
+    page.players.setText("Kim, Alex")
+    screen = page.open_game("tournament")
+    screen.start()
+    assert "vs" in main.mv_window.game_card.text() and not screen.first.isHidden()
+    screen.points.setValue(88)
+    screen.score(0)
+    screen.points.setValue(70)
+    screen.score(1)
+    assert controller.tournament.champion in ("Kim", "Alex")
+    birthday = page.open_game("birthday")
+    birthday.name.setText("Mia")
+    birthday.start()
+    qtbot.waitUntil(lambda: "Mia" in main.mv_window.game_card.text(), timeout=3000)
+
+
 def test_large_text(window):
     from PySide6.QtWidgets import QApplication
 

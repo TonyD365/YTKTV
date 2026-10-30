@@ -465,6 +465,93 @@ class CoinGame(GameScreen):
         self.animate(frames, lambda: self.finish(result, "#ffc94a", 96), interval=90)
 
 
+class TournamentGame(PlayersMixin, GameScreen):
+    key, icon, title, colour = "tournament", "👑", "King of Singers", "#b45309"
+    blurb = "Knockout rounds until one singer is king"
+    rules = (
+        "Uses the players at the top of the lobby (or everyone in the queue). Two singers per"
+        " match each sing a song with their name on it; the score card decides who goes"
+        " through. No scoring? Type the scores in below."
+    )
+    start_text = "Start Tournament"
+
+    def build(self) -> None:
+        self.controls.addWidget(QLabel("Score"))
+        self.points = QSpinBox()
+        self.points.setRange(1, 100)
+        self.points.setValue(80)
+        self.points.setStyleSheet(SPIN_STYLE)
+        self.controls.addWidget(self.points)
+        self.first = self.button("…", lambda: self.score(0))
+        self.second = self.button("…", lambda: self.score(1))
+        self.controls.addStretch()
+        self._watch = QTimer(self)
+        self._watch.timeout.connect(self.show_bracket)  # scores also arrive from the score card
+        self._watch.start(1500)
+
+    def reset(self) -> None:
+        self.show_bracket()
+
+    def show_bracket(self) -> None:
+        state = self.controller.tournament.public()
+        colour = "#ffc94a" if self.controller.tournament.champion else "white"
+        if state["text"] == "Add singers and start":
+            self.show_stage(self.icon, "Press Start Tournament")
+        else:
+            self.show_stage(state["text"], f"{state['title']}<br>{state['detail']}", colour, 48)
+        match = self.controller.tournament.current()
+        for button, index in ((self.first, 0), (self.second, 1)):
+            button.setVisible(match is not None)
+            if match is not None:
+                button.setText(f"Score for {match[index]}")
+
+    def start(self) -> None:
+        names = self.players()
+        if len(names) < 2:
+            self.show_stage("Add players first", "At least two names, at the top", size=36)
+            return
+        self.controller.play_game("tournament", player=",".join(names) + ",")
+        self.show_bracket()
+
+    def score(self, index: int) -> None:
+        match = self.controller.tournament.current()
+        if match is not None:
+            self.controller.play_game("tournament_score", self.points.value(), match[index])
+            self.show_bracket()
+
+
+class BirthdayGame(GameScreen):
+    key, icon, title, colour = "birthday", "🎂", "Birthday", "#db2777"
+    blurb = "Their name on the TV, then the birthday song"
+    rules = (
+        "Type whose birthday it is. Their name goes up on the TV and the birthday song plays next."
+    )
+    start_text = "Celebrate!"
+
+    def build(self) -> None:
+        self.name = QLineEdit()
+        self.name.setPlaceholderText("Whose birthday?")
+        self.controls.addWidget(self.name, stretch=1)
+
+    def start(self) -> None:
+        name = self.name.text().strip() or "you"
+        self.start_button.setEnabled(False)
+        self.show_stage("🎂", "Finding the birthday song…")
+
+        def celebrate(songs: list[Any]) -> None:
+            self.start_button.setEnabled(True)
+            result = self.controller.birthday(name, songs[0] if songs else None)
+            frames = [stage_html(c, "", size=96) for c in ("🎈", "🎁", "🎉", "🎂") * 3]
+            self.animate(frames, lambda: self.show_stage(result["text"], result["detail"],
+                                                         "#ff8ad0", 64))  # fmt: skip
+
+        run_async(
+            lambda: self.lobby.ctx.youtube.search(games.BIRTHDAY_SEARCH, 5),
+            celebrate,
+            lambda _exc: celebrate([]),
+        )
+
+
 SCREENS: tuple[type[GameScreen], ...] = (
     DiceGame,
     SpinGame,
@@ -478,6 +565,8 @@ SCREENS: tuple[type[GameScreen], ...] = (
     SevensGame,
     CountdownGame,
     CoinGame,
+    TournamentGame,
+    BirthdayGame,
 )
 COLUMNS = 4
 
