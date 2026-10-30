@@ -1105,6 +1105,22 @@ def test_large_text(window):
     main.settings_page.text_size.setCurrentText("Normal")
 
 
+def test_room_window_applies_desk_settings_and_hides_admin_cards(window):
+    main, controller = window
+    page = main.settings_page
+    controller.settings.desk_url = "https://desk:8770"
+    page.apply_role()
+    assert all(frame.isHidden() for frame in page.admin_cards)
+    main._apply_admin({"auto_update": False, "max_height": 720, "unknown": 1})
+    assert controller.settings.auto_update is False and controller.settings.max_height == 720
+    assert page._checks["auto_update"].isChecked() is False
+    main._apply_admin({"max_height": "4k"})  # invalid: ignored, nothing changes
+    assert controller.settings.max_height == 720
+    controller.settings.desk_url = ""
+    page.apply_role()
+    assert not any(frame.isHidden() for frame in page.admin_cards)
+
+
 # -- look checks: every page, no white boxes on the dark theme ---------------------------
 
 LOOK_TYPES = ("QLineEdit", "QListWidget", "QTableWidget", "QComboBox", "QPlainTextEdit",
