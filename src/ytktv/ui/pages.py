@@ -10,6 +10,7 @@ from typing import Any
 from PySide6.QtCore import QStringListModel, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QCursor, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -32,6 +33,7 @@ from ytktv import __version__, catalog
 from ytktv.core.controller import KTVController
 from ytktv.core.models import Song, StemStatus
 from ytktv.rooms.client import RoomClient
+from ytktv.ui import theme
 from ytktv.ui.front_desk_card import FrontDeskCard
 from ytktv.ui.song_list import STEM_TAGS, Action, SongList, SongRow, tag
 from ytktv.ui.support import ThumbnailLoader, run_async
@@ -660,6 +662,14 @@ class SettingsPage(Page):
     install_separation = Signal()
     install_hd_unlock = Signal()
 
+    def set_text_size(self, size: str) -> None:
+        """Bigger text everywhere on the console, for people who read better large."""
+        self.ctx.controller.settings.text_size = size
+        self.ctx.controller.store.save()
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            app.setStyleSheet(theme.stylesheet(size))
+
     def __init__(self, ctx: Context, server_url: str) -> None:
         super().__init__("Settings", ctx)
         settings = ctx.controller.settings
@@ -772,6 +782,13 @@ class SettingsPage(Page):
         phone.addWidget(url)
 
         column.addWidget(FrontDeskCard(ctx.controller.store, ctx.room_client))
+
+        display = card("Text Size")
+        self.text_size = QComboBox()
+        self.text_size.addItems(list(theme.TEXT_SIZES))
+        self.text_size.setCurrentText(ctx.controller.settings.text_size)
+        self.text_size.currentTextChanged.connect(self.set_text_size)
+        labelled(display, "Text on the console", self.text_size)
 
         setup = card("Setup")
         again = QPushButton("Run Setup Again")

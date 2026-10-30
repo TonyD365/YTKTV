@@ -267,6 +267,7 @@ def main(argv: list[str] | None = None) -> int:
 
     store = SettingsStore()
     settings = store.settings
+    app.setStyleSheet(theme.stylesheet(settings.text_size))
 
     player: Any
     if have_mpv:

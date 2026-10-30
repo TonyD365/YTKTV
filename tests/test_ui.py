@@ -995,3 +995,17 @@ def test_duet_toggle_reaches_the_state(tmp_path):
         assert controller.state()["duet"] is True
     finally:
         controller.close()
+
+
+def test_large_text(window):
+    from PySide6.QtWidgets import QApplication
+
+    from ytktv.ui import theme
+
+    main, controller = window
+    assert "font-size: 18px" in theme.stylesheet("Large")  # 14px * 1.25
+    assert theme.stylesheet("Normal") == theme.STYLESHEET
+    main.settings_page.text_size.setCurrentText("Extra large")
+    assert controller.settings.text_size == "Extra large"
+    assert "font-size: 21px" in QApplication.instance().styleSheet()
+    main.settings_page.text_size.setCurrentText("Normal")

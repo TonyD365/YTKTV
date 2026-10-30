@@ -61,6 +61,7 @@ class Settings:
     mic_presets: dict[str, dict[str, float]] = field(default_factory=dict)
     # Lyrics shown earlier (+) or later (-) than their subtitles say, in seconds, per video.
     lyrics_offsets: dict[str, float] = field(default_factory=dict)
+    text_size: str = "Normal"  # Normal, Large or Extra large (see theme.TEXT_SIZES)
     mic_preset: str = ""  # the preset the channels currently match, if any
 
     default_vocal_mode: str = "instrumental"
