@@ -32,6 +32,7 @@ from ytktv import __version__, catalog
 from ytktv.core.controller import KTVController
 from ytktv.core.models import Song, StemStatus
 from ytktv.rooms.client import RoomClient
+from ytktv.ui.diagnostics_dialog import save_diagnostics
 from ytktv.ui.front_desk_card import FrontDeskCard
 from ytktv.ui.local_songs_card import LocalSongsCard
 from ytktv.ui.remote_keys import key_help
@@ -692,6 +693,16 @@ class SettingsPage(Page):
     install_separation = Signal()
     install_hd_unlock = Signal()
 
+    def save_diagnostics(self, path: str | None = None) -> str:
+        from dataclasses import asdict
+
+        from ytktv.config import cache_dir
+
+        settings = asdict(self.ctx.controller.settings)
+        return save_diagnostics(
+            self, "YTKTV", path, settings=settings, files=[cache_dir() / "separator.log"]
+        )
+
     def __init__(self, ctx: Context, server_url: str) -> None:
         super().__init__("Settings", ctx)
         settings = ctx.controller.settings
@@ -824,6 +835,15 @@ class SettingsPage(Page):
         )
         again.clicked.connect(self.run_setup.emit)
         setup.addWidget(again, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        help_card = card("Help")
+        diagnose = QPushButton("Save Diagnostics…")
+        diagnose.setToolTip(
+            "One zip with the recent logs, the version and the settings (keys and passwords"
+            " left out), to attach to a bug report"
+        )
+        diagnose.clicked.connect(lambda: self.save_diagnostics())
+        help_card.addWidget(diagnose, alignment=Qt.AlignmentFlag.AlignLeft)
 
         # Updates
         updates = card("Updates")

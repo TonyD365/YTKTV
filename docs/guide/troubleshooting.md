@@ -47,8 +47,13 @@ Run `sudo xattr -dr com.apple.quarantine /Applications/YTKTV.app` in Terminal, t
 
 ## Getting a log for a bug report
 
-A log shows what YTKTV was doing when something went wrong. Start YTKTV like this, reproduce the
-problem, quit, and attach the file to your issue.
+YTKTV keeps its recent log by itself. After something goes wrong, open **Settings → Help → Save
+Diagnostics…**: it saves one zip with the logs, the version, your system and your settings (keys
+and passwords left out). Attach it to a [new issue](https://github.com/TonyD365/YTKTV/issues/new/choose)
+and say what happened. YTKTV Desk has the same button in **Settings → Updates**.
+
+For more detail, start YTKTV with `--debug`, which also writes everything to a file you choose.
+Reproduce the problem, quit, and attach the file:
 
 **macOS** (Terminal):
 
@@ -71,7 +76,7 @@ YTKTV_LOG_FILE=~/ytktv.log ./YTKTV-*.AppImage --debug
 
 ## Where YTKTV keeps its files
 
-| | Settings, playlists | Cache (instrumentals, downloads) |
+| | Settings, playlists | Cache (instrumentals, downloads, logs) |
 |---|---|---|
 | macOS | `~/Library/Application Support/YTKTV` | `~/Library/Caches/YTKTV` |
 | Windows | `%LOCALAPPDATA%\YTKTV` | `%LOCALAPPDATA%\YTKTV\Cache` |

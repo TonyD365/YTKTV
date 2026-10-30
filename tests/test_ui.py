@@ -1071,3 +1071,21 @@ def test_keyboard_and_remote_keys(window, qtbot):
     press = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_N, none, "n")
     assert keys.eventFilter(box, press) is False
     assert any(action == "Next song" for _keys, action in key_help())
+
+
+def test_settings_buttons_save_a_zip(window, tmp_path, qtbot):
+    import json
+    import zipfile
+
+    from ytktv.desk.panels import UpdateSettings
+    from ytktv.desk.store import DeskStore
+
+    main, _controller = window
+    saved = main.settings_page.save_diagnostics(str(tmp_path / "app.zip"))
+    with zipfile.ZipFile(saved) as bundle:
+        assert "settings.json" in bundle.namelist()
+    panel = UpdateSettings(DeskStore())
+    qtbot.addWidget(panel)
+    desk = panel.save_diagnostics(str(tmp_path / "desk.zip"))
+    with zipfile.ZipFile(desk) as bundle:
+        assert json.loads(bundle.read("about.json"))["app"] == "YTKTV Desk"
