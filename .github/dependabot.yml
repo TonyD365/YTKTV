@@ -19,6 +19,11 @@ updates:
       interval: daily
     versioning-strategy: increase
     labels: [dependencies]
+    ignore:
+      # pytest-benchmark breaks on pytest 9.2 ('Function' object has no attribute '_nodeid');
+      # lift this once it catches up (pyproject.toml pins pytest<9.2 for the same reason).
+      - dependency-name: pytest
+        versions: [">=9.2"]
     groups:
       yt-dlp:
         patterns: ["yt-dlp*"]
