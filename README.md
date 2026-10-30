@@ -79,12 +79,17 @@ way a real KTV's staff terminal runs its rooms: the adults in one room, the kids
 - **The till**: price per hour (per room if you like), a minimum spend, discounts, dropping the
   small change, cash, card, WeChat Pay, Alipay or a member's balance, and a bill or a 58/80 mm
   receipt on any installed printer.
-- **Members**: stored balance, points and a members' discount.
+- **Members**: stored balance, points, a members' discount and a birthday discount.
+- **Packages and coupons**: bundles such as 3 hours + a beer tower at one price, and coupon
+  codes for a percent or an amount off, with a number of uses and a last day.
 - **Run the floor**: bookings with a calendar and timeline, room types and seats, cleaning and
   maintenance, change room, broadcasts to every room, remote skip, pause and volume, a shift
   report, and records by day, week or month with a chart and a CSV export for Excel.
+- **Local songs only**: a room can be limited to the video files on its own computer.
 - **Several staff terminals**: other computers running YTKTV Desk can pair with the main one and
   work on the same rooms; the Log shows which machine did what, and when.
+- **Staff on their phones**: open the Desk's /staff page on a phone, pair it with a code, and
+  handle calls and orders, open, extend and check out rooms from anywhere on the floor.
 - **Insights**: takings, busy hours and weekdays, top songs, best-selling items and rooms for the
   last 7, 30 or 90 days.
 - **Stock alerts**: a product running low shows in the service bar ("Cola: 2 left").
@@ -153,15 +158,19 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 - **Danmaku and lights.** Anyone can send a short message from the console or a phone and it
   flies across the MV screen. A glow around the screen pulses with the music, and phones can
   join in as glow sticks that follow its colours.
+- **Local songs.** Add folders of video files (MP4, MKV and more) in Settings: they show first in
+  Search and on the Local page. Karaoke MKVs with two audio tracks switch between original and
+  instrumental straight away, and an .lrc file next to a video gives its lyrics.
 - **Downloads.** Press ⬇ on a song (or Download All Favorites) to keep it on the computer with
   its lyrics and instrumental, then sing it without internet.
 - **PK battle.** Two microphones sing the same song, with two live score bars on the TV and a
   winner at the end.
 - **Duet.** The lyrics on the TV turn blue for one singer, pink for the other and gold for both,
   from the 男/女/合 (or M/F) marks in the lyrics, or verse by verse when there are none.
-- **Party games.** Twelve games, each with its own screen on the console and the phones: dice,
+- **Party games.** Fourteen games, each with its own screen on the console and the phones: dice,
   who sings next, truth or dare, number bomb, liar's dice (everyone sees their own dice on their
-  phone), random song, challenge cards, draw lots, high or low, sevens, a countdown and a coin.
+  phone), random song, challenge cards, draw lots, high or low, sevens, a countdown, a coin, a King of Singers knockout tournament (the score cards decide
+  who goes through) and a birthday celebration with the song up next.
 - **Smooth playback.** The next songs in the queue are downloaded ahead of time and played from
   disk; only the first song of a session streams, with a loading screen until it is ready.
   Separation runs in its own low-priority process so it cannot disturb the live sound.

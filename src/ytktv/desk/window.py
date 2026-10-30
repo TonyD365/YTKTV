@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from ytktv.desk import lock
 from ytktv.desk.billing import bill
+from ytktv.desk.deals import DealsSettings
 from ytktv.desk.pages import (
     BookingsPage,
     InsightsPage,
@@ -360,8 +361,14 @@ class DeskWindow(QMainWindow):
         price.clicked.connect(self.set_room_rate)
         kind = QPushButton("Room Type")
         kind.clicked.connect(self.set_room_type)
+        local_only = QPushButton("Local Songs Only")
+        local_only.setToolTip(
+            "On or off: the room may sing only video files from its own computer, not YouTube"
+        )
+        local_only.clicked.connect(self.toggle_local_only)
         buttons.addWidget(rename)
         buttons.addWidget(kind)
+        buttons.addWidget(local_only)
         buttons.addWidget(price)
         buttons.addWidget(self.unbind_button)
         buttons.addStretch()
@@ -374,6 +381,8 @@ class DeskWindow(QMainWindow):
         column.addWidget(self.shop, stretch=2)
         self.receipts = ReceiptSettings(self.store)
         column.addWidget(self.receipts)
+        self.deals = DealsSettings(self.store)
+        column.addWidget(self.deals)
         self.security = SecuritySettings(self.store)
         column.addWidget(self.security)
         self.terminals = TerminalSettings(self.store, self.address, self.terminal)
@@ -752,13 +761,19 @@ class DeskWindow(QMainWindow):
             guest, ok = QInputDialog.getText(self, "Open room", "Guest name (optional):")
             if not ok:
                 return
+        currency = self.store.setting("currency", "$")
+        packages = {
+            f"Package · {p.name} ({p.minutes / 60:g} h, {currency}{p.price:g})": p
+            for p in self.store.packages(active_only=True)
+        }
         if length is None:
             length, ok = QInputDialog.getItem(
-                self, "Open room", "How long?", list(LENGTHS), 1, False
+                self, "Open room", "How long?", [*LENGTHS, *packages], 1, False
             )
             if not ok:
                 return
-        minutes = LENGTHS[length]
+        package = packages.get(length)
+        minutes = package.minutes if package is not None else LENGTHS[length]
         room = self.store.room(self.selected)
         if room is not None and room.state == "cleaning":
             answer = QMessageBox.question(
@@ -770,6 +785,8 @@ class DeskWindow(QMainWindow):
         if clashes and not _checked_clash(self, clashes):
             return
         self.store.open_room(self.selected, guest.strip(), minutes)
+        if package is not None:
+            self.store.set_session_package(self.selected, package.package_id)
         self.store.set_state(self.selected, "ready")
         tell(self.store, self.hub, self.selected)
         self.refresh()
@@ -800,6 +817,8 @@ class DeskWindow(QMainWindow):
         if confirm and not BillDialog(result, self, self.store).exec():
             return
         self.store.close_room(self.selected, result)
+        if result.coupon:
+            self.store.use_coupon(result.coupon)
         self.records.refresh()
         tell(self.store, self.hub, self.selected)
         self.refresh()
@@ -864,11 +883,22 @@ class DeskWindow(QMainWindow):
             self.store.set_type(room.room_id, kind, seats)
             self.refresh()
 
+    def toggle_local_only(self) -> None:
+        room_id = self._selected_setting()
+        room = self.store.room(room_id) if room_id else None
+        if room is None:
+            return
+        self.store.set_local_only(room.room_id, not room.local_only)
+        tell(self.store, self.hub, room.room_id)  # an open room changes at once
+        self.refresh()
+
     def _fill_settings(self, rooms: list[Room]) -> None:
         current = self.room_list.currentRow()
         self.room_list.clear()
         for room in rooms:
-            entry = QListWidgetItem(room.name)
+            entry = QListWidgetItem(
+                room.name + ("  ·  local songs only" if room.local_only else "")
+            )
             entry.setData(Qt.ItemDataRole.UserRole, room.room_id)
             self.room_list.addItem(entry)
         self.room_list.setCurrentRow(min(current, len(rooms) - 1))

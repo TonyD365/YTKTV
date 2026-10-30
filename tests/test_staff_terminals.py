@@ -180,3 +180,33 @@ def test_terminal_window_settings_and_log(main_desk, qtbot, tmp_path, monkeypatc
     window.terminals.leave(confirm=False)
     assert remote.load_config() is None
     main.close()
+
+
+def test_phone_staff_page_pairs_and_checks_out(main_desk):
+    store, address, _server = main_desk
+    connection, _cert = remote._connect(address)
+    connection.request("GET", "/staff")
+    page = connection.getresponse().read().decode()
+    assert "YTKTV STAFF" in page and "/api/staff/call" in page
+    reply = remote._post(
+        connection,
+        "/api/staff/pair",
+        {"code": store.new_terminal_code(), "name": "Amy", "nonce": "ab"},
+    )
+    token = reply["token"]
+
+    def phone(target, method, *args):
+        body = {"target": target, "method": method, "args": list(args)}
+        return remote._post(connection, "/api/staff/call", body, token)["result"]
+
+    room, _ = store.pair(store.new_code(), "Kids")
+    phone("store", "open_room", room.room_id, "Kim", 60)
+    phone("terminal", "tell", room.room_id)
+    assert store.room(room.room_id).is_open
+    paid = phone("terminal", "checkout", room.room_id, "Alipay")
+    assert paid["payment"] == "Alipay" and paid["total"] > 0
+    assert not store.room(room.room_id).is_open
+    assert store.history(0, time.time() + 1)[0].payment == "Alipay"
+    actions = [e.action for e in store.oplog(0, time.time() + 1) if e.machine == "Amy"]
+    assert any(a.startswith("Closed Kids") for a in actions)
+    connection.close()

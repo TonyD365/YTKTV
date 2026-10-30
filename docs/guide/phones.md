@@ -45,9 +45,10 @@ browser.
 
 ## Games, glow sticks and service
 
-- **GAMES** (bottom bar): the same twelve party games as the console, each with its own screen.
+- **GAMES** (bottom bar): the same fourteen party games as the console, each with its own screen.
   You play under the name you typed in **REMOTE → Your name**. In liar's dice your dice show
   only on your phone (hold **Hold to peek**); the TV shows everyone's at the reveal.
+  In **King of Singers**, sing with your name on the song: your score card counts for your match.
 - **✨ Glow stick** (REMOTE): the whole screen lights up in the colours of the TV's edge lights.
   Tap to stop.
 - **🛎 Service** (REMOTE, in rooms run by a [YTKTV Desk](front-desk.md)): call the staff or order

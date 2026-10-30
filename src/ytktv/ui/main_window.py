@@ -39,6 +39,7 @@ from ytktv.ui.pages import (
     FavoritesPage,
     HistoryPage,
     HotPage,
+    LocalPage,
     Page,
     PlaylistsPage,
     QueuePage,
@@ -66,6 +67,7 @@ NAV = (
     ("artists", "Artists"),
     ("favorites", "Favorites"),
     ("downloads", "Downloads"),
+    ("local", "Local"),
     ("playlists", "Playlists"),
     ("queue", "Selected"),
     ("history", "Sung"),
@@ -268,6 +270,7 @@ class MainWindow(QMainWindow):
             "artists": ArtistsPage(self.ctx),
             "favorites": FavoritesPage(self.ctx),
             "downloads": DownloadsPage(self.ctx),
+            "local": LocalPage(self.ctx),
             "playlists": PlaylistsPage(self.ctx),
             "queue": QueuePage(self.ctx),
             "history": HistoryPage(self.ctx),
@@ -651,6 +654,7 @@ class MainWindow(QMainWindow):
             self.controller.open_room()
             self._warned = False
             self._times_up_song = None
+        self.controller.set_local_only(client.state.local_only and not closed)
         locked = client.state.locked and not closed
         self.room_closed_view.message.setText(
             "This room is paused by the staff" if locked else "This room is closed"
@@ -708,6 +712,11 @@ class MainWindow(QMainWindow):
             for page in self.pages.values():
                 if isinstance(page, Page):
                     page.on_favorites()
+        elif topic == "local":
+            local_page = self.pages["local"]
+            if isinstance(local_page, LocalPage):
+                local_page.on_local()
+            self.settings_page.local_card.load()
         elif topic == "offline":
             downloads = self.pages["downloads"]
             if isinstance(downloads, DownloadsPage):
