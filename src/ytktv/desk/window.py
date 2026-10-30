@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from ytktv.desk import lock
 from ytktv.desk.billing import bill
+from ytktv.desk.deals import DealsSettings
 from ytktv.desk.pages import BookingsPage, LogPage, MembersPage, RecordsPage, ShiftDialog
 from ytktv.desk.panels import (
     MAX_PRICE,
@@ -365,6 +366,8 @@ class DeskWindow(QMainWindow):
         column.addWidget(self.shop, stretch=2)
         self.receipts = ReceiptSettings(self.store)
         column.addWidget(self.receipts)
+        self.deals = DealsSettings(self.store)
+        column.addWidget(self.deals)
         self.security = SecuritySettings(self.store)
         column.addWidget(self.security)
         self.terminals = TerminalSettings(self.store, self.address, self.terminal)
@@ -740,13 +743,19 @@ class DeskWindow(QMainWindow):
             guest, ok = QInputDialog.getText(self, "Open room", "Guest name (optional):")
             if not ok:
                 return
+        currency = self.store.setting("currency", "$")
+        packages = {
+            f"Package · {p.name} ({p.minutes / 60:g} h, {currency}{p.price:g})": p
+            for p in self.store.packages(active_only=True)
+        }
         if length is None:
             length, ok = QInputDialog.getItem(
-                self, "Open room", "How long?", list(LENGTHS), 1, False
+                self, "Open room", "How long?", [*LENGTHS, *packages], 1, False
             )
             if not ok:
                 return
-        minutes = LENGTHS[length]
+        package = packages.get(length)
+        minutes = package.minutes if package is not None else LENGTHS[length]
         room = self.store.room(self.selected)
         if room is not None and room.state == "cleaning":
             answer = QMessageBox.question(
@@ -758,6 +767,8 @@ class DeskWindow(QMainWindow):
         if clashes and not _checked_clash(self, clashes):
             return
         self.store.open_room(self.selected, guest.strip(), minutes)
+        if package is not None:
+            self.store.set_session_package(self.selected, package.package_id)
         self.store.set_state(self.selected, "ready")
         tell(self.store, self.hub, self.selected)
         self.refresh()
@@ -788,6 +799,8 @@ class DeskWindow(QMainWindow):
         if confirm and not BillDialog(result, self, self.store).exec():
             return
         self.store.close_room(self.selected, result)
+        if result.coupon:
+            self.store.use_coupon(result.coupon)
         self.records.refresh()
         tell(self.store, self.hub, self.selected)
         self.refresh()
