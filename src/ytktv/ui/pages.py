@@ -34,6 +34,7 @@ from ytktv.core.models import Song, StemStatus
 from ytktv.rooms.client import RoomClient
 from ytktv.ui.front_desk_card import FrontDeskCard
 from ytktv.ui.local_songs_card import LocalSongsCard
+from ytktv.ui.remote_keys import key_help
 from ytktv.ui.song_list import STEM_TAGS, Action, SongList, SongRow, tag
 from ytktv.ui.support import ThumbnailLoader, run_async
 from ytktv.youtube.search import HOT_CATEGORIES, YouTube
@@ -805,6 +806,16 @@ class SettingsPage(Page):
         column.addWidget(FrontDeskCard(ctx.controller.store, ctx.room_client))
         self.local_card = LocalSongsCard(ctx.controller)
         column.addWidget(self.local_card)
+
+        remote = card("Keyboard and Remote")
+        keys = QLabel(
+            "<table cellpadding='3'>"
+            + "".join(f"<tr><td><b>{k}</b></td><td>{a}</td></tr>" for k, a in key_help())
+            + "</table><br>USB and Bluetooth remotes and air mice send these keys too. A TV"
+            " remote works through HDMI-CEC on a Raspberry Pi (see the guide)."
+        )
+        keys.setWordWrap(True)
+        remote.addWidget(keys)
 
         setup = card("Setup")
         again = QPushButton("Run Setup Again")
