@@ -694,7 +694,19 @@ class UpdateSettings(QFrame):
         self.check_button.clicked.connect(lambda: self.check_now and self.check_now())
         for widget in (head, version, self.auto, self.state):
             column.addWidget(widget)
-        column.addWidget(self.check_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        buttons = QHBoxLayout()
+        buttons.addWidget(self.check_button)
+        diagnose = QPushButton("Save Diagnostics…")
+        diagnose.setToolTip("One zip with the recent logs and the version, for a bug report")
+        diagnose.clicked.connect(lambda: self.save_diagnostics())
+        buttons.addWidget(diagnose)
+        buttons.addStretch()
+        column.addLayout(buttons)
+
+    def save_diagnostics(self, path: str | None = None) -> str:
+        from ytktv.ui.diagnostics_dialog import save_diagnostics
+
+        return save_diagnostics(self, "YTKTV Desk", path)
 
     def automatic(self) -> bool:
         return self.store.setting("auto_update", "1") == "1"

@@ -60,6 +60,12 @@ def self_test() -> int:
 def main() -> int:
     if "--self-test" in sys.argv:
         return self_test()
+    import logging
+
+    from ytktv import diagnostics
+
+    logging.basicConfig(level=logging.INFO)
+    diagnostics.keep_log("desk")
     from PySide6.QtWidgets import QApplication
 
     from ytktv.desk.server import DESK_PORT, Hub, create_desk_app
