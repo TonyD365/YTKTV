@@ -90,7 +90,22 @@ A minimum spend can apply.
 
 The **Members** tab lists members with their stored balance and points. **＋ New Member** needs a
 name and a phone number; **💰 Top Up** adds to the balance. Set the members' discount and the
-points per unit spent in **Settings → Menu and prices**.
+points per unit spent in **Settings → Menu and prices**. **🎂 Birthday** saves a member's
+birthday (MM-DD): on that day they also get the birthday discount set in **Settings → Packages
+and coupons**.
+
+## Packages and coupons
+
+**Settings → Packages and coupons**:
+
+- **Packages** sell room time and items at one price, for example *Party, 3 hours, 1 × Beer
+  tower, $99*. When you open a room, the packages are offered under **How long?**. The bill
+  charges the package; time beyond it is charged by the hour. Hand the included items over
+  yourself (they are printed on the bill).
+- **Coupons** take a percent or an amount off a bill. Each has a code, an optional number of uses
+  and an optional last day. At the till type the code under **Coupon** and press **Apply**; the
+  bill shows it, and a use is counted when the room closes.
+- **Members' birthday discount**: an extra percent off for a member on their birthday.
 
 ## Receipts
 

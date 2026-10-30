@@ -35,6 +35,8 @@ TYPES: dict[str, type] = {
         desk_store.Room,
         desk_store.Terminal,
         desk_store.LogEntry,
+        desk_store.Package,
+        desk_store.Coupon,
         billing.Bill,
     )
 }
@@ -44,6 +46,7 @@ READS = frozenset(
     {
         "rooms", "room", "now_singing", "history", "members", "member_by_phone", "bookings",
         "clashes", "setting", "low_stock", "products", "orders", "calls", "terminals", "oplog",
+        "packages", "session_package", "coupons", "coupon",
     }
 )  # fmt: skip
 CHANGES = frozenset(
@@ -52,6 +55,8 @@ CHANGES = frozenset(
         "top_up", "pay_from_balance", "add_points", "book", "set_booking_status", "set_state",
         "set_type", "change_room", "set_rate", "set_setting", "save_product", "remove_product",
         "add_order", "set_order_status", "finish_call", "remove_terminal", "rename_terminal",
+        "save_package", "remove_package", "set_session_package", "save_coupon", "remove_coupon",
+        "use_coupon", "set_birthday",
     }
 )  # fmt: skip
 STORE_METHODS = READS | CHANGES

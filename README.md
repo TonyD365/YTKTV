@@ -79,7 +79,9 @@ way a real KTV's staff terminal runs its rooms: the adults in one room, the kids
 - **The till**: price per hour (per room if you like), a minimum spend, discounts, dropping the
   small change, cash, card, WeChat Pay, Alipay or a member's balance, and a bill or a 58/80 mm
   receipt on any installed printer.
-- **Members**: stored balance, points and a members' discount.
+- **Members**: stored balance, points, a members' discount and a birthday discount.
+- **Packages and coupons**: bundles such as 3 hours + a beer tower at one price, and coupon
+  codes for a percent or an amount off, with a number of uses and a last day.
 - **Run the floor**: bookings with a calendar and timeline, room types and seats, cleaning and
   maintenance, change room, broadcasts to every room, remote skip, pause and volume, a shift
   report, and records by day, week or month with a chart and a CSV export for Excel.
