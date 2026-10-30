@@ -15,11 +15,12 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from ytktv.desk import billing
 from ytktv.desk import store as desk_store
-from ytktv.desk.server import Hub
+from ytktv.desk.server import Hub, tell
 from ytktv.desk.store import DeskStore
 
 # Values that travel as {"__type__": name, "fields": {...}} and come back as the same class.
@@ -35,6 +36,8 @@ TYPES: dict[str, type] = {
         desk_store.Room,
         desk_store.Terminal,
         desk_store.LogEntry,
+        desk_store.Package,
+        desk_store.Coupon,
         billing.Bill,
     )
 }
@@ -44,6 +47,7 @@ READS = frozenset(
     {
         "rooms", "room", "now_singing", "history", "members", "member_by_phone", "bookings",
         "clashes", "setting", "low_stock", "products", "orders", "calls", "terminals", "oplog",
+        "packages", "session_package", "coupons", "coupon",
     }
 )  # fmt: skip
 CHANGES = frozenset(
@@ -52,6 +56,9 @@ CHANGES = frozenset(
         "top_up", "pay_from_balance", "add_points", "book", "set_booking_status", "set_state",
         "set_type", "change_room", "set_rate", "set_setting", "save_product", "remove_product",
         "add_order", "set_order_status", "finish_call", "remove_terminal", "rename_terminal",
+        "save_package", "remove_package", "set_session_package", "save_coupon", "remove_coupon",
+        "use_coupon", "set_birthday",
+        "set_local_only",
     }
 )  # fmt: skip
 STORE_METHODS = READS | CHANGES
@@ -138,6 +145,9 @@ def describe(store: DeskStore, method: str, args: tuple[Any, ...], kwargs: dict[
         booking = arg(0, "booking")
         when = getattr(booking, "guest", "")
         return f"Booked {room(getattr(booking, 'room_id', ''))}" + (f" for {when}" if when else "")
+    if method == "set_local_only":
+        rule = "only local songs" if arg(1, "local_only") else "any song"
+        return f"{room(arg(0, 'room_id'))} may now play {rule}"
     if method == "new_code":
         return "Showed a code to bind a room"
     words = method.replace("_", " ")
@@ -203,6 +213,7 @@ class LoggedHub:
 
 # -- the main Desk's side ---------------------------------------------------------
 
+ASSETS = Path(__file__).parent / "assets"
 SERVER_SETTING = "terminal_server"  # "1" while other Desks may pair and work on this one
 NAME_SETTING = "machine_name"
 
@@ -218,6 +229,15 @@ def certificate_hash(certificate_file: Path) -> str:
 def proof(nonce: str, cert_hash: str) -> bytes:
     """What the main Desk signs: this connection's certificate, for this terminal's nonce."""
     return f"ytktv-staff:{nonce}:{cert_hash}".encode()
+
+
+def checkout(store: Any, hub: Hub, room_id: str, payment: str) -> billing.Bill:
+    """Close a room with its bill at the usual prices (for phones, which have no till)."""
+    bill = billing.bill(store, room_id)
+    bill.payment = payment if payment in billing.PAYMENTS else bill.payment
+    store.close_room(room_id, bill)
+    tell(store, hub, room_id)
+    return bill
 
 
 def machine_name(store: DeskStore) -> str:
@@ -254,6 +274,11 @@ def add_staff_routes(app: FastAPI, store: DeskStore, hub: Hub, cert_hash: str) -
             "main_name": machine_name(store),
         }
 
+    @app.get("/staff", response_class=HTMLResponse)
+    def phone_page() -> str:
+        """The staff terminal for a phone: rooms, calls and orders, in the browser."""
+        return (ASSETS / "staff.html").read_text(encoding="utf-8")
+
     @app.post("/api/staff/hello")
     def hello(body: HelloIn) -> dict[str, str]:
         return signed(body.nonce)
@@ -283,6 +308,12 @@ def add_staff_routes(app: FastAPI, store: DeskStore, hub: Hub, cert_hash: str) -
                 result = getattr(LoggedHub(hub, store, lambda: name), body.method)(*args)
             elif body.target == "terminal" and body.method == "whoami":
                 result = {"name": name, "main_name": machine_name(store)}
+            elif body.target == "terminal" and body.method == "tell":
+                tell(store, hub, str(args[0]))  # after a phone opened, extended or closed it
+                result = None
+            elif body.target == "terminal" and body.method == "checkout":
+                bill = checkout(LoggedStore(store, lambda: name), hub, str(args[0]), str(args[1]))
+                result = {"total": bill.total, "currency": bill.currency, "payment": bill.payment}
             elif body.target == "terminal" and body.method == "rename":
                 store.rename_terminal(terminal.terminal_id, str(args[0]))
                 store.log(str(args[0]), f"Renamed this terminal (was {name})")

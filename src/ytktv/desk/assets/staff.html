@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>YTKTV Staff</title>
+<style>
+  :root {
+    --bg: #0d0720; --panel: #1a1035; --panel-2: #241650; --line: #3a2a70;
+    --text: #f3eeff; --muted: #a99bd6; --pink: #ff3d9a; --cyan: #2ee6ff;
+    --green: #35d07f; --gold: #ffc94d; --danger: #ff5470;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, "Segoe UI", Roboto, "PingFang SC", sans-serif; }
+  header { position: sticky; top: 0; background: var(--bg); padding: calc(10px + env(safe-area-inset-top)) 16px 8px;
+    border-bottom: 1px solid var(--line); z-index: 2; }
+  .brand { font-weight: 900; letter-spacing: 2px; font-size: 18px;
+    background: linear-gradient(90deg, var(--pink), var(--cyan)); -webkit-background-clip: text;
+    background-clip: text; color: transparent; }
+  .who { color: var(--muted); font-size: 13px; }
+  nav { display: flex; gap: 8px; margin-top: 8px; }
+  nav button { flex: 1; }
+  nav button.on { background: var(--pink); border-color: var(--pink); }
+  main { padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); }
+  button, select, input { font: inherit; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+  button:active { transform: scale(0.98); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px; margin-bottom: 10px; }
+  .card h3 { margin: 0 0 4px; font-size: 17px; }
+  .card .info { color: var(--muted); font-size: 14px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  .empty { color: var(--muted); text-align: center; padding: 30px 0; }
+  .alert { background: var(--danger); color: white; border-radius: 10px; padding: 8px 12px;
+    margin-bottom: 10px; display: none; }
+  .badge { background: var(--pink); border-radius: 9px; padding: 0 7px; font-size: 13px; margin-left: 4px; }
+  #pair input { width: 100%; margin: 6px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">YTKTV STAFF</div>
+  <div class="who" id="who"></div>
+  <nav id="tabs" hidden>
+    <button data-tab="rooms" class="on">Rooms</button>
+    <button data-tab="calls">Calls <span class="badge" id="n-calls" hidden></span></button>
+    <button data-tab="orders">Orders <span class="badge" id="n-orders" hidden></span></button>
+  </nav>
+</header>
+<main>
+  <div class="alert" id="alert"></div>
+  <div id="pair" class="card" hidden>
+    <h3>Pair this phone</h3>
+    <div class="info">On the main Desk: Settings → Staff Terminals → tick “Let other Desks connect”,
+      press Add Terminal, and type the code here.</div>
+    <input id="code" inputmode="numeric" maxlength="6" placeholder="6-digit code">
+    <input id="name" maxlength="30" placeholder="Your name, e.g. Amy (shown in the log)">
+    <button id="pair-go" style="width:100%">Pair</button>
+  </div>
+  <div id="view"></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, ...kids) => {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith("on")) node.addEventListener(k.slice(2), v); else node.setAttribute(k, v);
+  }
+  node.append(...kids.filter((k) => k !== null && k !== undefined));
+  return node;
+};
+// The Desk sends records as {"__type__": "Room", "fields": {...}}: keep just the fields.
+const plain = (v) => Array.isArray(v) ? v.map(plain)
+  : v && typeof v === "object" ? (v.__type__ ? plain(v.fields) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plain(x)]))) : v;
+let token = localStorage.getItem("staff-token") || "";
+let tab = "rooms";
+const PAYMENTS = ["Cash", "Card", "WeChat Pay", "Alipay"];
+const LENGTHS = [["1 hour", 60], ["2 hours", 120], ["3 hours", 180], ["No limit", null]];
+
+function alertBox(text) { $("alert").textContent = text; $("alert").style.display = text ? "block" : "none"; }
+
+async function call(target, method, ...args) {
+  const r = await fetch("/api/staff/call", {method: "POST",
+    headers: {"Content-Type": "application/json", "Authorization": "Bearer " + token},
+    body: JSON.stringify({target, method, args})});
+  if (r.status === 401) { localStorage.removeItem("staff-token"); token = ""; showPair(); throw new Error("Not paired any more"); }
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "The Desk said no");
+  const reply = await r.json();
+  if (reply.error) throw new Error(reply.message || reply.error);
+  return plain(reply.result);
+}
+const act = (fn) => async () => { try { await fn(); await refresh(); } catch (e) { alertBox(e.message); } };
+
+function showPair() { $("pair").hidden = false; $("tabs").hidden = true; $("view").replaceChildren(); }
+$("pair-go").onclick = async () => {
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+  const r = await fetch("/api/staff/pair", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({code: $("code").value.trim(), name: $("name").value.trim() || "Phone", nonce})});
+  if (!r.ok) { alertBox("Wrong or expired code"); return; }
+  const reply = await r.json();
+  token = reply.token; localStorage.setItem("staff-token", token);
+  localStorage.setItem("staff-name", $("name").value.trim() || "Phone");
+  $("pair").hidden = true; alertBox(""); start();
+};
+
+function timeLeft(room) {
+  if (!room.is_open) return room.state === "ready" ? "Free" : room.state[0].toUpperCase() + room.state.slice(1);
+  if (room.ends_at == null) return "Open, no time limit";
+  const min = Math.round((room.ends_at * 1000 - Date.now()) / 60000);
+  return min >= 0 ? `${min} min left` : `${-min} min over`;
+}
+
+function roomCard(room, online) {
+  const colour = !online.has(room.room_id) ? "#555" : room.is_open ? "var(--green)" : "var(--muted)";
+  const buttons = [];
+  if (!room.is_open && room.state === "ready") {
+    const length = el("select", {}, ...LENGTHS.map(([t], i) => el("option", {value: i}, t)));
+    const guest = el("input", {placeholder: "Guest (optional)", maxlength: "40", style: "flex:1;min-width:120px"});
+    buttons.push(guest, length, el("button", {onclick: act(async () => {
+      await call("store", "open_room", room.room_id, guest.value.trim(), LENGTHS[length.value][1]);
+      await call("terminal", "tell", room.room_id);
+    })}, "Open"));
+  } else if (room.is_open) {
+    for (const minutes of [30, 60]) {
+      buttons.push(el("button", {onclick: act(async () => {
+        await call("store", "extend", room.room_id, minutes);
+        await call("terminal", "tell", room.room_id);
+      })}, `+${minutes} min`));
+    }
+    const pay = el("select", {}, ...PAYMENTS.map((p) => el("option", {}, p)));
+    buttons.push(pay, el("button", {style: "background:var(--pink)", onclick: act(async () => {
+      if (!confirm(`Check out ${room.name} (${pay.value})?`)) return;
+      const bill = await call("terminal", "checkout", room.room_id, pay.value);
+      alert(`${room.name}: ${bill.currency}${bill.total.toFixed(2)}, paid by ${bill.payment}`);
+    })}, "Check out"));
+  } else if (room.state === "cleaning") {
+    buttons.push(el("button", {onclick: act(() => call("store", "set_state", room.room_id, "ready"))}, "🧹 Cleaned"));
+  }
+  return el("div", {class: "card"},
+    el("h3", {}, el("span", {class: "dot", style: `background:${colour}`}), room.name),
+    el("div", {class: "info"}, [timeLeft(room), room.guest, room.room_type].filter(Boolean).join(" · ")),
+    el("div", {class: "row"}, ...buttons));
+}
+
+async function refresh() {
+  const [rooms, online, calls, orders] = await Promise.all([
+    call("store", "rooms"), call("hub", "online"), call("store", "calls"), call("store", "orders")]);
+  const names = Object.fromEntries(rooms.map((r) => [r.room_id, r.name]));
+  const pending = orders.filter((o) => o.status === "pending");
+  $("n-calls").hidden = !calls.length; $("n-calls").textContent = calls.length;
+  $("n-orders").hidden = !pending.length; $("n-orders").textContent = pending.length;
+  alertBox("");
+  if (tab === "rooms") {
+    const live = new Set(online);
+    $("view").replaceChildren(...(rooms.length ? rooms.map((r) => roomCard(r, live)) : [el("div", {class: "empty"}, "No rooms yet")]));
+  } else if (tab === "calls") {
+    $("view").replaceChildren(...(calls.length ? calls.map((c) => el("div", {class: "card"},
+      el("h3", {}, "🛎 ", names[c.room_id] || "?"), el("div", {class: "info"}, c.kind + (c.note ? ": " + c.note : "")),
+      el("div", {class: "row"}, el("button", {onclick: act(async () => {
+        const room = await call("store", "finish_call", c.call_id);
+        if (room) await call("hub", "send_soon", room, {type: "call_done"});
+      })}, "On my way ✓")))) : [el("div", {class: "empty"}, "No calls right now")]));
+  } else {
+    $("view").replaceChildren(...(pending.length ? pending.map((o) => el("div", {class: "card"},
+      el("h3", {}, `${o.qty} × ${o.name}`), el("div", {class: "info"}, names[o.room_id] || "?"),
+      el("div", {class: "row"},
+        el("button", {onclick: act(() => call("store", "set_order_status", o.order_id, "delivered"))}, "Delivered ✓"),
+        el("button", {onclick: act(() => call("store", "set_order_status", o.order_id, "cancelled"))}, "Cancel")))) :
+      [el("div", {class: "empty"}, "No orders waiting")]));
+  }
+}
+
+let timer = null;
+function start() {
+  $("tabs").hidden = false;
+  $("who").textContent = "Signed in as " + (localStorage.getItem("staff-name") || "staff");
+  clearInterval(timer);
+  // Keep the page fresh, but do not redraw while someone is typing a guest's name.
+  timer = setInterval(() => {
+    if (!document.activeElement || !["INPUT", "SELECT"].includes(document.activeElement.tagName)) refresh().catch((e) => alertBox(e.message));
+  }, 4000);
+  refresh().catch((e) => alertBox(e.message));
+}
+document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll("[data-tab]").forEach((x) => x.classList.toggle("on", x === b));
+  refresh().catch((e) => alertBox(e.message));
+});
+if (token) start(); else showPair();
+</script>
+</body>
+</html>

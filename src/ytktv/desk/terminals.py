@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 from ytktv.desk import remote, staff
 from ytktv.desk.store import CODE_SECONDS, DeskStore
 from ytktv.rooms import discovery
-from ytktv.ui.support import run_async
+from ytktv.ui.support import qr_pixmap, run_async
 
 
 def _restart_note(parent: QWidget, text: str) -> None:
@@ -43,6 +43,7 @@ class TerminalSettings(QFrame):
     def __init__(self, store: DeskStore, address: str, main: remote.MainDesk | None = None) -> None:
         super().__init__()
         self.store, self.address, self.main = store, address, main
+        self.phone_url = f"https://{address}/staff"
         self.setObjectName("panel")
         self.column = QVBoxLayout(self)
         self.column.setContentsMargins(24, 20, 24, 20)
@@ -77,6 +78,19 @@ class TerminalSettings(QFrame):
         self.serving.setChecked(self.store.setting(staff.SERVER_SETTING, "0") == "1")
         self.serving.toggled.connect(self.set_serving)
         self.column.addWidget(self.serving)
+        phone_row = QHBoxLayout()
+        qr = QLabel()
+        qr.setPixmap(qr_pixmap(self.phone_url, 120))
+        phone_row.addWidget(qr)
+        phone_note = QLabel(
+            f"Staff can use a phone too: open {self.phone_url} (accept the security warning"
+            " once: the Desk's certificate is its own), then pair it with a code from Add"
+            " Terminal. Phones see rooms, calls and orders, and can open and check out rooms."
+        )
+        phone_note.setWordWrap(True)
+        phone_note.setObjectName("muted")
+        phone_row.addWidget(phone_note, stretch=1)
+        self.column.addLayout(phone_row)
         self.list = QListWidget()
         self.list.setMaximumHeight(140)
         self.column.addWidget(self.list)
