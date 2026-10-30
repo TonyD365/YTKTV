@@ -168,6 +168,10 @@ def describe_message(store: DeskStore, room_id: str, message: dict[str, Any]) ->
         )
     if kind in ("lock", "unlock"):
         return f"{'Paused' if kind == 'lock' else 'Unpaused'} {where}"
+    if kind == "admin_settings":
+        values = message.get("values")
+        names = ", ".join(sorted(values)) if isinstance(values, dict) else ""
+        return f"Changed admin settings of {where}: {names}"
     if kind == "message":
         return f"Sent “{message.get('text')}” to {where}"
     return None
@@ -204,6 +208,9 @@ class LoggedHub:
 
     def online(self) -> set[str]:
         return self._hub.online()
+
+    def report(self, room_id: str) -> dict[str, Any] | None:
+        return self._hub.report(room_id)
 
     def send_soon(self, room_id: str, message: dict[str, Any]) -> None:
         line = describe_message(self._store, room_id, message)
@@ -314,7 +321,7 @@ def add_staff_routes(
         try:
             if body.target == "store" and body.method in STORE_METHODS:
                 result = getattr(LoggedStore(store, lambda: name), body.method)(*args, **kwargs)
-            elif body.target == "hub" and body.method in ("online", "send_soon"):
+            elif body.target == "hub" and body.method in ("online", "send_soon", "report"):
                 result = getattr(LoggedHub(hub, store, lambda: name), body.method)(*args)
             elif body.target == "terminal" and body.method == "whoami":
                 result = {"name": name, "main_name": machine_name(store)}

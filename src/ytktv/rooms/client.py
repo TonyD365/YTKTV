@@ -44,6 +44,8 @@ class RoomClient:
         self.now_singing: Callable[[], str] = lambda: ""  # set by the console
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self.admin_report: Callable[[], dict[str, Any]] | None = None
+        self._reported: dict[str, Any] | None = None
 
     def call(self, kind: str, note: str = "") -> bool:
         """Ask for the staff. False when this room is not open."""
@@ -123,6 +125,11 @@ class RoomClient:
                     self.store.settings.desk_last_seen = now
                     self.store.save()
                     await ws.send(json.dumps({"type": "heartbeat", "song": self.now_singing()}))
+                    report = self.admin_report() if self.admin_report else None
+                    if report is not None and report != self._reported:
+                        # The staff terminal's Admin Settings show what this room has now.
+                        await ws.send(json.dumps(report))
+                        self._reported = report
                 with self._outbox_lock:
                     outbox, self._outbox = self._outbox, []
                 for message in outbox:
