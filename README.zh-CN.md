@@ -84,7 +84,7 @@
 
 ## 快速开始
 
-1. 从[最新版本](https://github.com/TonyD365/YTKTV/releases/latest)下载对应系统的安装包并安装（macOS 需要先执行一条 `xattr` 命令，见下面的[安装](#安装)）。
+1. 从[最新版本](https://github.com/TonyD365/YTKTV/releases/latest)下载对应系统的安装包并安装（macOS 用下面[安装](#安装)里的一行 `curl` 命令最省事）。
 2. 把电视作为第二块屏幕接上，**尽量用 HDMI 线**（原因见[常见问题](#常见问题)），然后打开 YTKTV。第一次启动会有一个简短的向导，选音箱、选屏幕、试麦克风。
 3. 用手机扫屏幕上的二维码，点首歌，开唱。
 
@@ -104,7 +104,15 @@
 | 管理终端 YTKTV Desk，Linux | `YTKTV-Desk-<版本>-linux-x86_64.AppImage` |
 | 管理终端 YTKTV Desk，ARM | `YTKTV-Desk-<版本>-windows-arm64-setup.exe` 或 `-linux-aarch64.AppImage` |
 
-安装包还没有付费签名。**macOS** 上打开安装包前，先在"终端"里去掉下载隔离标记：
+**macOS 和 Linux 最省事的装法**：在"终端"里粘贴下面这一行。它会下载最新版本、校验后安装（macOS 会问一次开机密码），不会出现"已损坏"的提示：
+
+```bash
+curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash
+```
+
+装管理终端 YTKTV Desk 的话，在 `bash` 后面加上 `-s -- --desk`。
+
+安装包没有付费签名。如果是在浏览器里下载的 macOS 安装包，打开前先在"终端"里去掉下载隔离标记：
 
 ```bash
 xattr -d com.apple.quarantine ~/Downloads/YTKTV-<版本>-macos-universal.pkg

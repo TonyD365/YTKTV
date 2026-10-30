@@ -234,7 +234,7 @@
         <a data-desk data-asset="windows-x64-setup.exe" href="https://github.com/TonyD365/YTKTV/releases/latest">Windows</a> ·
         <a data-desk data-asset="linux-x86_64.AppImage" href="https://github.com/TonyD365/YTKTV/releases/latest">Linux</a></p>
       <p class="small" style="text-align:center;max-width:760px;margin:22px auto 0" data-i18n="dl.note" data-html>
-        The installers are not signed yet. On macOS run <code>xattr -d com.apple.quarantine ~/Downloads/YTKTV-*.pkg</code> before opening the package; on Windows choose <b>More info → Run anyway</b>. On first start YTKTV offers to install mpv, the free video player it uses.
+        Easiest on macOS and Linux: paste <code>curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash</code> into Terminal. The installers are not signed; if you download the macOS package in a browser, run <code>xattr -d com.apple.quarantine ~/Downloads/YTKTV-*.pkg</code> before opening it; on Windows choose <b>More info → Run anyway</b>. On first start YTKTV offers to install mpv, the free video player it uses.
       </p>
     </div>
   </section>
@@ -297,7 +297,7 @@ const ZH = {
   "s3.t": "扫码开唱", "s3.d": "用手机扫二维码，点歌，拿起麦克风。",
   "dl.title": "下载", "dl.sub": "免费，支持 macOS、Windows 和 Linux。",
   "dl.mac": "Apple 芯片和 Intel", "dl.win": "Windows 10 和 11，64 位", "dl.linux": "x86-64 AppImage", "dl.button": "下载",
-  "dl.note": "安装包还没有签名。macOS 上打开安装包前先在终端执行 <code>xattr -d com.apple.quarantine ~/Downloads/YTKTV-*.pkg</code>；Windows 上点 <b>更多信息 → 仍要运行</b>。第一次启动时会提示安装视频播放器 mpv。",
+  "dl.note": "macOS 和 Linux 最省事：在终端粘贴 <code>curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash</code>。安装包没有签名；如果在浏览器里下载 macOS 安装包，打开前先在终端执行 <code>xattr -d com.apple.quarantine ~/Downloads/YTKTV-*.pkg</code>；Windows 上点 <b>更多信息 → 仍要运行</b>。第一次启动时会提示安装视频播放器 mpv。",
   "road.title": "接下来要做的", "road.sub": "实时来自 GitHub 上带 <code>roadmap</code> 标签的 issue。点 👍 投票，或者参与讨论。",
   "road.loading": "加载中…", "road.planned": "计划中", "road.done": "已完成",
   "faq.title": "常见问题",
