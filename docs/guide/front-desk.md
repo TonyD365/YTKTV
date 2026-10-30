@@ -149,6 +149,14 @@ A terminal keeps nothing of its own: everything it does happens on the main Desk
 Desk cannot be reached, the terminal says so at the top and tries again on its own. **Remove**
 on the main Desk, or **Disconnect** on the terminal, ends the pairing.
 
+**On a phone**: Settings → Staff Terminals shows a link and a QR code (`https://<desk address>/staff`).
+Open it on a phone on the same Wi-Fi, accept the browser's security warning once (the Desk's
+certificate is its own, not from a public authority), then enter a code from **Add Terminal**
+and your name. The phone shows the rooms (open with a guest and a length, +30 / +60 minutes,
+check out with the payment method at the usual prices, mark cleaned), the service calls (**On my
+way**) and the orders waiting (**Delivered** or **Cancel**). Discounts and members stay on the
+Desk's till.
+
 **📜 Log** lists everything done on the main Desk and its terminals by day: the time, the
 machine's name and what was done ("Bar: Closed Kids, $60.00 by Card"). Choose a machine to see
 only its actions. Passwords are never written into the log.
