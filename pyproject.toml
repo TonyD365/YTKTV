@@ -13,7 +13,7 @@ authors = [{ name = "TonyD365" }]
 dependencies = [
     "PySide6-Essentials>=6.6",
     "mpv>=1.0.7",
-    "yt-dlp>=2025.9.0",
+    "yt-dlp>=2026.10.26",
     # Used by the optional HD unlock for restricted videos (see youtube/hd_unlock.py).
     "yt-dlp-ejs",
     "bgutil-ytdlp-pot-provider>=2.0",
