@@ -92,6 +92,28 @@ for the other, gold when both sing. The parts come from the marks many duet lyri
 | Guide, Music, Mic | How much of the original singer stays in Instrumental mode; music volume; microphone volume |
 | Crowd | Applause, Cheer, Air Horn, Drum Roll, Lights |
 
+## Keyboard and remote controls
+
+You can run the music without touching the mouse, in any YTKTV window (not while typing in a box):
+
+| Keys | Does |
+|---|---|
+| Space, ⏯ | Play / pause |
+| N, ⏭ | Next song |
+| R, ⏮ | Sing it again |
+| V, Enter / OK | Original / instrumental |
+| ↑ ↓ (or + −) | Music louder / softer |
+| → ← (or ] [) | Key up / down |
+| L | Lyrics on / off |
+| S | Scoring on / off |
+
+USB and Bluetooth remotes and "air mouse" remotes send these same keys, so they work as they
+are. **A TV remote** can drive YTKTV on a Raspberry Pi connected by HDMI: turn on the TV's
+HDMI-CEC (it has a brand name such as Anynet+, SimpLink, Bravia Sync or EasyLink), then run
+`cec-ctl -d /dev/cec0 --playback` once after the Pi starts. The remote's arrows, OK and play
+keys then arrive like keyboard keys; which keys a TV passes on depends on the TV. Most desktop
+computers have no CEC, so this does not work on them.
+
 ## Sound and delay
 
 Choose the speakers in **Mixer → MAIN OUT**. Use speakers connected with a cable (HDMI to the

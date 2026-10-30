@@ -169,6 +169,9 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
   who sings next, truth or dare, number bomb, liar's dice (everyone sees their own dice on their
   phone), random song, challenge cards, draw lots, high or low, sevens, a countdown, a coin, a King of Singers knockout tournament (the score cards decide
   who goes through) and a birthday celebration with the song up next.
+- **Keyboard and remotes.** Space, N, V, the arrows and media keys play, skip, switch to the
+  instrumental and change volume and key; USB remotes work as they are, and a TV remote through
+  HDMI-CEC on a Raspberry Pi.
 - **Smooth playback.** The next songs in the queue are downloaded ahead of time and played from
   disk; only the first song of a session streams, with a loading screen until it is ready.
   Separation runs in its own low-priority process so it cannot disturb the live sound.
