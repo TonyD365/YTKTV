@@ -49,7 +49,7 @@ from ytktv.desk.panels import (
     UpdateSettings,
 )
 from ytktv.desk.remote import DeskOffline, MainDesk, NotPaired
-from ytktv.desk.server import Hub, tell, tell_all_products, unbind
+from ytktv.desk.server import Hub, folders_message, tell, tell_all_products, unbind
 from ytktv.desk.store import CODE_SECONDS, Booking, DeskStore, Room
 from ytktv.desk.terminals import TerminalSettings
 from ytktv.desk.update import DeskUpdater
@@ -366,9 +366,13 @@ class DeskWindow(QMainWindow):
             "On or off: the room may sing only video files from its own computer, not YouTube"
         )
         local_only.clicked.connect(self.toggle_local_only)
+        folders = QPushButton("Local Folders…")
+        folders.setToolTip("Folders of video files on the room's own computer, one per line")
+        folders.clicked.connect(lambda: self.set_local_folders())
         buttons.addWidget(rename)
         buttons.addWidget(kind)
         buttons.addWidget(local_only)
+        buttons.addWidget(folders)
         buttons.addWidget(price)
         buttons.addWidget(self.unbind_button)
         buttons.addStretch()
@@ -882,6 +886,28 @@ class DeskWindow(QMainWindow):
         if ok:
             self.store.set_type(room.room_id, kind, seats)
             self.refresh()
+
+    def set_local_folders(self, folders: list[str] | None = None) -> None:
+        room_id = self._selected_setting()
+        room = self.store.room(room_id) if room_id else None
+        if room is None:
+            return
+        if folders is None:
+            text, ok = QInputDialog.getMultiLineText(
+                self,
+                "Local folders",
+                f"Folders of video files on {room.name}'s computer, one per line\n"
+                "(e.g. /Users/ktv/Songs or D:\\Karaoke):",
+                "\n".join(room.local_folders),
+            )
+            if not ok:
+                return
+            folders = text.splitlines()
+        self.store.set_local_folders(room.room_id, folders)
+        updated = self.store.room(room.room_id)
+        if updated is not None:
+            self.hub.send_soon(room.room_id, folders_message(updated))
+        self.refresh()
 
     def toggle_local_only(self) -> None:
         room_id = self._selected_setting()

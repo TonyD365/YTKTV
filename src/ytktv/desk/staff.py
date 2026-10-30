@@ -58,7 +58,7 @@ CHANGES = frozenset(
         "add_order", "set_order_status", "finish_call", "remove_terminal", "rename_terminal",
         "save_package", "remove_package", "set_session_package", "save_coupon", "remove_coupon",
         "use_coupon", "set_birthday",
-        "set_local_only",
+        "set_local_only", "set_local_folders",
     }
 )  # fmt: skip
 STORE_METHODS = READS | CHANGES

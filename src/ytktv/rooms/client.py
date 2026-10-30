@@ -143,6 +143,11 @@ class RoomClient:
             binding.clear(self.store.settings)
             self.store.save()
             self.state = RoomState(closed=False)
+        if kind == "local_folders":
+            # The staff terminal decides which folders this room sings from.
+            folders = [str(f) for f in message.get("folders", []) if str(f).strip()]
+            self.store.settings.local_folders = folders
+            self.store.save()
         if kind == "products":
             self.products = [i for i in message.get("items", []) if isinstance(i, dict)]
             self.currency = str(message.get("currency", "$"))

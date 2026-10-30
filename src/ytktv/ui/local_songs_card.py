@@ -47,6 +47,7 @@ class LocalSongsCard(QFrame):
         rescan.clicked.connect(self.rescan)
         self.count = QLabel()
         self.count.setObjectName("muted")
+        self.add_button, self.remove_button = add, remove
         for button in (add, remove, rescan):
             row.addWidget(button)
         row.addStretch()
@@ -55,11 +56,18 @@ class LocalSongsCard(QFrame):
         self.load()
 
     def load(self) -> None:
+        # A room bound to a staff terminal gets its folders from there.
+        managed = bool(self.controller.settings.desk_url)
+        self.add_button.setEnabled(not managed)
+        self.remove_button.setEnabled(not managed)
+        self.add_button.setToolTip("Set by the staff terminal" if managed else "")
         self.folders.clear()
         self.folders.addItems(self.controller.settings.local_folders)
         local = self.controller.local
         if local is None:
             self.count.setText("")
+        elif managed and not local.scanning:
+            self.count.setText(f"{len(local.songs())} songs · folders set by the staff terminal")
         elif local.scanning:
             self.count.setText("Looking…")
         else:
