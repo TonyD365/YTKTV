@@ -14,12 +14,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from ytktv.desk import billing
 from ytktv.desk import store as desk_store
+from ytktv.desk.guard import PairingGuard
 from ytktv.desk.server import Hub, tell
 from ytktv.desk.store import DeskStore
 
@@ -261,7 +262,11 @@ class CallIn(BaseModel):
     kwargs: dict[str, Any] = {}
 
 
-def add_staff_routes(app: FastAPI, store: DeskStore, hub: Hub, cert_hash: str) -> None:
+def add_staff_routes(
+    app: FastAPI, store: DeskStore, hub: Hub, cert_hash: str, guard: PairingGuard | None = None
+) -> None:
+    guard = guard or PairingGuard(store.forget_codes)
+
     def serving() -> None:
         if store.setting(SERVER_SETTING, "0") != "1":
             raise HTTPException(403, "This Desk does not accept staff terminals")
@@ -284,11 +289,16 @@ def add_staff_routes(app: FastAPI, store: DeskStore, hub: Hub, cert_hash: str) -
         return signed(body.nonce)
 
     @app.post("/api/staff/pair")
-    def pair(body: PairIn) -> dict[str, str]:
+    def pair(body: PairIn, request: Request) -> dict[str, str]:
         serving()
+        address = request.client.host if request.client else "?"
+        if not guard.allowed(address):
+            raise HTTPException(429, "too many wrong codes; wait five minutes")
         try:
             terminal_id, token = store.pair_terminal(body.code.strip(), body.name.strip())
+            guard.succeeded()
         except KeyError as exc:
+            guard.missed(address)
             raise HTTPException(403, "wrong or expired code") from exc
         store.log(body.name.strip() or "Staff terminal", "Paired as a staff terminal")
         return {"terminal_id": terminal_id, "token": token, **signed(body.nonce)}

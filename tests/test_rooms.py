@@ -762,3 +762,30 @@ def test_insights_dashboard(qtbot):
     window.show_tab(window.stack.indexOf(window.insights))
     assert window.insights.tiles["Sessions"].text() == "2"
     assert "Cola" in window.insights.lists["BEST-SELLING ITEMS"].text()
+
+
+def test_guessing_pairing_codes_is_stopped():
+    from fastapi.testclient import TestClient
+
+    from ytktv.desk import guard as desk_guard
+    from ytktv.desk.server import Hub, create_desk_app
+
+    store = DeskStore()
+    code = store.new_code()
+    http = TestClient(create_desk_app(store, Hub()))
+    wrong = "000000" if code != "000000" else "111111"
+    for _ in range(desk_guard.PER_ADDRESS):
+        assert http.post("/api/pair", json={"code": wrong, "name": "x"}).status_code == 403
+    # Locked out now, even with the right code.
+    assert http.post("/api/pair", json={"code": code, "name": "x"}).status_code == 429
+
+    flooded: list[bool] = []
+    guard = desk_guard.PairingGuard(lambda: flooded.append(True))
+    for n in range(desk_guard.IN_TOTAL):
+        guard.missed(f"10.0.0.{n}")
+    assert flooded == [True]
+    store.forget_codes()
+    import pytest
+
+    with pytest.raises(KeyError):
+        store.pair(code, "late")
