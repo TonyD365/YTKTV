@@ -722,7 +722,7 @@ def test_desk_database_is_versioned_and_backed_up(tmp_path):
 
 
 def test_insights_dashboard(qtbot):
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
     from ytktv.desk import reports
     from ytktv.desk.billing import Bill
@@ -732,7 +732,9 @@ def test_insights_dashboard(qtbot):
     store = DeskStore()
     kids, _ = store.pair(store.new_code(), "Kids")
     vip, _ = store.pair(store.new_code(), "VIP")
-    evening = datetime.now().replace(hour=19, minute=30, second=0, microsecond=0).timestamp()
+    # Yesterday evening: over by now, whatever time the test runs.
+    yesterday = datetime.now() - timedelta(days=1)
+    evening = yesterday.replace(hour=19, minute=30, second=0, microsecond=0).timestamp()
     for room, total, payment, items in (
         (kids, 50.0, "Cash", [("Cola × 2", 10.0)]),
         (vip, 150.0, "Card", [("Cola × 1", 5.0), ("Beer tower × 1", 40.0)]),
