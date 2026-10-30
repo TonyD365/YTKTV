@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import csv
 import time
+from collections import Counter
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -67,3 +69,73 @@ def export_csv(visits: list[Visit], path: Path | str) -> None:
                     "; ".join(f"{text} {amount:.2f}" for text, amount in v.lines),
                 )
             )
+
+
+# -- the dashboard ---------------------------------------------------------------
+
+RANGES = {"Last 7 days": 7, "Last 30 days": 30, "Last 90 days": 90}
+ROOM_LINES = ("Room ·", "Package ·", "Extra time ·")  # bill lines that pay for the room
+WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+@dataclass
+class Insights:
+    sessions: int
+    takings: float
+    hours: float
+    busy_hours: list[float]  # how many rooms were in use, summed over the days, per hour of day
+    weekdays: list[float]  # takings per weekday, Monday first
+    top_songs: list[tuple[str, int]]
+    top_items: list[tuple[str, int, float]]  # name, how many, takings
+    rooms: list[tuple[str, float]]  # takings per room, best first
+    payments: list[tuple[str, float]]
+
+    @property
+    def per_session(self) -> float:
+        return self.takings / self.sessions if self.sessions else 0.0
+
+
+def insights(visits: list[Visit]) -> Insights:
+    busy = [0.0] * 24
+    weekdays = [0.0] * 7
+    songs: Counter[str] = Counter()
+    items: dict[str, tuple[int, float]] = {}
+    rooms: dict[str, float] = {}
+    payments: dict[str, float] = {}
+    for v in visits:
+        # Spread the session over the hours of the day it covered.
+        start = v.opened_at
+        while start < v.closed_at:
+            hour_start = start - (start % 3600)
+            end = min(v.closed_at, hour_start + 3600)
+            busy[time.localtime(start).tm_hour] += (end - start) / 3600
+            start = end
+        weekdays[time.localtime(v.closed_at).tm_wday] += v.total
+        songs.update(v.songs)
+        rooms[v.room] = rooms.get(v.room, 0.0) + v.total
+        payments[v.payment] = payments.get(v.payment, 0.0) + v.total
+        for text, amount in v.lines:
+            if text.startswith(ROOM_LINES) or " × " not in text:
+                continue
+            name, qty = text.rsplit(" × ", 1)
+            count, money = items.get(name, (0, 0.0))
+            items[name] = (count + (int(qty) if qty.isdigit() else 1), money + amount)
+    top_items = sorted(((n, q, a) for n, (q, a) in items.items()), key=lambda i: -i[1])
+    return Insights(
+        sessions=len(visits),
+        takings=round(sum(v.total for v in visits), 2),
+        hours=sum(v.closed_at - v.opened_at for v in visits) / 3600,
+        busy_hours=[round(b, 2) for b in busy],
+        weekdays=[round(w, 2) for w in weekdays],
+        top_songs=songs.most_common(10),
+        top_items=top_items[:10],
+        rooms=sorted(rooms.items(), key=lambda pair: -pair[1]),
+        payments=sorted(payments.items(), key=lambda pair: -pair[1]),
+    )
+
+
+def last_days(store: DeskStore, days: int, now: float | None = None) -> list[Visit]:
+    now = time.time() if now is None else now
+    today = datetime.fromtimestamp(now).replace(hour=0, minute=0, second=0, microsecond=0)
+    start = today - timedelta(days=days - 1)
+    return store.history(start.timestamp(), now + 1)
