@@ -371,24 +371,40 @@ function renderService() {
   $("service").style.display = service ? "" : "none";
   if (!service) return;
   const menu = $("menu");
-  menu.replaceChildren(...service.products.map((p) => {
-    const row = document.createElement("div");
-    row.className = "menu-row";
-    row.style.cssText = "display:flex;align-items:center;gap:8px;margin:6px 0";
-    const name = document.createElement("span");
-    name.style.flex = "1";
-    name.textContent = `${p.name} · ${service.currency}${p.price}`;
-    const count = document.createElement("span");
-    count.textContent = orderQty[p.product_id] || 0;
-    const step = (d) => () => {
-      orderQty[p.product_id] = Math.max(0, Math.min(20, (orderQty[p.product_id] || 0) + d));
-      renderService();
-    };
-    const minus = document.createElement("button"); minus.textContent = "−"; minus.onclick = step(-1);
-    const plus = document.createElement("button"); plus.textContent = "+"; plus.onclick = step(1);
-    row.append(name, minus, count, plus);
-    return row;
-  }));
+  // Drinks and snacks are ordered from the menu once there is one.
+  document.querySelectorAll('[data-call="Drinks"], [data-call="Snacks"]').forEach((b) => {
+    b.style.display = service.products.length ? "none" : "";
+  });
+  const groups = {};
+  for (const p of service.products) (groups[p.category || "Other"] ||= []).push(p);
+  const rows = [];
+  for (const category of Object.keys(groups).sort()) {
+    const head = document.createElement("div");
+    head.className = "menu-category";
+    head.style.cssText = "margin:14px 0 2px;font-size:12px;letter-spacing:1.5px;color:var(--cyan);text-transform:uppercase;font-weight:700";
+    head.textContent = category;
+    rows.push(head);
+    for (const p of groups[category]) {
+      const row = document.createElement("div");
+      row.className = "menu-row";
+      row.style.cssText = "display:flex;align-items:center;gap:8px;margin:6px 0";
+      const name = document.createElement("span");
+      name.style.flex = "1";
+      name.textContent = `${p.name} · ${service.currency}${p.price}`;
+      const count = document.createElement("span");
+      count.style.cssText = "min-width:24px;text-align:center;font-weight:700";
+      count.textContent = orderQty[p.product_id] || 0;
+      const step = (d) => () => {
+        orderQty[p.product_id] = Math.max(0, Math.min(20, (orderQty[p.product_id] || 0) + d));
+        renderService();
+      };
+      const minus = document.createElement("button"); minus.textContent = "−"; minus.onclick = step(-1);
+      const plus = document.createElement("button"); plus.textContent = "+"; plus.onclick = step(1);
+      row.append(name, minus, count, plus);
+      rows.push(row);
+    }
+  }
+  menu.replaceChildren(...rows);
   $("send-order").style.display = Object.values(orderQty).some((q) => q > 0) ? "" : "none";
 }
 
