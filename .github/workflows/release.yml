@@ -408,3 +408,26 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$TAG" installers/* --clobber
+
+  winget:
+    # Opens a pull request on microsoft/winget-pkgs for the new version, with the user's
+    # WINGET_TOKEN (a classic token with public_repo only). Needs both packages to be in
+    # winget already, and a fork of winget-pkgs under the same account.
+    name: Update winget (${{ matrix.id }})
+    needs: attach
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: TonyD365.YTKTV
+            regex: '^YTKTV-\d[^/]*-windows-(x64|arm64)-setup\.exe$'
+          - id: TonyD365.YTKTVDesk
+            regex: '^YTKTV-Desk-\d[^/]*-windows-(x64|arm64)-setup\.exe$'
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: ${{ matrix.id }}
+          installers-regex: ${{ matrix.regex }}
+          token: ${{ secrets.WINGET_TOKEN }}
