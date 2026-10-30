@@ -14,9 +14,10 @@ import hmac
 import json
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from ytktv.desk.guard import PairingGuard
 from ytktv.desk.store import DeskStore, Room
 from ytktv.rooms import crypto
 
@@ -74,19 +75,26 @@ def create_desk_app(store: DeskStore, hub: Hub | None = None, cert_hash: str = "
     from ytktv.desk.staff import add_staff_routes
 
     hub = hub or Hub()
+    guard = PairingGuard(store.forget_codes)
     app = FastAPI(title="YTKTV Desk")
+    app.state.guard = guard
     app.state.hub = hub
-    add_staff_routes(app, store, hub, cert_hash)
+    add_staff_routes(app, store, hub, cert_hash, guard)
 
     @app.get("/api/desk")
     def desk() -> dict[str, str]:
         return {"desk_id": store.desk_id, "desk_key": store.public_key}
 
     @app.post("/api/pair")
-    def pair(body: PairIn) -> dict[str, str]:
+    def pair(body: PairIn, request: Request) -> dict[str, str]:
+        address = request.client.host if request.client else "?"
+        if not guard.allowed(address):
+            raise HTTPException(429, "too many wrong codes; wait five minutes")
         try:
             room, key = store.pair(body.code.strip(), body.name.strip())
+            guard.succeeded()
         except KeyError as exc:
+            guard.missed(address)
             raise HTTPException(403, "wrong or expired code") from exc
         return {
             "room_id": room.room_id,

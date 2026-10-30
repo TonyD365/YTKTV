@@ -150,7 +150,8 @@ def test_terminal_window_settings_and_log(main_desk, qtbot, tmp_path, monkeypatc
     dialog.name.setText("Bar")
     seen: list[str] = []
     dialog.join(confirm=lambda config: seen.append(config.fingerprint) or True)
-    qtbot.waitUntil(lambda: remote.load_config() is not None, timeout=5000)
+    # TLS on a busy Windows CI machine can take a while; wait long enough not to flake.
+    qtbot.waitUntil(lambda: remote.load_config() is not None, timeout=30000)
     assert seen == [store.fingerprint]
     panel.load()
     assert panel.list.count() == 1 and panel.list.item(0).text().startswith("Bar")

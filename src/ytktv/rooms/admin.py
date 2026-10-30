@@ -77,6 +77,7 @@ FIELDS: dict[str, tuple[str, Callable[[Any], Any]]] = {
     "smart_lights": ("Smart lights", _lights),
     "smart_lights_host": ("Smart lights address", _host),
     "auto_update": ("Install new releases automatically", _bool),
+    "low_power": ("Low-power mode (720p, no light effects)", _bool),
 }
 
 

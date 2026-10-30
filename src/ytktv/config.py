@@ -66,6 +66,8 @@ class Settings:
     smart_lights_host: str = ""  # the WLED controller's or the Hue bridge's address
     hue_key: str = ""  # what the Hue bridge gave when paired
     text_size: str = "Normal"  # Normal, Large or Extra large (see theme.TEXT_SIZES)
+    low_power: bool = False  # 720p and no light effects, for a Raspberry Pi or an old PC
+    low_power_checked: bool = False  # the first start looked at the computer already
     mic_preset: str = ""  # the preset the channels currently match, if any
 
     default_vocal_mode: str = "instrumental"

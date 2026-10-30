@@ -33,7 +33,7 @@ from ytktv import __version__, catalog
 from ytktv.core.controller import KTVController
 from ytktv.core.models import Song, StemStatus
 from ytktv.rooms.client import RoomClient
-from ytktv.ui import theme
+from ytktv.ui import feedback, theme
 from ytktv.ui.diagnostics_dialog import save_diagnostics
 from ytktv.ui.front_desk_card import FrontDeskCard
 from ytktv.ui.local_songs_card import LocalSongsCard
@@ -795,6 +795,10 @@ class SettingsPage(Page):
             "Download the next songs in the queue ahead of time (smoother playback)",
             "preload_queue",
         )
+        low = QCheckBox("Low-power mode: 720p video, no light effects (Raspberry Pi, old PCs)")
+        low.setChecked(settings.low_power)
+        low.toggled.connect(self.set_low_power)
+        display.addWidget(low)
 
         # Vocals
         vocals = card("Vocal Separation", admin=True)
@@ -878,7 +882,14 @@ class SettingsPage(Page):
             " left out), to attach to a bug report"
         )
         diagnose.clicked.connect(lambda: self.save_diagnostics())
-        help_card.addWidget(diagnose, alignment=Qt.AlignmentFlag.AlignLeft)
+        feedback_row = QHBoxLayout()
+        feedback_row.addWidget(diagnose)
+        for caption, link in (("Report a Bug", feedback.BUG), ("Suggest a Feature", feedback.IDEA)):
+            button = QPushButton(caption)
+            button.clicked.connect(lambda _c=False, u=link: feedback.open_url(u))
+            feedback_row.addWidget(button)
+        feedback_row.addStretch()
+        help_card.addLayout(feedback_row)
 
         # Updates
         updates = card("Updates", admin=True)
@@ -904,6 +915,15 @@ class SettingsPage(Page):
         self.release_button.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(self._release_url))
         )
+
+    def set_low_power(self, on: bool) -> None:
+        from ytktv import low_power
+
+        settings = self.ctx.controller.settings
+        low_power.apply(settings, on)
+        self.quality.setCurrentIndex(max(0, self.quality.findData(settings.max_height)))
+        self.ctx.controller.set_lights(settings.lights)
+        self.ctx.controller.store.save()
 
     def apply_role(self) -> None:
         """Bound to a staff terminal, this page keeps only the guests' settings."""

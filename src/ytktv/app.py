@@ -280,6 +280,10 @@ def main(argv: list[str] | None = None) -> int:
 
     store = SettingsStore()
     settings = store.settings
+    from ytktv import low_power
+
+    if low_power.first_start(settings):  # a Raspberry Pi or an old computer
+        store.save()
     app.setStyleSheet(theme.stylesheet(settings.text_size))
 
     player: Any
@@ -479,6 +483,9 @@ def main(argv: list[str] | None = None) -> int:
 
     keys = RemoteKeys(controller, app)  # media keys and remotes work in every window
     app.installEventFilter(keys)
+    from ytktv.ui.feedback import install_crash_handler
+
+    install_crash_handler(window)
     window.show()
     window.place_mv()
     if not settings.setup_done:

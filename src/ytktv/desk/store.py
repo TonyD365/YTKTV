@@ -177,6 +177,12 @@ class DeskStore:
 
     # -- staff terminals ----------------------------------------------------------
 
+    def forget_codes(self) -> None:
+        """Throw away every pairing code not used yet (someone was guessing)."""
+        with self._lock:
+            self._codes.clear()
+            self._terminal_codes.clear()
+
     def new_terminal_code(self, now: float | None = None) -> str:
         """A one-time code that pairs another Desk as a staff terminal (not a room)."""
         now = time.time() if now is None else now
