@@ -45,4 +45,4 @@ Name: "{group}\YTKTV Desk"; Filename: "{app}\YTKTV Desk.exe"
 Name: "{autodesktop}\YTKTV Desk"; Filename: "{app}\YTKTV Desk.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\YTKTV Desk.exe"; Description: "Launch YTKTV Desk"; Flags: nowait postinstall
+Filename: "{app}\YTKTV Desk.exe"; Description: "Launch YTKTV Desk"; Flags: nowait postinstall skipifsilent
