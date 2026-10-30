@@ -469,6 +469,10 @@ def main(argv: list[str] | None = None) -> int:
         window.settings_page.install_hd_unlock.connect(hd_setup.install)
         hd_setup.publish()
     window.settings_page.run_setup.connect(window.run_setup)
+    from ytktv.ui.remote_keys import RemoteKeys
+
+    keys = RemoteKeys(controller, app)  # media keys and remotes work in every window
+    app.installEventFilter(keys)
     window.show()
     window.place_mv()
     if not settings.setup_done:
