@@ -80,6 +80,7 @@ class KTVController:
         self.bomb = games.NumberBomb()
         self.liars = games.LiarsDice()
         self.sevens = games.Sevens()
+        self.tournament = games.Tournament()
         self.player = player
         self.resolver = resolver
         self.library = library or Library()
@@ -641,6 +642,10 @@ class KTVController:
             "voices": entries,
         }
         self.bus.emit("score", self.last_score)
+        if self.tournament.active and item.singer:
+            decided = self.tournament.record(item.singer, result.points)
+            if decided is not None:
+                self.bus.emit("game", decided)
 
     def set_pk_mode(self, enabled: bool) -> None:
         """PK battle: two singers on two microphones, the higher score wins the song."""
@@ -764,9 +769,28 @@ class KTVController:
             result = self.liars.public()
         elif game == "liar_reveal":
             result = self.liars.reveal()
+        elif game == "tournament":
+            names = [n for n in player.split(",") if n.strip()] if "," in player else []
+            result = self.tournament.start(names or self.singers())
+        elif game == "tournament_status":
+            result = self.tournament.public()
+        elif game == "tournament_score":
+            if value is None:
+                raise ValueError("a score needs a number")
+            result = self.tournament.record(player, value) or self.tournament.public()
         else:
             raise ValueError(f"unknown game {game!r}")
         self.bus.emit("game", result)
+        return result
+
+    def birthday(self, name: str, song: Song | None = None) -> dict[str, str]:
+        """Birthday: the name big on the TV, a shower of party emoji, and the song up next."""
+        result = games.birthday(name)
+        self.bus.emit("game", result)
+        for emoji in ("🎉", "❤️", "🎉", "🌹", "🎉"):
+            self.bus.emit("reaction", {"emoji": emoji})
+        if song is not None and not self.room_closed:
+            self.enqueue(song, singer=name.strip(), priority=True)
         return result
 
     def announce(self, result: dict[str, str]) -> None:
