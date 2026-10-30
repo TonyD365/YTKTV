@@ -44,7 +44,7 @@ NAME="${URL##*/}"
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-say "Downloading $NAME…"
+say "Downloading ${NAME}…"
 curl -fL --progress-bar -o "$WORK/$NAME" "$URL"
 
 # Check the download against the release's SHA256SUMS, when it has one.
