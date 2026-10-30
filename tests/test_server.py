@@ -20,6 +20,7 @@ def test_index_page_is_served(client):
     response = http.get("/")
     assert response.status_code == 200
     assert "YTKTV Remote" in response.text
+    assert "menu-category" in response.text  # the order menu is grouped by category
 
 
 def test_search_and_categories(client):
