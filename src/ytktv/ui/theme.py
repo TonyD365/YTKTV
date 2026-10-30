@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 BG = "#0d0720"
 PANEL = "#1a1035"
 PANEL_2 = "#241650"
@@ -141,3 +143,15 @@ QCheckBox::indicator:checked {{ background: {PINK}; border-color: {PINK}; }}
 #toast[error="true"] {{ border-color: {DANGER}; }}
 QMessageBox, QDialog {{ background: {PANEL}; }}
 """
+
+
+TEXT_SIZES = {"Normal": 1.0, "Large": 1.25, "Extra large": 1.5}
+_FONT_SIZE = re.compile(r"font-size:\s*(\d+)px")
+
+
+def stylesheet(text_size: str = "Normal") -> str:
+    """STYLESHEET with every font size scaled up, for people who read better large."""
+    factor = TEXT_SIZES.get(text_size, 1.0)
+    if factor == 1.0:
+        return STYLESHEET
+    return _FONT_SIZE.sub(lambda m: f"font-size: {round(int(m.group(1)) * factor)}px", STYLESHEET)

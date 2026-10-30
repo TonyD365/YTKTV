@@ -1089,3 +1089,17 @@ def test_settings_buttons_save_a_zip(window, tmp_path, qtbot):
     desk = panel.save_diagnostics(str(tmp_path / "desk.zip"))
     with zipfile.ZipFile(desk) as bundle:
         assert json.loads(bundle.read("about.json"))["app"] == "YTKTV Desk"
+
+
+def test_large_text(window):
+    from PySide6.QtWidgets import QApplication
+
+    from ytktv.ui import theme
+
+    main, controller = window
+    assert "font-size: 18px" in theme.stylesheet("Large")  # 14px * 1.25
+    assert theme.stylesheet("Normal") == theme.STYLESHEET
+    main.settings_page.text_size.setCurrentText("Extra large")
+    assert controller.settings.text_size == "Extra large"
+    assert "font-size: 21px" in QApplication.instance().styleSheet()
+    main.settings_page.text_size.setCurrentText("Normal")
