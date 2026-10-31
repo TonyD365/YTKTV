@@ -93,6 +93,13 @@ class AdminSettingsDialog(QDialog):
             spin.setSuffix(" %")
             spin.setValue(int(value))
             return spin
+        if name == "screen_delay_ms":
+            delay = QSpinBox()
+            delay.setRange(0, 1000)
+            delay.setSingleStep(20)
+            delay.setSuffix(" ms")
+            delay.setValue(int(value))
+            return delay
         if name == "local_folders":
             edit = QPlainTextEdit("\n".join(value or []))
             edit.setPlaceholderText("One folder per line, as a path on the room's computer")

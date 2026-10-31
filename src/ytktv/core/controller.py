@@ -156,6 +156,7 @@ class KTVController:
         self._apply_volume()
         player.set_guide(self.settings.guide_vocal / 100.0)
         player.set_audio_device(self.settings.output_device)
+        player.set_audio_delay(self.settings.screen_delay_ms / 1000.0)
 
     # -- queue ------------------------------------------------------------
 
@@ -580,6 +581,12 @@ class KTVController:
         else:
             self.player.use_instrumental(False)
             self.player.set_channel_mode(self.vocal_mode)
+
+    def set_screen_delay(self, ms: int) -> None:
+        """How late the TV shows the picture (a wireless screen); the sound waits as long."""
+        self.settings.screen_delay_ms = max(0, min(1000, int(ms)))
+        self.player.set_audio_delay(self.settings.screen_delay_ms / 1000.0)
+        self._save_soon()
 
     def set_guide_vocal(self, percent: int) -> None:
         """How much of the original singer to keep in Instrumental mode (0..100)."""
