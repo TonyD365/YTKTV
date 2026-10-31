@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPlainTextEdit,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -86,6 +87,12 @@ class AdminSettingsDialog(QDialog):
                 combo.addItem(text, key)
             combo.setCurrentIndex(max(0, combo.findData(value)))
             return combo
+        if name == "kids_max_volume":
+            spin = QSpinBox()
+            spin.setRange(10, 100)
+            spin.setSuffix(" %")
+            spin.setValue(int(value))
+            return spin
         if name == "local_folders":
             edit = QPlainTextEdit("\n".join(value or []))
             edit.setPlaceholderText("One folder per line, as a path on the room's computer")
@@ -99,6 +106,8 @@ class AdminSettingsDialog(QDialog):
             return widget.isChecked()
         if isinstance(widget, QComboBox):
             return widget.currentData()
+        if isinstance(widget, QSpinBox):
+            return widget.value()
         if isinstance(widget, QPlainTextEdit):
             return [line.strip() for line in widget.toPlainText().splitlines() if line.strip()]
         if isinstance(widget, QLineEdit):

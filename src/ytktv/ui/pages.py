@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -127,6 +128,7 @@ class Page(QWidget):
 
     def show_songs(self, songs: list[Song], empty: str = "") -> None:
         """Show *songs* in this page's list and keep their tags current from now on."""
+        songs = self.ctx.controller.for_this_room(list(songs))
         self._browse_songs = list(songs)
         self._browse_marks = self._marks(songs)
         if songs:
@@ -799,6 +801,28 @@ class SettingsPage(Page):
         low.setChecked(settings.low_power)
         low.toggled.connect(self.set_low_power)
         display.addWidget(low)
+
+        # Kids
+        kids_card = card("Kids Mode", admin=True)
+        kids_note = QLabel(
+            "For a children's room: songs whose title or channel is not for children are left"
+            " out of search and cannot be selected, and the music cannot be turned up past the"
+            " limit. Age-restricted YouTube videos never play."
+        )
+        kids_note.setWordWrap(True)
+        kids_card.addWidget(kids_note)
+        self.kids_box = QCheckBox("Kids mode")
+        self.kids_box.setChecked(settings.kids_mode)
+        self.kids_box.toggled.connect(lambda on: ctx.controller.set_kids_mode(on))
+        kids_card.addWidget(self.kids_box)
+        self.kids_volume = QSpinBox()
+        self.kids_volume.setRange(10, 100)
+        self.kids_volume.setSuffix(" %")
+        self.kids_volume.setValue(settings.kids_max_volume)
+        self.kids_volume.valueChanged.connect(
+            lambda v: ctx.controller.set_kids_mode(settings.kids_mode, v)
+        )
+        labelled(kids_card, "Highest volume", self.kids_volume)
 
         # Vocals
         vocals = card("Vocal Separation", admin=True)

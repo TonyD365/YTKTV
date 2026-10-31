@@ -213,7 +213,8 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
                 if not local:
                     raise HTTPException(502, "YouTube search failed") from exc
         controller.remember_search(q)
-        return [{**song.to_dict(), **controller.song_marks(song)} for song in local + songs]
+        allowed = controller.for_this_room(local + songs)
+        return [{**song.to_dict(), **controller.song_marks(song)} for song in allowed]
 
     @app.get("/api/suggest")
     def suggest(q: str) -> list[str]:
@@ -236,7 +237,8 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         if category not in HOT_CATEGORIES:
             raise HTTPException(404, "unknown category")
         try:
-            return [{**s.to_dict(), **controller.song_marks(s)} for s in source.hot(category)]
+            songs = controller.for_this_room(source.hot(category))
+            return [{**s.to_dict(), **controller.song_marks(s)} for s in songs]
         except Exception as exc:
             raise HTTPException(502, "YouTube search failed") from exc
 
