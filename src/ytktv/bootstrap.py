@@ -280,6 +280,30 @@ def install_libmpv(report: Callable[[str], None] = lambda _msg: None) -> bool:
     return find_libmpv() is not None
 
 
+def _runs(binary: Path) -> bool:
+    """Whether *binary* starts at all (macOS kills one whose signature it no longer trusts)."""
+    try:
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        result = subprocess.run(
+            [str(binary), "-version"], capture_output=True, timeout=20, creationflags=flags
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
+def _stage(source: Path, target: Path) -> None:
+    """Copy *source* to *target* as a new file, never over the old one in place.
+
+    On Apple Silicon, macOS remembers a program's code signature by its file; overwriting
+    one that has run makes every later start of it get killed (exit 137).
+    """
+    partial = target.with_name(target.name + ".new")
+    shutil.copy2(source, partial)
+    partial.chmod(0o755)
+    os.replace(partial, target)
+
+
 def ensure_ffmpeg() -> str | None:
     """Make an ``ffmpeg`` executable reachable on PATH and return its path."""
     found = shutil.which("ffmpeg")
@@ -304,9 +328,12 @@ def ensure_ffmpeg() -> str | None:
     bin_dir.mkdir(parents=True, exist_ok=True)
     target = bin_dir / ("ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg")
     try:
-        if not target.exists() or target.stat().st_size != source.stat().st_size:
-            shutil.copy2(source, target)
-            target.chmod(0o755)
+        stale = not target.exists() or target.stat().st_size != source.stat().st_size
+        if stale or not _runs(target):
+            _stage(source, target)
+        if not _runs(target):  # still refused: use the bundled one where it is
+            log.warning("the staged ffmpeg does not run; using %s", source)
+            return str(source)
     except OSError:
         log.exception("could not stage ffmpeg")
         return str(source)
