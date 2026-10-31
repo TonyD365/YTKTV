@@ -431,3 +431,6 @@ jobs:
           identifier: ${{ matrix.id }}
           installers-regex: ${{ matrix.regex }}
           token: ${{ secrets.WINGET_TOKEN }}
+          # WINGET_TOKEN is TonyD365-Agent's, so the PR comes from that account's fork
+          # (the default would be the repository owner's, which the bot cannot push to).
+          fork-user: TonyD365-Agent
