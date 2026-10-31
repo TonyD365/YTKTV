@@ -36,6 +36,8 @@ class Bill:
     coupon: str = ""  # its code
     coupon_percent: float = 0.0
     coupon_amount: float = 0.0
+    service_rate: float = 0.0  # service charge, percent, added after the discounts
+    tax_rate: float = 0.0  # tax, percent, on everything including the service charge
 
     @property
     def subtotal(self) -> float:
@@ -46,11 +48,23 @@ class Bill:
         return max(self.subtotal, self.minimum)
 
     @property
-    def total(self) -> float:
+    def after_discounts(self) -> float:
         amount = self.before_discounts
         for percent in (self.member_off, self.birthday_off, self.discount, self.coupon_percent):
             amount *= 1 - percent / 100
-        amount = max(0.0, amount - self.coupon_amount)
+        return max(0.0, amount - self.coupon_amount)
+
+    @property
+    def service(self) -> float:
+        return round(self.after_discounts * self.service_rate / 100, 2)
+
+    @property
+    def tax(self) -> float:
+        return round((self.after_discounts + self.service) * self.tax_rate / 100, 2)
+
+    @property
+    def total(self) -> float:
+        amount = self.after_discounts + self.service + self.tax
         if self.round_to:
             amount = math.floor(amount / self.round_to + 1e-9) * self.round_to
         return round(amount, 2)
@@ -78,6 +92,15 @@ class Bill:
                 f"<tr><td>Coupon {escape(self.coupon)}</td><td align='right'>"
                 f"−{self.currency}{self.coupon_amount:.2f}</td></tr>"
             )
+        for label, rate, amount in (
+            ("Service charge", self.service_rate, self.service),
+            ("Tax", self.tax_rate, self.tax),
+        ):
+            if rate:
+                rows += (
+                    f"<tr><td>{label} {rate:g}%</td><td align='right'>"
+                    f"+{self.currency}{amount:.2f}</td></tr>"
+                )
         if self.round_to:
             rows += "<tr><td>Small change dropped</td><td></td></tr>"
         rows += f"<tr><td>Paid by</td><td align='right'>{escape(self.payment)}</td></tr>"
@@ -117,6 +140,8 @@ def bill(store: DeskStore, room_id: str, now: float | None = None) -> Bill:
         room.guest,
         store.setting("currency", "$"),
         minimum=float(store.setting("minimum", "0")),
+        service_rate=float(store.setting("service_rate", "0")),
+        tax_rate=float(store.setting("tax_rate", "0")),
     )
     package = store.session_package(room_id)
     if package is not None:
