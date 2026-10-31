@@ -118,6 +118,11 @@ class MainWindow(QMainWindow):
 
         self.bridge = EventBridge(controller.bus, self)
         self.bridge.received.connect(self._on_event)
+        # A TV connected later (a cable, AirPlay or Miracast) gets the MV straight away.
+        app = QGuiApplication.instance()
+        if isinstance(app, QGuiApplication):
+            app.screenAdded.connect(self._screen_added)
+            app.screenRemoved.connect(lambda _screen: QTimer.singleShot(800, self.place_mv))
         self.ctx = Context(controller, youtube, ThumbnailLoader(self), room_client=room_client)
         self.ctx.open_search = self.open_search
         self._state: dict[str, Any] = controller.state()
@@ -524,6 +529,11 @@ class MainWindow(QMainWindow):
         self._setup.finished.connect(lambda _result: self.mixer_page.refresh_devices())
         self._setup.open()
 
+    def _screen_added(self, screen: Any) -> None:
+        # Wireless displays take a moment to settle their size; place the MV after that.
+        QTimer.singleShot(1500, self.place_mv)
+        self.show_toast(f"TV connected: the MV moves to {screen.name()}")
+
     def place_mv(self) -> None:
         settings = self.controller.settings
         self.mv_window.place_on_screen(
@@ -619,6 +629,8 @@ class MainWindow(QMainWindow):
         if not changed:
             return
         self.controller.store.save()
+        if "screen_delay_ms" in changed:
+            self.controller.set_screen_delay(settings.screen_delay_ms)
         if "output_device" in changed:
             self.controller.set_output_device(settings.output_device)
         if {"mv_screen", "mv_fullscreen"} & set(changed):

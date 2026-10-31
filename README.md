@@ -178,6 +178,9 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
   HDMI-CEC on a Raspberry Pi.
 - **Smart lights.** WLED strips or Philips Hue lights change colour with the music, like the
   TV's edge lights (Settings → Smart Lights).
+- **TV without a cable.** Use the TV as a wireless second screen (AirPlay on a Mac, Miracast
+  with Win + K on Windows): the MV moves there by itself, lyrics included, and a picture delay
+  setting keeps the sound in step.
 - **Large text.** Settings → Text Size makes the console's text 25% or 50% bigger.
 - **Smooth playback.** The next songs in the queue are downloaded ahead of time and played from
   disk; only the first song of a session streams, with a loading screen until it is ready.

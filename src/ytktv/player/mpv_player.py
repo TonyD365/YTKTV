@@ -218,6 +218,10 @@ class MpvPlayer:
     def set_speed(self, speed: float) -> None:
         self.mpv.speed = max(0.5, min(1.5, speed))
 
+    def set_audio_delay(self, seconds: float) -> None:
+        """Hold the sound back by *seconds* (a wireless TV shows the picture late)."""
+        self.mpv["audio-delay"] = max(0.0, min(1.0, seconds))
+
     def set_channel_mode(self, mode: VocalMode) -> None:
         if mode != self._channel_mode:
             self._channel_mode = mode

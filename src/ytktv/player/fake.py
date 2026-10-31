@@ -14,6 +14,7 @@ class FakePlayer:
         self.on_end: EndCallback | None = None
         self.on_position: PositionCallback | None = None
         self.source: MediaSource | None = None
+        self.audio_delay = 0.0
         self.paused = False
         self.volume = 100.0
         self.pitch = 0
@@ -61,6 +62,9 @@ class FakePlayer:
 
     def set_speed(self, speed: float) -> None:
         self.speed = speed
+
+    def set_audio_delay(self, seconds: float) -> None:
+        self.audio_delay = seconds
 
     def set_channel_mode(self, mode: VocalMode) -> None:
         self.channel_mode = mode

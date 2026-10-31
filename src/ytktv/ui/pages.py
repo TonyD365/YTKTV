@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -67,6 +68,20 @@ KEPT_TAGS = {
     "waiting": ("Waiting to download", "busy"),
     "failed": ("Download failed", ""),
 }
+
+
+def open_display_settings() -> None:
+    """The system's own screen settings, where a wireless TV is connected."""
+    import platform
+
+    system = platform.system()
+    if system == "Darwin":
+        url = "x-apple.systempreferences:com.apple.Displays-Settings.extension"
+    elif system == "Windows":
+        url = "ms-settings-connectabledevices:devicediscovery"
+    else:
+        return
+    QDesktopServices.openUrl(QUrl(url))
 
 
 class Page(QWidget):
@@ -799,6 +814,30 @@ class SettingsPage(Page):
         low.setChecked(settings.low_power)
         low.toggled.connect(self.set_low_power)
         display.addWidget(low)
+
+        # A TV without a cable
+        wireless = card("TV Without a Cable", admin=True)
+        how = QLabel(
+            "Use the TV as a second screen over Wi-Fi; YTKTV then shows the whole MV there,"
+            " lyrics and effects included.<br><b>Mac</b>: Control Centre → Screen Mirroring →"
+            " pick the TV (AirPlay), then choose <i>Use As Separate Display</i>.<br>"
+            "<b>Windows</b>: press <b>Win + K</b> and pick the TV (Miracast).<br>"
+            "If the picture runs behind the sound, raise the delay below until the lyrics"
+            " match the singing."
+        )
+        how.setWordWrap(True)
+        how.setTextFormat(Qt.TextFormat.RichText)
+        wireless.addWidget(how)
+        self.screen_delay = QSpinBox()
+        self.screen_delay.setRange(0, 1000)
+        self.screen_delay.setSingleStep(20)
+        self.screen_delay.setSuffix(" ms")
+        self.screen_delay.setValue(settings.screen_delay_ms)
+        self.screen_delay.valueChanged.connect(ctx.controller.set_screen_delay)
+        labelled(wireless, "Picture delay of the TV", self.screen_delay)
+        open_displays = QPushButton("Open Display Settings")
+        open_displays.clicked.connect(open_display_settings)
+        wireless.addWidget(open_displays, alignment=Qt.AlignmentFlag.AlignLeft)
 
         # Vocals
         vocals = card("Vocal Separation", admin=True)

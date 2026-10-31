@@ -35,6 +35,12 @@ def _screen(value: Any) -> int:
     return value
 
 
+def _delay(value: Any) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 1000:
+        raise ValueError("expected 0 to 1000 milliseconds")
+    return value
+
+
 def _folders(value: Any) -> list[str]:
     if not isinstance(value, list) or len(value) > 20:
         raise ValueError("expected up to 20 folders")
@@ -79,6 +85,7 @@ FIELDS: dict[str, tuple[str, Callable[[Any], Any]]] = {
     "smart_lights_host": ("Smart lights address", _host),
     "auto_update": ("Install new releases automatically", _bool),
     "low_power": ("Low-power mode (720p, no light effects)", _bool),
+    "screen_delay_ms": ("Picture delay of a wireless TV (ms)", _delay),
 }
 
 

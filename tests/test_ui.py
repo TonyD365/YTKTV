@@ -1208,3 +1208,19 @@ def test_desk_pages_have_no_white_boxes(themed, qtbot):
         if found:
             problems[index] = found
     assert problems == {}
+
+
+def test_wireless_tv_screen_and_picture_delay(window, qtbot):
+    main, controller = window
+    moved = []
+    main.place_mv = lambda: moved.append(True)
+
+    class Screen:
+        def name(self):
+            return "Living Room TV"
+
+    main._screen_added(Screen())
+    qtbot.waitUntil(lambda: bool(moved), timeout=4000)
+    assert "Living Room TV" in main.toast.text()
+    main.settings_page.screen_delay.setValue(240)
+    assert controller.settings.screen_delay_ms == 240 and controller.player.audio_delay == 0.24
