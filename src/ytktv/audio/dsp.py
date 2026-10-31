@@ -464,6 +464,52 @@ def fader_gain(position: float) -> float:
     return float((position / 0.8) ** 2.5)
 
 
+VOICES = {"off": "Off", "chipmunk": "Chipmunk", "deep": "Deep", "robot": "Robot"}
+_SHIFTS = {"chipmunk": 7.0, "deep": -5.0}  # semitones
+ROBOT_HZ = 55.0
+
+
+class VoiceChanger:
+    """Fun voice effects for a microphone: higher, lower, or a robot.
+
+    Pitch moves with two delay taps that sweep through a 50 ms window and cross-fade,
+    which is cheap enough for every block and adds only that window of delay.
+    """
+
+    def __init__(self, sample_rate: float) -> None:
+        self.sample_rate = sample_rate
+        self.window = int(sample_rate * 0.05)
+        self.tail = np.zeros(self.window + 2, dtype=np.float32)
+        self.phase = 0.0
+        self.robot_phase = 0.0
+
+    def process(self, x: FloatArray, voice: str) -> FloatArray:
+        n = len(x)
+        if voice == "robot":
+            t = self.robot_phase + np.arange(n) * (2 * math.pi * ROBOT_HZ / self.sample_rate)
+            self.robot_phase = float((t[-1] if n else self.robot_phase) % (2 * math.pi))
+            self.tail = np.concatenate([self.tail, x])[-(self.window + 2) :]
+            return (x * np.sin(t)).astype(np.float32) * np.float32(1.6)
+        shift = _SHIFTS.get(voice)
+        history = np.concatenate([self.tail, x.astype(np.float32)])
+        self.tail = history[-(self.window + 2) :]
+        if shift is None or n == 0:
+            return x
+        ratio = 2.0 ** (shift / 12.0)
+        step = (1.0 - ratio) / self.window
+        base = len(history) - n + np.arange(n)
+        phases = (self.phase + np.arange(n) * step) % 1.0
+        out = np.zeros(n, dtype=np.float32)
+        for p in (phases, (phases + 0.5) % 1.0):
+            pos = base - p * self.window - 1.0
+            index = np.floor(pos).astype(np.int64)
+            frac = (pos - index).astype(np.float32)
+            sample = history[index] * (1 - frac) + history[index + 1] * frac
+            out += sample * np.sin(np.pi * p).astype(np.float32) ** 2
+        self.phase = float((self.phase + n * step) % 1.0)
+        return out
+
+
 class MicChain:
     """One mixer channel strip.
 
@@ -477,6 +523,7 @@ class MicChain:
         self.compressor = Compressor(sample_rate)
         self.echo = Echo(sample_rate)
         self.reverb = Reverb(sample_rate)
+        self.voice = VoiceChanger(sample_rate)
         self._trim = 1.0
         self._level = 0.0
         self.peak = 0.0  # post-fader peak of the last block, for meters
@@ -501,6 +548,7 @@ class MicChain:
             x = x * np.float32(params.gain)
         self.eq.set_gains(params.low_db, params.mid_db, params.high_db)
         x = self.compressor.process(self.eq.process(x), params.comp)
+        x = self.voice.process(x, params.voice)
         target = 0.0 if params.mute else fader_gain(params.fader)
         if target != self._level:
             x = x * np.linspace(self._level, target, n, dtype=np.float32)
