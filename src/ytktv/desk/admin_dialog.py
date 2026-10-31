@@ -87,6 +87,12 @@ class AdminSettingsDialog(QDialog):
                 combo.addItem(text, key)
             combo.setCurrentIndex(max(0, combo.findData(value)))
             return combo
+        if name == "kids_max_volume":
+            spin = QSpinBox()
+            spin.setRange(10, 100)
+            spin.setSuffix(" %")
+            spin.setValue(int(value))
+            return spin
         if name == "screen_delay_ms":
             delay = QSpinBox()
             delay.setRange(0, 1000)

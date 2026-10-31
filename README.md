@@ -163,6 +163,9 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
   instrumental straight away, and an .lrc file next to a video gives its lyrics.
 - **AI lyrics.** A song with no lyrics anywhere gets them written by Whisper, with the timing
   (Settings → AI Lyrics, a one-time download; GPU on Apple Silicon and NVIDIA).
+- **Spotify and Apple Music playlists.** Paste a public playlist link (Playlists → Import
+  Playlist), or a list of songs one per line; each song is found on YouTube, karaoke versions
+  first.
 - **Downloads.** Press ⬇ on a song (or Download All Favorites) to keep it on the computer with
   its lyrics and instrumental, then sing it without internet.
 - **PK battle.** Two microphones sing the same song, with two live score bars on the TV and a
@@ -176,8 +179,12 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 - **Keyboard and remotes.** Space, N, V, the arrows and media keys play, skip, switch to the
   instrumental and change volume and key; USB remotes work as they are, and a TV remote through
   HDMI-CEC on a Raspberry Pi.
+- **Voice effects.** Chipmunk, deep or robot voice on any microphone, from its channel strip in
+  the Mixer.
 - **Smart lights.** WLED strips or Philips Hue lights change colour with the music, like the
   TV's edge lights (Settings → Smart Lights).
+- **Kids mode.** For a children's room: songs not meant for children are left out and cannot be
+  chosen, and the volume has a ceiling (Settings, or the staff terminal's Admin Settings).
 - **TV without a cable.** Use the TV as a wireless second screen (AirPlay on a Mac, Miracast
   with Win + K on Windows): the MV moves there by itself, lyrics included, and a picture delay
   setting keeps the sound in step.

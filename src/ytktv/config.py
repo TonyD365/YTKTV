@@ -67,6 +67,8 @@ class Settings:
     hue_key: str = ""  # what the Hue bridge gave when paired
     text_size: str = "Normal"  # Normal, Large or Extra large (see theme.TEXT_SIZES)
     ai_lyrics: bool = False  # write lyrics with Whisper when a song has none (a download)
+    kids_mode: bool = False  # only songs for children, and the volume capped
+    kids_max_volume: int = 70  # the highest music and master volume in kids mode
     screen_delay_ms: int = 0  # a wireless TV shows the picture late: delay the sound to match
     low_power: bool = False  # 720p and no light effects, for a Raspberry Pi or an old PC
     low_power_checked: bool = False  # the first start looked at the computer already

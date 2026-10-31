@@ -39,6 +39,10 @@ def receipt_html(bill: Bill, shop: str, footer: str, width: int = 58) -> str:
         extras.append((f"Member {bill.member}", f"−{bill.member_off:g}%"))
     if bill.discount:
         extras.append(("Discount", f"−{bill.discount:g}%"))
+    if bill.service_rate:
+        extras.append((f"Service {bill.service_rate:g}%", f"+{bill.service:.2f}"))
+    if bill.tax_rate:
+        extras.append((f"Tax {bill.tax_rate:g}%", f"+{bill.tax:.2f}"))
     if bill.round_to:
         extras.append(("Small change", "dropped"))
     extra_rows = "".join(

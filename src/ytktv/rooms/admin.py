@@ -35,6 +35,12 @@ def _screen(value: Any) -> int:
     return value
 
 
+def _volume(value: Any) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not 10 <= value <= 100:
+        raise ValueError("expected a volume from 10 to 100")
+    return value
+
+
 def _delay(value: Any) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 1000:
         raise ValueError("expected 0 to 1000 milliseconds")
@@ -85,6 +91,8 @@ FIELDS: dict[str, tuple[str, Callable[[Any], Any]]] = {
     "smart_lights_host": ("Smart lights address", _host),
     "auto_update": ("Install new releases automatically", _bool),
     "low_power": ("Low-power mode (720p, no light effects)", _bool),
+    "kids_mode": ("Kids mode (songs for children, volume capped)", _bool),
+    "kids_max_volume": ("Kids mode: highest volume", _volume),
     "screen_delay_ms": ("Picture delay of a wireless TV (ms)", _delay),
 }
 
