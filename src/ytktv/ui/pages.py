@@ -577,7 +577,8 @@ class PlaylistsPage(Page):
             ("Play All", lambda: self._enqueue(False), "accent"),
             ("Shuffle Play", lambda: self._enqueue(True), ""),
             ("New", self._new, ""),
-            ("Import from YouTube", self._import, ""),
+            ("Import Playlist", self._import, ""),
+            ("Import Song List", self._import_list, ""),
             ("Delete", self._delete, "danger"),
         ):
             button = QPushButton(text)
@@ -657,10 +658,14 @@ class PlaylistsPage(Page):
             self._controller.delete_playlist(name)
 
     def _import(self) -> None:
-        url = ask_text(self, "Import from YouTube", "Paste the link of a YouTube playlist:")
+        url = ask_text(
+            self,
+            "Import a playlist",
+            "Paste the link of a YouTube, Spotify or Apple Music playlist (public):",
+        )
         if not url:
             return
-        self._controller.toast("Importing the playlist...")
+        self._controller.toast("Importing the playlist... (each song is looked up on YouTube)")
 
         def done(name: str) -> None:
             self.picker.setCurrentIndex(self.picker.findData(name))
@@ -670,6 +675,26 @@ class PlaylistsPage(Page):
             self._controller.toast(f"Import failed: {reason}", error=True)
 
         run_async(lambda: self._controller.import_playlist(url), done, failed)
+
+    def _import_list(self, text: str | None = None) -> None:
+        """A playlist from songs typed or pasted one per line (a private playlist, say)."""
+        if text is None:
+            text, ok = QInputDialog.getMultiLineText(
+                self,
+                "Import a song list",
+                'One song per line, like "Yesterday - The Beatles":',
+            )
+            if not ok or not text.strip():
+                return
+        self._controller.toast("Looking the songs up on YouTube...")
+
+        def done(name: str) -> None:
+            self.picker.setCurrentIndex(self.picker.findData(name))
+
+        def failed(exc: Exception) -> None:
+            self._controller.toast(f"Import failed: {exc}", error=True)
+
+        run_async(lambda: self._controller.import_song_list(text), done, failed)
 
 
 class HistoryPage(Page):

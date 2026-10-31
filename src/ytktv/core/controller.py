@@ -1211,12 +1211,39 @@ class KTVController:
 
     def import_playlist(self, url: str) -> str:
         """Import a YouTube playlist (network; call off the GUI thread). Returns its name."""
+        from ytktv.youtube import music_import
+
+        search = getattr(self.resolver, "search", None)
+        if music_import.is_music_link(url) and search is not None:
+            # Spotify / Apple Music: each song looked up on YouTube.
+            title, tracks = music_import.playlist_tracks(url)
+            songs = music_import.find_on_youtube(tracks, search)
+            if not songs:
+                raise ValueError("none of its songs were found on YouTube")
+            name = self.create_playlist(self.library.unique_playlist_name(title), songs)
+            self.toast(f"Imported {len(songs)} of {len(tracks)} songs into {name}")
+            return name
         fetch = getattr(self.resolver, "playlist", None)
         if fetch is None:
             raise ValueError("playlist import is not available")
         title, songs = fetch(url)
         name = self.create_playlist(self.library.unique_playlist_name(title), songs)
         self.toast(f"Imported {len(songs)} songs into {name}")
+        return name
+
+    def import_song_list(self, text: str, title: str = "Imported songs") -> str:
+        """A playlist from a pasted list of songs, one per line (network; off the GUI thread)."""
+        from ytktv.youtube import music_import
+
+        search = getattr(self.resolver, "search", None)
+        tracks = music_import.text_tracks(text)
+        if search is None or not tracks:
+            raise ValueError("no songs in that list")
+        songs = music_import.find_on_youtube(tracks, search)
+        if not songs:
+            raise ValueError("none of those songs were found on YouTube")
+        name = self.create_playlist(self.library.unique_playlist_name(title), songs)
+        self.toast(f"Imported {len(songs)} of {len(tracks)} songs into {name}")
         return name
 
     def enqueue_playlist(
