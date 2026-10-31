@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 from ytktv import __version__
 from ytktv.audio import presets
 from ytktv.config import SettingsStore
-from ytktv.core import games
+from ytktv.core import games, kids
 from ytktv.core.events import EventBus
 from ytktv.core.library import Library
 from ytktv.core.local import is_local
@@ -267,6 +267,24 @@ class KTVController:
         """Raise PermissionError for a song this room may not play."""
         if self.local_only and not is_local(song.video_id):
             raise PermissionError("This room plays songs from this computer only")
+        if self.settings.kids_mode and not kids.suitable(song):
+            raise PermissionError("This song is not available in kids mode")
+
+    def for_this_room(self, songs: list[Song]) -> list[Song]:
+        """Leave out the songs this room may not play (kids mode)."""
+        if not self.settings.kids_mode:
+            return songs
+        return [song for song in songs if kids.suitable(song)]
+
+    def set_kids_mode(self, on: bool, max_volume: int | None = None) -> None:
+        self.settings.kids_mode = on
+        if max_volume is not None:
+            self.settings.kids_max_volume = max(10, min(100, int(max_volume)))
+        if on:  # bring the volume down now, not only the next time it is changed
+            for name in ("music", "master"):
+                self.set_volume(name, getattr(self.settings, f"{name}_volume"))
+        self._save_soon()
+        self._emit_state()
 
     def clear_queue(self) -> None:
         self.queue.clear()
@@ -937,6 +955,8 @@ class KTVController:
     def set_volume(self, name: str, value: int) -> None:
         """Set ``music``, ``mic`` or ``master`` volume (0..100)."""
         value = max(0, min(100, int(value)))
+        if self.settings.kids_mode and name in ("music", "master"):
+            value = min(value, self.settings.kids_max_volume)
         if name not in ("music", "mic", "master"):
             raise ValueError(f"unknown volume {name!r}")
         setattr(self.settings, f"{name}_volume", value)

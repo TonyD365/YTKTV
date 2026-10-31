@@ -177,3 +177,25 @@ def test_staff_terminal_sets_a_rooms_local_folders(tmp_path, qtbot):
         assert not card.add_button.isEnabled() and not card.remove_button.isEnabled()
     finally:
         controller.close()
+
+
+def test_kids_mode_filters_songs_and_caps_the_volume(tmp_path):
+    from ytktv.core import kids
+    from ytktv.core.models import Song
+
+    clean, rude = Song("aaaaaaaaaaa", "Baby Shark Dance"), Song("bbbbbbbbbbb", "Song (Explicit)")
+    assert kids.suitable(clean) and not kids.suitable(rude)
+    controller, _player, _ = make_controller(tmp_path)
+    try:
+        controller.set_volume("music", 95)
+        controller.set_kids_mode(True, 60)
+        assert controller.settings.music_volume == 60
+        controller.set_volume("music", 100)
+        assert controller.settings.music_volume == 60
+        assert controller.for_this_room([clean, rude]) == [clean]
+        with pytest.raises(PermissionError, match="kids mode"):
+            controller.enqueue(rude)
+        controller.set_kids_mode(False)
+        assert controller.for_this_room([clean, rude]) == [clean, rude]
+    finally:
+        controller.close()
