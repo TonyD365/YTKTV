@@ -290,3 +290,26 @@ def test_cancel_aborts_the_running_song_and_the_worker_recovers(tmp_path):
         assert (tmp_path / "quick.flac").read_bytes() == b"y"
     finally:
         separator.close()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="uses shell scripts as stand-in programs")
+def test_ffmpeg_is_staged_as_a_new_file_and_restaged_when_it_will_not_run(tmp_path, monkeypatch):
+    import stat
+
+    from ytktv import bootstrap
+
+    source = tmp_path / "ffmpeg-v7"
+    source.write_text("#!/bin/sh\necho ffmpeg version 7\n")
+    source.chmod(source.stat().st_mode | stat.S_IEXEC)
+    target = tmp_path / "bin" / "ffmpeg"
+    target.parent.mkdir()
+    target.write_text("#!/bin/sh\nexit 137\n")  # same size is not enough: it must run
+    target.chmod(0o755)
+    before = target.stat().st_ino
+    bootstrap._stage(source, target)
+    assert target.stat().st_ino != before  # replaced, not overwritten in place
+    assert bootstrap._runs(target) and not (tmp_path / "bin" / "ffmpeg.new").exists()
+    broken = tmp_path / "broken"
+    broken.write_text("#!/bin/sh\nexit 137\n")
+    broken.chmod(0o755)
+    assert not bootstrap._runs(broken) and not bootstrap._runs(tmp_path / "missing")
