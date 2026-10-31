@@ -176,6 +176,8 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 - **Keyboard and remotes.** Space, N, V, the arrows and media keys play, skip, switch to the
   instrumental and change volume and key; USB remotes work as they are, and a TV remote through
   HDMI-CEC on a Raspberry Pi.
+- **Voice effects.** Chipmunk, deep or robot voice on any microphone, from its channel strip in
+  the Mixer.
 - **Smart lights.** WLED strips or Philips Hue lights change colour with the music, like the
   TV's edge lights (Settings → Smart Lights).
 - **Large text.** Settings → Text Size makes the console's text 25% or 50% bigger.

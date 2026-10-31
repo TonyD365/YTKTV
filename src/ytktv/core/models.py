@@ -100,3 +100,4 @@ class MicParams:
     pan: float = 0.0  # -1 left .. +1 right
     fader: float = 0.8  # channel fader 0..1 (0.8 = unity)
     mute: bool = False
+    voice: str = "off"  # voice effect: off, chipmunk, deep or robot (see dsp.VOICES)
