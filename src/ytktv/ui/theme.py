@@ -117,6 +117,8 @@ QSlider::handle:horizontal {{ width: 20px; height: 20px; margin: -8px 0; border-
 QComboBox {{ background: {PANEL}; border: 1px solid {LINE}; border-radius: 10px; padding: 8px 12px; min-height: 22px; }}
 QComboBox:hover {{ border-color: {PURPLE}; }}
 QComboBox::drop-down {{ border: none; width: 24px; }}
+QAbstractSpinBox {{ background: {PANEL}; border: 1px solid {LINE}; border-radius: 10px; padding: 6px 10px; color: {TEXT}; }}
+QAbstractSpinBox:focus {{ border-color: {CYAN}; }}
 QListWidget {{ background: {PANEL}; border: 1px solid {LINE}; border-radius: 10px; padding: 4px; color: {TEXT}; }}
 QListWidget::item {{ padding: 6px 8px; border-radius: 6px; }}
 QListWidget::item:selected {{ background: {PURPLE}; color: white; }}
