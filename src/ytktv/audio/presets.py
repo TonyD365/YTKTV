@@ -37,10 +37,14 @@ def clean_name(name: str) -> str:
     return cleaned
 
 
-def clamp(field: str, value: Any) -> float | bool:
+def clamp(field: str, value: Any) -> float | bool | str:
     """Coerce a strip value into its legal range. Raises KeyError for unknown fields."""
     if field == "mute":
         return bool(value)
+    if field == "voice":
+        from ytktv.audio.dsp import VOICES
+
+        return value if value in VOICES else "off"
     low, high = LIMITS[field]
     return max(low, min(high, float(value)))
 

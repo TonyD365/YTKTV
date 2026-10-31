@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv.audio import devices
+from ytktv.audio.dsp import VOICES
 from ytktv.audio.phone_mic import is_phone
 from ytktv.config import MicSettings
 from ytktv.core.controller import KTVController
@@ -143,6 +144,13 @@ class ChannelStrip(_StripFrame):
         self.mute.setChecked(mic.mute)
         self.mute.toggled.connect(lambda on: self._set("mute", on))
         layout.addWidget(self.mute)
+        self.voice = QComboBox()
+        self.voice.setToolTip("Voice effect: higher, deeper or a robot, for fun")
+        for key, name in VOICES.items():
+            self.voice.addItem(f"🎭 {name}" if key != "off" else "Voice: Off", key)
+        self.voice.setCurrentIndex(max(0, self.voice.findData(mic.voice)))
+        self.voice.activated.connect(lambda _i: self._set("voice", self.voice.currentData()))
+        layout.addWidget(self.voice)
 
     def _set(self, attr: str, value: Any) -> None:
         self.controller.set_mic(self.index, **{attr: value})
@@ -156,6 +164,7 @@ class ChannelStrip(_StripFrame):
             self.mute.blockSignals(True)
             self.mute.setChecked(self.mic.mute)
             self.mute.blockSignals(False)
+        self.voice.setCurrentIndex(max(0, self.voice.findData(self.mic.voice)))
 
     def set_devices(self, names: list[str]) -> None:
         self.device.blockSignals(True)
