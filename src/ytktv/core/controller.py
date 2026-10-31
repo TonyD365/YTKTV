@@ -23,6 +23,7 @@ from ytktv.core.local import is_local
 from ytktv.core.models import PlayStatus, QueueItem, Song, StemStatus, VocalMode
 from ytktv.core.queue import SongQueue
 from ytktv.core.scoring import Melody, Scoreboard, ScoreKeeper, ScoringLoop
+from ytktv.core.warmup import PLAYBACK
 from ytktv.player.base import PlayerBackend
 from ytktv.youtube.lyrics import LyricLine
 from ytktv.youtube.parse import MediaSource
@@ -485,6 +486,7 @@ class KTVController:
                     self._awaiting_start = False
                     self.status = PlayStatus.PLAYING
                     self.loading = ""
+            PLAYBACK.started()  # background downloads wait while this song buffers
             self._emit_state()
         self.position = position
         if position > 1.0:

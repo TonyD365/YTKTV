@@ -18,6 +18,7 @@ from ytktv.config import SettingsStore, cache_dir, data_dir
 from ytktv.core.controller import KTVController
 from ytktv.core.events import EventBus
 from ytktv.core.library import Library
+from ytktv.core.warmup import PLAYBACK
 from ytktv.player.fake import FakePlayer
 from ytktv.youtube.search import YouTube
 
@@ -171,6 +172,7 @@ def make_stem_manager(
 
         if local is not None and is_local(video_id):
             return Path(local.extract_audio(video_id, dest))
+        PLAYBACK.wait()  # let a song that just started buffer first
         return youtube.download_audio(video_id, dest, ffmpeg=ffmpeg)
 
     manager = StemManager(cache, separator, download)
@@ -341,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     def preload(video_id: str, dest: Path) -> Path:
+        PLAYBACK.wait()  # let a song that just started buffer first
         return youtube.download_media(video_id, dest, settings.max_height, ffmpeg=ffmpeg)
 
     preloader = MediaPreloader(cache_dir() / "media", preload)
@@ -382,6 +385,7 @@ def main(argv: list[str] | None = None) -> int:
     def song_audio(video_id: str, dest: Path) -> Path:
         if is_local(video_id):
             return Path(local.extract_audio(video_id, dest))
+        PLAYBACK.wait()
         return youtube.download_audio(video_id, dest, ffmpeg=ffmpeg)
 
     # Lyrics written by Whisper for songs that have none (an optional download).

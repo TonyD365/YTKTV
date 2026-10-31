@@ -102,6 +102,8 @@ class MpvPlayer:
             # Read well ahead so a slow network moment does not become an audible hitch.
             demuxer_readahead_secs=30,
             cache_pause_wait=2,
+            # Start a song only once a little is buffered, rather than stall right after.
+            cache_pause_initial=True,
             volume_max=100,
             log_handler=self._log,
             loglevel="warn",
