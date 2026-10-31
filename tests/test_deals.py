@@ -86,3 +86,19 @@ def test_till_and_window_use_packages_coupons_and_birthdays(qtbot):
 
     window.close_room(confirm=False)  # a plain close: no coupon was given
     assert store.coupon("TEN").uses_left == 2
+
+
+def test_service_charge_and_tax_come_after_discounts():
+    from ytktv.desk.receipt import receipt_html
+
+    bill = billing.Bill("Kids", "", "$", [("Room", 100.0)], discount=10)
+    bill.service_rate, bill.tax_rate = 10, 5
+    assert bill.after_discounts == 90 and bill.service == 9.0
+    assert bill.tax == pytest.approx(4.95) and bill.total == pytest.approx(103.95)
+    assert "Service charge 10%" in bill.html() and "Tax 5%" in bill.html()
+    assert "Tax 5%" in receipt_html(bill, "YTKTV", "")
+    store = DeskStore()
+    room, _ = store.pair(store.new_code(), "Kids")
+    store.set_setting("tax_rate", "8")
+    store.open_room(room.room_id, "", 60)
+    assert billing.bill(store, room.room_id).tax_rate == 8
