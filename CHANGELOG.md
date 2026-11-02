@@ -3,6 +3,157 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 2.5.1
+
+### Fixes
+- The voice effect box on each mixer channel is no longer cut off ("Voice: C" now reads "Voice: Off").
+
+### Docs
+- The README describes the newer features: service charge and tax at the Desk till, Admin Settings from the Desk, low-power mode and problem reports.
+- New screenshots from the current version.
+
+## 2.5.0
+
+### 🎤 YTKTV
+- **TV without a cable**: use the TV as a wireless second screen (AirPlay on a Mac, Miracast with Win + K on Windows). The MV moves there by itself, lyrics and effects included, and a **picture delay** setting keeps the sound in step with a wireless picture. Settings → TV Without a Cable.
+- **Spotify and Apple Music playlists**: paste a public playlist link (Playlists → Import Playlist), or a list of songs one per line; each song is found on YouTube, karaoke versions first.
+- **Voice effects**: Chipmunk, Deep or Robot voice on any microphone, from its channel strip in the Mixer.
+- **Kids mode**: for a children's room, songs not meant for children are left out and cannot be chosen, and the volume has a ceiling.
+
+### 🛎 YTKTV Desk
+- **Service charge and tax** on bills and receipts (Settings → Menu and prices), added after discounts.
+- Kids mode and the wireless TV's picture delay can be set per room in **⚙ Admin Settings**.
+
+### 🔧 Fixes
+- Number boxes use the dark theme everywhere.
+
+## 2.4.1
+
+### What's fixed in 2.4.1
+
+- **Vocal separation and AI lyrics work again after updating (macOS, Apple Silicon).** YTKTV keeps a copy of ffmpeg in its data folder; an update overwrote it in place, and macOS then stopped that copy from running, so song audio could not be downloaded. The copy is now replaced as a new file, checked at start, and made again (or the bundled one used) if it will not run.
+- **No stall a few seconds after a song starts.** Background downloads (vocal separation, AI lyrics, the next songs) now wait while a song that has just started buffers, and playback starts once a little is buffered.
+
+## 2.4.0
+
+### 🎤 YTKTV
+- **AI lyrics**: a song with no lyrics anywhere (no subtitles, nothing on LRCLIB) gets them written by Whisper, with line and word timing, kept for next time. Settings → AI Lyrics, a one-time download: the Apple GPU on Apple Silicon, CUDA on NVIDIA cards, the CPU otherwise.
+- **Low-power mode** for a Raspberry Pi or an old computer: 720p video and no light effects. Turned on by itself on the first start of such a computer; Settings → MV Screen.
+- **Report a Bug / Suggest a Feature** in Settings → Help. After an unexpected error YTKTV asks whether to report it, and only then opens a GitHub issue with the details filled in for you to check. Nothing is sent automatically.
+
+### 🛎 YTKTV Desk
+- **Admin Settings**: a room bound to a staff terminal now shows only the guests' settings (text size, phone remote, keys, help, unbinding). Video, sound output, vocal separation, AI lyrics, local songs, smart lights, low-power mode and updates are set on the staff terminal: select the room, then **⚙ Admin Settings**. Changes travel as signed, numbered messages and the room accepts only those settings, each checked.
+- **Pairing codes can no longer be guessed**: five wrong codes from one address lock it out for five minutes; twenty in all throw away every open code.
+
+### 🔧 Under the hood
+- yt-dlp is checked for new versions every day, so a YouTube change is followed quickly; other dependencies were updated too.
+- Every page of YTKTV and YTKTV Desk is checked for white boxes on the dark theme in CI, with screenshots kept.
+- Every build now includes the uv installer, so macOS can download the AI lyrics runtime.
+
+## 2.3.1
+
+- **Smart lights**: WLED strips or Philips Hue lights change colour with the music, like the TV's edge lights. Settings → Smart Lights picks the kind and address, pairs a Hue bridge (press its button first) and has a Test button.
+- **Phone order menu by category**: the phone's service menu is grouped under category headings, and the Drinks/Snacks call buttons hide while there is a menu.
+- **Local folders from the staff terminal**: a room bound to YTKTV Desk gets its local song folders from there (Room settings → Local Folders…, paths on the room's computer); the room's Local Songs card becomes read-only.
+- Lists use the dark theme everywhere (the folder list was a white box).
+- **Installing explained step by step** in the README and on the website.
+
+## 2.3.0
+
+### 🎤 Singing
+- **Local songs**: add folders of video files (MP4, MKV and more) in Settings → Local Songs. They show first in Search and on a new Local page. Karaoke MKVs with two audio tracks switch to the instrumental at once (no AI needed), and an `.lrc` file next to a video gives its lyrics.
+- **King of Singers** and **Birthday** in Games: a knockout tournament decided by the score cards, and a birthday celebration with the song up next. Fourteen games now, on the console and phones.
+- **Keyboard and remotes**: Space, N, R, V, the arrows and media keys play, skip, switch to the instrumental and change volume and key. USB remotes work as they are; a TV remote works through HDMI-CEC on a Raspberry Pi.
+- **Large text**: Settings → Text Size makes the console's text 25% or 50% bigger.
+- **Save Diagnostics** (Settings → Help): one zip with the recent logs, version and settings (keys and passwords left out) for a bug report.
+- The service menu shows categories and big − / + buttons, and hides the Drinks/Snacks calls when there is a menu.
+
+### 🛎 YTKTV Desk
+- **Staff terminal on a phone**: open the Desk's `/staff` page, pair with a code, and handle calls, orders, opening, extending and checking out rooms.
+- **Packages and coupons**: bundles such as 3 hours + a beer tower at one price, coupon codes for a percent or an amount off, and a members' birthday discount.
+- **Insights**: takings, busy hours and weekdays, top songs, best-selling items and rooms for the last 7, 30 or 90 days.
+- **Local songs only**: a room can be limited to the video files on its own computer.
+
+### 📦 Installing
+- **Windows**: `winget install TonyD365.YTKTV` (YTKTV Desk: `winget install TonyD365.YTKTVDesk`, once it is accepted). No SmartScreen prompt; `winget upgrade` updates it. Silent installs no longer start the app.
+- **macOS and Linux**: `curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash` (add `-s -- --desk` for YTKTV Desk). No quarantine warning, no `xattr`.
+
+If you download the macOS package in a browser instead, run `xattr -d com.apple.quarantine ~/Downloads/YTKTV-2.3.0-macos-universal.pkg` before opening it. On Windows, a browser download may need **More info → Run anyway**.
+
+## 2.2.0
+
+### 🛎 YTKTV Desk: several staff terminals
+- **Staff terminals**: other computers running YTKTV Desk pair with the main Desk (a one-time code and four pictures, like rooms) and work on the same rooms, bookings, members and records. A terminal keeps nothing of its own; if the main Desk is unreachable it says so and reconnects by itself, even after the main Desk's IP address changes.
+- **📜 Log**: every change on the main Desk or a terminal, by day and machine ("Bar: Closed Kids, $60.00 by Card"). Passwords are never written into it.
+- **Records by day, week or month**, with a takings chart and **Export CSV** that Excel opens (names in any language included).
+- **Stock alerts**: a product running low shows in the service bar ("📦 Cola: 2 left"); set the number in Settings → Shop.
+- **Settings → Updates**: the version, automatic checks on or off, and Check Now.
+- The front desk is now called the **Staff Terminal** everywhere; what guests read says "the staff".
+- The Desk's database now has versioned migrations and keeps a backup copy before it changes an existing file.
+
+### 🎤 Singing
+- **Downloads**: press ⬇ on any song, or Download All Favorites, to keep the video, lyrics and instrumental on the computer and sing without internet. A Downloads page lists them with their size.
+- **Duet mode** (Party tab): the TV's lyrics turn blue for one singer, pink for the other and gold for both, from the 男/女/合 (or M/F) marks in the lyrics, or verse by verse when there are none.
+- **More lyrics**: a video with no subtitles at all now gets synced lyrics from [LRCLIB](https://lrclib.net) when a recording of the same length is found.
+
+## 2.1.1
+
+### 💻 AI vocal separation on Windows on ARM
+Windows on ARM computers (Snapdragon X and others) now get **Original / Instrumental** switching too. The separation runtime is the x64 one, run through Windows' built-in x64 emulation on the CPU; it is downloaded on first run (about 500 MB), like on other Windows computers. YTKTV also downloads an **ARM64 build of ffmpeg** there, so audio is not emulated as well.
+
+Expect a few minutes per song: it is prepared in the background while earlier songs in the queue play.
+
+## 2.1.0
+
+### 🎤 Finding and singing
+- **Pinyin initials**: type the first letters of a song's pinyin and it is suggested at once, like on a KTV machine (`yldb` → 月亮代表我的心, `hktk` → 海闊天空), on the console and phones.
+- **Artists by language and type**: Mandarin, Cantonese, English, Japanese, Korean; male, female or group.
+- **PK battle** (Party tab): two microphones sing the same song, two live score bars race on the TV, and the score card names the winner.
+- **Glow sticks**: on the phone remote, the whole screen lights up in the TV's edge-light colours.
+
+### 🎲 Party games with their own screens
+The Games page is a lobby of twelve games, and each one opens its own screen with how to play, a big stage, its own buttons and an animation, on the console and on phones (new GAMES tab): dice, who sings next, truth or dare, number bomb, liar's dice (your dice only on your phone), random song, challenge cards, draw lots, high or low, sevens, countdown and a coin. Phones play under the name you typed.
+
+### 🛎 YTKTV Desk
+- **The till**: members (by phone number) save a set percent and earn points; discounts; drop the small change; pay by cash, card, WeChat Pay, Alipay or a member's stored balance. The shift report adds up takings by payment.
+- **Members** tab: stored balance top-ups and points.
+- **Receipts**: 58 mm or 80 mm receipts on any installed printer, by hand or at every check-out.
+- **Updates itself** like YTKTV, and installs on macOS from one universal package.
+- Fixes in the menu editor: readable cell editing, a labelled On menu switch, prices up to 99,999,999, and scrolling no longer changes values.
+- A full [YTKTV Desk guide](https://github.com/TonyD365/YTKTV/blob/main/docs/guide/front-desk.md) (also in the wiki).
+
+### 💻 ARM
+New installers for **Windows on ARM** and **Linux ARM** (64-bit, e.g. Raspberry Pi 4/5), for YTKTV and YTKTV Desk.
+
+### 🐞 Fixed
+- The updater could pick YTKTV Desk's installer for YTKTV, or the other way round, because their file names end the same way.
+
+## 2.0.0
+
+### 🛎 YTKTV Desk: run a whole KTV with rooms
+A new front-desk app manages several YTKTV machines on your network, like a real KTV: the adults in one room, the kids in another.
+
+- **Rooms bind to the desk** with a one-time code and a four-picture security code. A binding is permanent: a room can only unbind itself after the desk has been offline for 7 days. Rooms find the desk by its ID, so a changed IP address does not matter, and they obey only messages the desk has signed.
+- **Open, extend and close rooms** for 1–3 hours or without a limit. A closed room shows "This room is closed" and its TV goes black. Open rooms show the time left; when time is up, the song finishes and the room closes.
+- **Service and orders**: rooms call the desk or order from its menu, from the console or a phone. The desk beeps and lists the calls.
+- **Billing**: price per hour (per room if you like), a minimum spend, and a choice of how open-ended rooms are charged. The bill prints or saves as a PDF.
+- **Remote control and broadcasts**: skip, pause, volume, lock a room, or send a message to every room.
+- **Bookings** with a calendar and timeline, **records** of every session with its songs, a **shift report**, **room types**, **cleaning and maintenance** states, **change room**, **stock**, and an optional **desk password**.
+- A classic front-desk layout and its own bell icon.
+
+Install **YTKTV Desk** on one computer (`YTKTV-Desk-2.0.0-…` below), then in each room open **Settings → Front Desk**, press **Find Desks** and enter the code the desk shows. The YTKTV installers already include everything a room needs.
+
+### 🎲 More party games
+Number bomb, liar's dice (each player sees their own dice on their phone), random song, challenge cards, draw lots, high or low, the sevens counting game, a 10-second countdown and a coin flip.
+
+## 1.7.0
+
+- **A new console that looks like a real KTV screen.** It opens on a home page: what's playing and up next on the left, big coloured tiles for every feature on the right, and the menu across the top.
+- **Volume keys with a pop-up level display.** The sliders became − / + keys. Each press shows a volume display on the console and on the MV screen, and so do changes made from a phone.
+- **A Party tab.** Danmaku, eight emoji reactions that float up the MV screen (phones can send them too) and crowd sounds.
+- **Party games.** Roll the dice, pick who sings next, truth or dare. The result shows big on the MV screen. Play from the Games tab or from a phone.
+- New screenshots in the README and on the website.
+
 ## 1.6.0
 
 - **mpv is no longer attached to the releases.** When YTKTV finds no mpv it offers to install it
