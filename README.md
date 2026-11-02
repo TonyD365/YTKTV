@@ -76,7 +76,7 @@ way a real KTV's staff terminal runs its rooms: the adults in one room, the kids
   "This room is closed" and its TV goes black; when time is up the song finishes, then the room closes.
 - **Service and orders**: guests call the desk or order from its menu on the console or their
   phones. The desk beeps and the room's tile flashes.
-- **The till**: price per hour (per room if you like), a minimum spend, discounts, dropping the
+- **The till**: price per hour (per room if you like), a minimum spend, a service charge and tax, discounts, dropping the
   small change, cash, card, WeChat Pay, Alipay or a member's balance, and a bill or a 58/80 mm
   receipt on any installed printer.
 - **Members**: stored balance, points, a members' discount and a birthday discount.
@@ -85,6 +85,9 @@ way a real KTV's staff terminal runs its rooms: the adults in one room, the kids
 - **Run the floor**: bookings with a calendar and timeline, room types and seats, cleaning and
   maintenance, change room, broadcasts to every room, remote skip, pause and volume, a shift
   report, and records by day, week or month with a chart and a CSV export for Excel.
+- **Admin Settings from the desk**: change a bound room's settings (kids mode and its volume ceiling,
+  video quality, local song folders, low-power mode and more) from the Desk, without walking to the room. Every change is signed
+  and numbered, so it cannot be forged or replayed.
 - **Local songs only**: a room can be limited to the video files on its own computer.
 - **Several staff terminals**: other computers running YTKTV Desk can pair with the main one and
   work on the same rooms; the Log shows which machine did what, and when.
@@ -188,6 +191,12 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 - **TV without a cable.** Use the TV as a wireless second screen (AirPlay on a Mac, Miracast
   with Win + K on Windows): the MV moves there by itself, lyrics included, and a picture delay
   setting keeps the sound in step.
+- **Low-power mode.** On a Raspberry Pi or an old computer, Settings can drop the video to 720p
+  and turn off the light effects so songs still play smoothly. It is on from the first start on a
+  weak computer.
+- **Report a problem.** The feedback button opens a ready-filled GitHub issue with your version
+  and system. After an unexpected error YTKTV asks whether to report it; you read the details before
+  anything is sent.
 - **Large text.** Settings → Text Size makes the console's text 25% or 50% bigger.
 - **Smooth playback.** The next songs in the queue are downloaded ahead of time and played from
   disk; only the first song of a session streams, with a loading screen until it is ready.

@@ -39,6 +39,7 @@ _CONSOLE_STYLE = """
     font-family: "Menlo", "Consolas", monospace; font-size: 10px; font-weight: 700; padding: 6px; letter-spacing: 0px; }
 #console QComboBox { background: #0c0c0e; color: #e6e6e6; border: 1px solid #3a3a3e; border-radius: 4px;
     padding: 3px 6px; font-size: 10px; min-height: 16px; }
+#console QComboBox::drop-down { border: none; width: 12px; }
 #console QComboBox QAbstractItemView { background: #0c0c0e; color: #e6e6e6; selection-background-color: #1b4fd6; }
 #console QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f4f4f4, stop:1 #b9b9bd);
     color: #111; border: 1px solid #000; border-radius: 3px; padding: 3px 6px; font-size: 9px; font-weight: 900;
@@ -147,7 +148,7 @@ class ChannelStrip(_StripFrame):
         self.voice = QComboBox()
         self.voice.setToolTip("Voice effect: higher, deeper or a robot, for fun")
         for key, name in VOICES.items():
-            self.voice.addItem(f"🎭 {name}" if key != "off" else "Voice: Off", key)
+            self.voice.addItem(name if key != "off" else "Voice: Off", key)
         self.voice.setCurrentIndex(max(0, self.voice.findData(mic.voice)))
         self.voice.activated.connect(lambda _i: self._set("voice", self.voice.currentData()))
         layout.addWidget(self.voice)
