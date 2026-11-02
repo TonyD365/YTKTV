@@ -131,7 +131,7 @@ def console(app: QApplication) -> None:
             (2600, lambda: window.grab().save(str(OUT / "mixer.png"))),
             (2700, lambda: window.show_page("party")),
             (3600, lambda: window.grab().save(str(OUT / "party.png"))),
-            (3700, lambda: window.pages["games"].play("spin")),
+            (3700, lambda: window.pages["games"].open_game("spin").start()),
             (3800, lambda: window.show_page("games")),
             (4700, lambda: window.grab().save(str(OUT / "games.png"))),
         ],
