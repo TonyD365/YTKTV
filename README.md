@@ -511,6 +511,9 @@ Versions come from git tags; there is no version number in the source.
    mpv is neither inside the installers nor attached to the release; each build installs it the
    way a user would, only to check that the packaged app plays through it.
 
+After publishing, run `python scripts/changelog.py` and open a pull request with the updated
+`CHANGELOG.md`: it adds the "What's new" part of every release that is not in it yet.
+
 Installed copies check `releases/latest` at startup and every six hours. Once the installers
 are attached they download the one for their platform, verify its checksum, and offer to
 install when nothing is playing. A release marked as a pre-release is not offered as an update.
