@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -32,6 +32,7 @@ from ytktv.desk import lock
 from ytktv.desk.admin_dialog import AdminSettingsDialog
 from ytktv.desk.billing import bill
 from ytktv.desk.deals import DealsSettings
+from ytktv.desk.lobby import Lobby, LobbySettings
 from ytktv.desk.pages import (
     BookingsPage,
     InsightsPage,
@@ -234,6 +235,7 @@ class DeskWindow(QMainWindow):
         self.stack.addWidget(self.log_page)
         settings = QScrollArea()  # taller than a laptop screen: let it scroll
         settings.setWidgetResizable(True)
+        self.lobby = Lobby(self.store)
         settings.setWidget(self._settings_tab())
         self.stack.addWidget(settings)
         page.addLayout(middle, stretch=1)
@@ -267,6 +269,7 @@ class DeskWindow(QMainWindow):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
         self._timer.start(1000)
+        self.lobby.apply()
         self.refresh()
         self.lock_screen = lock.LockScreen(root, self.store)
         self.lock_screen.lock()  # asks for the password at start when one is set
@@ -391,7 +394,18 @@ class DeskWindow(QMainWindow):
         column.addWidget(self.terminals)
         self.updates = UpdateSettings(self.store)
         column.addWidget(self.updates)
+        self.lobby_settings = LobbySettings(self.store, self._lobby_changed)
+        column.addWidget(self.lobby_settings)
         return tab
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt)
+        if self.lobby.window is not None:
+            self.lobby.window.close()  # it must not keep the app running
+        super().closeEvent(event)
+
+    def _lobby_changed(self) -> None:
+        self.lobby.apply()
+        self.refresh()
 
     def watch_updates(self, updates: DeskUpdater) -> None:
         """Offer a downloaded update in the top bar; installing quits the desk."""
@@ -536,6 +550,7 @@ class DeskWindow(QMainWindow):
         self._fill_panel(rooms, online)
         self._fill_settings(rooms)
         self._fill_calls(rooms)
+        self.lobby.refresh(rooms, lambda room: self._status(room, online))
         start = time.mktime(time.localtime()[:3] + (0, 0, 0, 0, 0, -1))
         today = sum(v.total for v in self.store.history(start, start + 86400))
         self.stat_today.setText(f"{self.store.setting('currency', '$')}{today:g}")
