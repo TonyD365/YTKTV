@@ -30,7 +30,7 @@ dependencies = [
     "asn1crypto>=1.5.1",
     "ecdsa>=0.19.2",
     # Finds the front desk on the local network even when its IP address changes.
-    "zeroconf>=0.151.5",
+    "zeroconf>=0.152.0",
     # Pinyin initials for the song book: "yldb" finds 月亮代表我的心.
     "pypinyin>=0.55.0",
 ]
