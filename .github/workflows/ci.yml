@@ -35,6 +35,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.11", "3.13"]
+        # Pull requests test Python 3.11 on Linux only: macOS runners are few and queue for
+        # long. main still runs every combination after a merge.
+        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"os":"macos-latest","python":"3.11"},{"os":"windows-latest","python":"3.11"}]') || fromJSON('[]') }}
     env:
       QT_QPA_PLATFORM: offscreen
     steps:

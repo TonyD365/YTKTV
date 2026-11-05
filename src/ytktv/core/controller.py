@@ -79,6 +79,8 @@ class KTVController:
         self.room_closed = False  # set by the staff terminal; a closed room takes no songs
         self.pk_mode = False  # two microphones battle on the same song
         self.scene = ""  # a mood scene from core.scenes, or "" for the usual lights
+        self.idle_playing = False  # the current video is background, not a chosen song
+        self._last_idle = ""
         self.duet_mode = False  # two singers share the song: the lyrics say whose line it is
         self.front_desk: Any = None  # the RoomClient when this machine is a room
         self.settings = store.settings
@@ -176,6 +178,8 @@ class KTVController:
                 self.status = PlayStatus.LOADING
         if start:
             self._executor.submit(self._advance, None)
+        elif self.idle_playing:
+            self.skip()  # a background video gives way to the first real song at once
         else:
             self._prefetch_next()
         self.toast(f"Added: {song.title}")
@@ -352,13 +356,17 @@ class KTVController:
             with self._lock:
                 if (self.current.id if self.current else None) != expected_id:
                     return
-                if self.current is not None and self._started:
+                if self.current is not None and self._started and not self.idle_playing:
                     self.queue.add_history(self.current.song)
                     self.library.save(self.queue.history())
                     self._announce_score(self.current)
                 had_melody, self._keeper = self._keeper is not None, None
                 self._started = False
                 item = self.queue.pop_next()
+                self.idle_playing = False
+                if item is None and not self.room_closed:
+                    item = self._idle_item()
+                    self.idle_playing = item is not None
                 self.current = item
                 self.status = PlayStatus.LOADING if item else PlayStatus.IDLE
                 self.loading = "Loading video" if item else ""
@@ -378,7 +386,7 @@ class KTVController:
             self._apply_volume()
             if item is None:
                 return
-            if not self._wait_for_instrumental(item):
+            if not self.idle_playing and not self._wait_for_instrumental(item):
                 expected_id = item.id  # skipped while waiting
                 continue
             try:
@@ -409,6 +417,40 @@ class KTVController:
             self._load_lyrics(item)
             self._prefetch_next()
             return
+
+    def _idle_item(self) -> QueueItem | None:
+        """A video to show while nobody has chosen a song, when Settings turn that on."""
+        if not self.settings.idle_mv:
+            return None
+        name = self.settings.idle_playlist
+        songs = list(self.library.playlist(name) or []) if name else []
+        if not songs:
+            songs = self.library.favorites() + self.queue.history()
+        songs = [s for s in songs if not self.local_only or is_local(s.video_id)]
+        if self.settings.kids_mode:
+            songs = [s for s in songs if kids.suitable(s)]
+        if not songs:
+            return None
+        last = self._last_idle
+        choices = [s for s in songs if s.video_id != last] or songs
+        song = random.choice(choices)
+        self._last_idle = song.video_id
+        return QueueItem(song, singer="")
+
+    def set_idle_mv(self, enabled: bool, playlist: str | None = None) -> None:
+        """Turn background videos on or off; they start when the queue is empty."""
+        self.settings.idle_mv = bool(enabled)
+        if playlist is not None:
+            self.settings.idle_playlist = playlist
+        self._save_soon()
+        with self._lock:
+            start = enabled and self.current is None and self.status == PlayStatus.IDLE
+            stop = not enabled and self.idle_playing
+        if start:
+            self._executor.submit(self._advance, None)
+        elif stop:
+            self.skip()
+        self._emit_state()
 
     def _wait_for_instrumental(self, item: QueueItem) -> bool:
         """Hold a song until its instrumental is ready, so it never switches mid-song.
@@ -1362,6 +1404,8 @@ class KTVController:
             "phone_mic_url": self.phone_mic_url,
             "lyrics_offset": self.lyrics_offset,
             "lights": settings.lights,
+            "idle_mv": settings.idle_mv,
+            "idle_playing": self.idle_playing,
             "scoring": settings.scoring,
             "scoring_active": self._keeper is not None,
             "last_score": self.last_score,

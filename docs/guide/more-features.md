@@ -7,6 +7,13 @@ Smaller features that do not need a guide of their own.
 Each microphone channel in the **Mixer** has a voice box under its **MUTE** button. Pick
 **Chipmunk** (higher), **Deep** (lower) or **Robot**; **Voice: Off** turns it off again.
 
+## Background videos
+
+**Settings → Background Videos** (off unless you turn it on) plays music videos by themselves
+while nobody has chosen a song, like a KTV room before the first song. Choose to play from your
+favorites and sung songs, or from one playlist. The first song anyone chooses starts at once;
+background videos are not scored and are not added to Sung.
+
 ## Mood scenes
 
 On the **Party** page, under **Mood**, pick **Birthday**, **Romantic**, **Party** or **Chill**.

@@ -184,6 +184,8 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
   HDMI-CEC on a Raspberry Pi.
 - **Voice effects.** Chipmunk, deep or robot voice on any microphone, from its channel strip in
   the Mixer.
+- **Background videos.** Settings → Background Videos (off by default) plays music videos
+  while nobody has chosen a song; the first chosen song takes over at once.
 - **Confetti for a great song.** A score of 90 or more, or tonight's best, bursts confetti over
   the MV; bound rooms send their scores to the Desk's lobby screen.
 - **Mood scenes.** Party → Mood switches the TV's edge lights and smart lights to Birthday,

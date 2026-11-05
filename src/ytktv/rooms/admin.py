@@ -92,6 +92,7 @@ FIELDS: dict[str, tuple[str, Callable[[Any], Any]]] = {
     "auto_update": ("Install new releases automatically", _bool),
     "low_power": ("Low-power mode (720p, no light effects)", _bool),
     "kids_mode": ("Kids mode (songs for children, volume capped)", _bool),
+    "idle_mv": ("Play music videos while nobody is singing", _bool),
     "kids_max_volume": ("Kids mode: highest volume", _volume),
     "screen_delay_ms": ("Picture delay of a wireless TV (ms)", _delay),
 }
