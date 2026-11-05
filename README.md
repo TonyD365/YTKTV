@@ -45,6 +45,20 @@ for macOS, Windows and Linux.
   <br><sub>The MV screen while someone sings: lyrics that follow the singer, a pitch lane, a live score, danmaku and lights.</sub>
 </p>
 
+## Why I made YTKTV
+
+I'm a high-school student, and I wanted to sing karaoke at home. The only way was YouTube in a
+browser: ads between songs, a page made for watching rather than singing, and none of the
+atmosphere of a real KTV. The open-source karaoke apps I tried either looked nothing like a KTV,
+could only play songs from their own built-in library instead of searching for any song, or had
+stopped being maintained.
+
+So I built my own, in Python, the language I know best. Python is also the most popular language
+right now, so more people can read the code and help. YTKTV is free: for families, for parties,
+and for small KTV rooms and bars, who can run it at no cost at all (it just may not be sold).
+
+If YTKTV made your night, a ⭐ helps other people find it.
+
 ## Highlights
 
 | | |
