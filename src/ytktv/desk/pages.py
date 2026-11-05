@@ -390,6 +390,7 @@ def shift_report(store: DeskStore, now: float | None = None) -> str:
     by_payment: dict[str, float] = {}
     for v in visits:
         by_payment[v.payment] = by_payment.get(v.payment, 0.0) + v.total
+    calls, late = store.late_calls(started, now + 1)
     rows = "".join(
         f"<tr><td>{n}</td><td align='right'>{q}</td></tr>" for n, q in sold.most_common()
     )
@@ -409,6 +410,8 @@ def shift_report(store: DeskStore, now: float | None = None) -> str:
             f"<tr><td>· {method}</td><td align='right'>{currency}{amount:.2f}</td></tr>"
             for method, amount in sorted(by_payment.items())
         )
+        + f"<tr><td>Service calls (waited over {store.overdue_minutes()} min)</td>"
+        f"<td align='right'>{calls} ({late})</td></tr>"
         + f"<tr><td>Rooms still open</td><td align='right'>{still_open}</td></tr>"
         "</table>"
         + (f"<h3>Items sold</h3><table width='100%' cellpadding='4'>{rows}</table>" if rows else "")

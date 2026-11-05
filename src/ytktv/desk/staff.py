@@ -48,7 +48,7 @@ READS = frozenset(
     {
         "rooms", "room", "now_singing", "history", "members", "member_by_phone", "bookings",
         "clashes", "setting", "low_stock", "products", "orders", "calls", "terminals", "oplog",
-        "packages", "session_package", "coupons", "coupon",
+        "packages", "session_package", "coupons", "coupon", "overdue_minutes", "late_calls",
     }
 )  # fmt: skip
 CHANGES = frozenset(
