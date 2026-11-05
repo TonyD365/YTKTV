@@ -77,6 +77,7 @@ class SoundIn(BaseModel):
     master_volume: int | None = Field(default=None, ge=0, le=100)
     guide_vocal: int | None = Field(default=None, ge=0, le=100)
     lights: bool | None = None
+    scene: str | None = None  # a mood scene, or "" for the usual lights
     scoring: bool | None = None
     show_lyrics: bool | None = None
     lyrics_offset: float | None = Field(default=None, ge=-10, le=10)
@@ -302,6 +303,8 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
             controller.set_guide_vocal(body.guide_vocal)
         if body.lights is not None:
             controller.set_lights(body.lights)
+        if body.scene is not None:
+            controller.set_scene(body.scene)
         if body.scoring is not None:
             controller.set_scoring(body.scoring)
         if body.show_lyrics is not None:
