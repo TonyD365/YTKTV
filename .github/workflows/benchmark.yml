@@ -2,7 +2,9 @@ name: Benchmark
 
 # Runs the benchmark suite for the base branch and for the pull request on the
 # same runner, back to back, so the comparison is not skewed by different
-# hardware. Fails when a benchmark regresses by more than THRESHOLD percent.
+# hardware. Fails when a benchmark regresses by more than THRESHOLD percent twice:
+# the first time, both are measured again, since a busy runner can slow a
+# microsecond benchmark by half.
 
 on:
   pull_request:
@@ -70,6 +72,21 @@ jobs:
           echo "status=$?" >> "$GITHUB_OUTPUT"
           cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Measure again after a regression
+        id: again
+        if: steps.compare.outputs.status != '0'
+        run: |
+          set +e
+          (cd base && [ -d benchmarks ] && PYTHONPATH="$PWD/src:$PWD" python -m pytest benchmarks \
+            --benchmark-only --benchmark-json="$RUNNER_TEMP/base.json" -q -p no:cacheprovider)
+          (cd head && PYTHONPATH="$PWD/src:$PWD" python -m pytest benchmarks \
+            --benchmark-only --benchmark-json="$RUNNER_TEMP/head.json" -q -p no:cacheprovider)
+          cd head
+          python benchmarks/compare.py --base "$RUNNER_TEMP/base.json" --head "$RUNNER_TEMP/head.json" \
+            --threshold "$THRESHOLD" --output "$RUNNER_TEMP/report.md"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          { echo; echo "## Measured again"; cat "$RUNNER_TEMP/report.md"; } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Comment on the pull request
         # Pull requests from forks get a read-only token; the job summary still has the report.
         continue-on-error: true
@@ -90,7 +107,7 @@ jobs:
             }
 
       - name: Fail on regression
-        if: steps.compare.outputs.status != '0'
+        if: steps.compare.outputs.status != '0' && steps.again.outputs.status != '0'
         run: |
-          echo "::error::A benchmark regressed by more than ${THRESHOLD}%. See the job summary."
+          echo "::error::A benchmark regressed by more than ${THRESHOLD}%, twice. See the job summary."
           exit 1
