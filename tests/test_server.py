@@ -203,3 +203,10 @@ def test_tournament_and_birthday_over_http(client):
     assert party["text"] == "🎉 Mia 🎉"
     queued = [*controller.state()["queue"], controller.state()["current"]]
     assert any(item and item.get("singer") == "Mia" for item in queued)
+
+
+def test_phone_switches_mood_scene(client):
+    http, _controller = client
+    assert http.post("/api/sound", json={"scene": "chill"}).json()["scene"] == "chill"
+    assert http.post("/api/sound", json={"scene": ""}).json()["scene"] == ""
+    assert http.post("/api/sound", json={"scene": "nope"}).json()["scene"] == ""

@@ -207,6 +207,14 @@
       <button data-sfx="drumroll">Drum Roll</button>
       <button id="lights" style="grid-column: span 2">Lights</button>
     </div>
+    <h3>Mood</h3>
+    <div class="pad">
+      <button data-scene="">✨ Usual</button>
+      <button data-scene="birthday">🎂 Birthday</button>
+      <button data-scene="romantic">💕 Romantic</button>
+      <button data-scene="party">🪩 Party</button>
+      <button data-scene="chill" style="grid-column: span 2">🌊 Chill</button>
+    </div>
     <h3>Danmaku</h3>
     <form class="search" id="danmaku-form">
       <input type="text" id="danmaku" maxlength="60" placeholder="Send a message to the big screen" autocomplete="off" enterkeyhint="send">
@@ -425,6 +433,7 @@ function render() {
     $("out-" + name).textContent = $("vol-" + name).value;
   }
   $("lights").classList.toggle("on", state.lights);
+  document.querySelectorAll("[data-scene]").forEach((b) => b.classList.toggle("on", b.dataset.scene === (state.scene || "")));
   $("scoring").classList.toggle("on", state.scoring);
   $("scoring").textContent = state.scoring ? "Scoring: On" : "Scoring: Off";
   $("mic-link").hidden = !state.phone_mic_url;
@@ -683,6 +692,7 @@ for (const [name, key] of SLIDERS) {
   slider.addEventListener("change", () => { dragging[name] = false; sound({[key]: +slider.value}); });
 }
 $("lights").onclick = () => state && sound({lights: !state.lights});
+document.querySelectorAll("[data-scene]").forEach((b) => b.addEventListener("click", () => sound({scene: b.dataset.scene})));
 $("scoring").onclick = () => state && sound({scoring: !state.scoring});
 $("show-lyrics").onclick = () => state && sound({show_lyrics: !state.show_lyrics});
 // Lyrics that run ahead of or behind the singing are moved a tenth of a second at a time.
