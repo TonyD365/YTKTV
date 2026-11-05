@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QSize, Qt, QTimer, QUrl
-from PySide6.QtGui import QCloseEvent, QDesktopServices, QIcon
+from PySide6.QtGui import QCloseEvent, QColor, QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -58,7 +58,7 @@ from ytktv.desk.store import CODE_SECONDS, Booking, DeskStore, Room
 from ytktv.desk.terminals import TerminalSettings
 from ytktv.desk.update import DeskUpdater
 from ytktv.rooms.state import format_left
-from ytktv.ui import icons
+from ytktv.ui import backdrop, icons
 
 COLUMNS = 4
 ICON = Path(__file__).parent / "assets" / "icon.png"
@@ -73,18 +73,19 @@ STYLE = """
 #navButton { background: transparent; color: #c9c3e6; border: 0; border-radius: 0;
   padding: 10px 18px; font-size: 15px; font-weight: 600; }
 #navButton:checked { color: white; border-bottom: 3px solid #ff3d9a; }
-#stat { background: #1a1430; border: 1px solid #33284f; border-radius: 14px; }
+#stat { background: rgba(26, 20, 48, 0.85); border: 1px solid #3f3168; border-radius: 14px; }
 #statValue { color: white; font-size: 34px; font-weight: 800; }
 #statLabel { color: #9a93b8; font-size: 11px; font-weight: 700; letter-spacing: 3px; }
-#panel { background: #150f28; border: 1px solid #33284f; border-radius: 16px; }
+#panel { background: rgba(21, 15, 40, 0.86); border: 1px solid #3f3168; border-radius: 16px; }
 #panelHead { color: #2ee6ff; font-size: 12px; font-weight: 800; letter-spacing: 4px; }
 #bigName { color: white; font-size: 28px; font-weight: 800; }
 #muted { color: #9a93b8; }
 #codeDigits { color: #ff3d9a; font-size: 56px; font-weight: 900; letter-spacing: 12px; }
-#callBar { background: #120c22; border-top: 1px solid #3a2a5c; }
-#roomTile { border-radius: 14px; text-align: left; }
+#callBar { background: rgba(14, 9, 32, 0.85); border-top: 1px solid #3a2a5c; }
+QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; }
+#roomTile { border-radius: 14px; text-align: left; border: 1px solid rgba(255, 255, 255, 0.3); }
 #roomTile[selected="true"] { border: 3px solid #2ee6ff; }
-#sideBar { background: #0e0920; border-right: 1px solid #3a2a5c; }
+#sideBar { background: rgba(14, 9, 32, 0.8); border-right: 1px solid #3a2a5c; }
 #sideHead { color: #6f6890; font-size: 10px; font-weight: 800; letter-spacing: 3px;
   padding: 12px 6px 4px 6px; }
 #sideButton { background: transparent; color: #d9d4f2; border: 0; border-radius: 10px;
@@ -162,7 +163,7 @@ class DeskWindow(QMainWindow):
         self.setStyleSheet(STYLE)
         self.resize(1280, 820)
         self.setMinimumWidth(1100)
-        root = QWidget()
+        root = backdrop.Backdrop()  # the same night sky as the rooms' consoles
         page = QVBoxLayout(root)
         page.setContentsMargins(0, 0, 0, 0)
         page.setSpacing(0)
@@ -702,9 +703,12 @@ class DeskWindow(QMainWindow):
             tile.setText(text.replace("&", "&&"))  # a lone & would become a shortcut
             tile.setIcon(icons.icon(dot))
             tile.setIconSize(QSize(26, 26))
+            # A glossy tile: lighter at the top, darker at the bottom, like the console's.
+            top, bottom = QColor(colour).lighter(140).name(), QColor(colour).darker(130).name()
             tile.setStyleSheet(
-                f"#roomTile {{ background: {colour}; color: white; font-size: 15px;"
-                " font-weight: 700; text-align: left; padding: 12px 16px; }"
+                "#roomTile { background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
+                f" stop:0 {top}, stop:0.45 {colour}, stop:1 {bottom}); color: white;"
+                " font-size: 15px; font-weight: 700; text-align: left; padding: 12px 16px; }"
             )
             tile.clicked.connect(lambda _c=False, r=room.room_id: self.select(r))
             self.grid.addWidget(tile, n // COLUMNS, n % COLUMNS)
@@ -766,8 +770,9 @@ class DeskWindow(QMainWindow):
         }
         for key, action in self.room_actions.items():
             action.setEnabled(enabled[key])
-        self.room_actions["repair"].setText(
-            "✅  Back in Service" if room.state == "maintenance" else "🔧  Maintenance"
+        icons.set_text(
+            self.room_actions["repair"],
+            "✅  Back in Service" if room.state == "maintenance" else "🔧  Maintenance",
         )
         self.orders.show_room(room.room_id if room.is_open else None)
         for button in self.remote_buttons:
