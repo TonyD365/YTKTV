@@ -3,6 +3,30 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 3.0.0
+
+YTKTV 3.0 has a new look: our own icons everywhere and a console that feels like a KTV touch screen.
+
+### 🎤 YTKTV
+- **Our own icons.** 71 icons drawn for YTKTV replace the system emoji on the console, the phone page, the games and the MV screen. Reactions fly across the TV as coloured icons.
+- **A KTV-style console.** A night-sky background, glossy tiles with the icon and name in the middle, and an on-screen **Keyboard** on the Search page for touch screens (initials still work: `yldb`).
+- **Mood scenes.** Party → Mood, or the phone page: Birthday, Romantic, Party or Chill keeps the TV's edge lights and smart lights in that scene's colours, with a cheer or an air horn to start.
+- **Menu pictures.** Items on the staff terminal's menu show their picture when guests order from the console or a phone.
+
+### 🛎 YTKTV Desk
+- **Lobby screen.** Settings → Lobby Screen puts a board on a TV outside the desk: free rooms, when busy rooms come free, and today's bookings. It goes full screen on the chosen display, like a room's MV screen.
+- **Service calls that wait too long** turn bright red, show how long they have waited and beep again (Settings → Service Calls, 3 minutes by default). The shift report counts them.
+- **Pictures for menu items**: Settings → Menu and Prices → Picture.
+
+### 📖 Docs
+- The user guide has a new **More features** page, and the changelog is complete again.
+
+### ✅ Works with older versions
+Nothing to redo when you update:
+- A 3.0 room works with an older YTKTV Desk, and an older room works with Desk 3.0. Older rooms just do not show menu pictures.
+- The Desk's records are upgraded in place the first time it starts; rooms, members, bookings and history are all kept.
+- Settings, playlists, favorites and downloads stay as they were.
+
 ## 2.5.1
 
 ### Fixes
