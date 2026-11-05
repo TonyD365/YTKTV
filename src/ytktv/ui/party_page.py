@@ -104,8 +104,8 @@ class PartyPage(Page):
 
     def _duet(self, on: bool) -> None:
         self.ctx.controller.set_duet_mode(on)
-        self.duet_button.setText(f"🎭  Duet: {'On' if on else 'Off'}")
+        self.duet_button.setText(f"Duet: {'On' if on else 'Off'}")
 
     def _pk(self, on: bool) -> None:
         self.ctx.controller.set_pk_mode(on)
-        self.pk_button.setText(f"⚔️  PK Battle: {'On' if on else 'Off'}")
+        self.pk_button.setText(f"PK Battle: {'On' if on else 'Off'}")

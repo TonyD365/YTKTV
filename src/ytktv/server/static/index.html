@@ -97,6 +97,7 @@
     border: 1px solid var(--cyan); color: var(--text); padding: 9px 16px; border-radius: 20px; font-size: 13px;
     opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 86vw; text-align: center; }
   #toast.show { opacity: 1; } #toast.error { border-color: var(--danger); }
+  img.ic { height: 1.15em; width: 1.15em; vertical-align: -0.2em; margin: 0 .1em; }
 </style>
 </head>
 <body>
@@ -206,6 +207,14 @@
       <button data-sfx="airhorn">Air Horn</button>
       <button data-sfx="drumroll">Drum Roll</button>
       <button id="lights" style="grid-column: span 2">Lights</button>
+    </div>
+    <h3>Mood</h3>
+    <div class="pad">
+      <button data-scene="">✨ Usual</button>
+      <button data-scene="birthday">🎂 Birthday</button>
+      <button data-scene="romantic">💕 Romantic</button>
+      <button data-scene="party">🪩 Party</button>
+      <button data-scene="chill" style="grid-column: span 2">🌊 Chill</button>
     </div>
     <h3>Danmaku</h3>
     <form class="search" id="danmaku-form">
@@ -425,6 +434,7 @@ function render() {
     $("out-" + name).textContent = $("vol-" + name).value;
   }
   $("lights").classList.toggle("on", state.lights);
+  document.querySelectorAll("[data-scene]").forEach((b) => b.classList.toggle("on", b.dataset.scene === (state.scene || "")));
   $("scoring").classList.toggle("on", state.scoring);
   $("scoring").textContent = state.scoring ? "Scoring: On" : "Scoring: Off";
   $("mic-link").hidden = !state.phone_mic_url;
@@ -683,6 +693,7 @@ for (const [name, key] of SLIDERS) {
   slider.addEventListener("change", () => { dragging[name] = false; sound({[key]: +slider.value}); });
 }
 $("lights").onclick = () => state && sound({lights: !state.lights});
+document.querySelectorAll("[data-scene]").forEach((b) => b.addEventListener("click", () => sound({scene: b.dataset.scene})));
 $("scoring").onclick = () => state && sound({scoring: !state.scoring});
 $("show-lyrics").onclick = () => state && sound({show_lyrics: !state.show_lyrics});
 // Lyrics that run ahead of or behind the singing are moved a tenth of a second at a time.
@@ -847,6 +858,38 @@ function connect() {
   ws.onclose = () => setTimeout(connect, 1500);
 }
 connect();
+</script>
+<script src="/icons.js"></script>
+<script>
+// Our own icons instead of the phone's emoji: every emoji in the page becomes an <img>,
+// including text that appears later (games, toasts, lists).
+const ICON_RE = new RegExp("(" + Object.keys(ICON_FOR).sort((a, b) => b.length - a.length)
+  .map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\uFE0F?", "g");
+function iconize(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const found = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const tag = n.parentNode && n.parentNode.nodeName;
+    if (tag !== "SCRIPT" && tag !== "STYLE" && tag !== "TEXTAREA" && ICON_RE.test(n.data)) found.push(n);
+    ICON_RE.lastIndex = 0;
+  }
+  for (const node of found) {
+    const parts = node.data.split(ICON_RE);
+    const frag = document.createDocumentFragment();
+    parts.forEach((part, i) => {
+      if (i % 2 === 0) { if (part) frag.appendChild(document.createTextNode(part)); return; }
+      const img = document.createElement("img");
+      img.className = "ic"; img.alt = part; img.src = "/icons/" + ICON_FOR[part] + ".svg";
+      frag.appendChild(img);
+    });
+    node.replaceWith(frag);
+  }
+}
+if (typeof ICON_FOR !== "undefined") {
+  iconize(document.body);
+  new MutationObserver((changes) => changes.forEach((c) => c.addedNodes.forEach((n) =>
+    iconize(n.nodeType === 3 ? n.parentNode || document.body : n)))).observe(document.body, {childList: true, subtree: true});
+}
 </script>
 </body>
 </html>

@@ -29,6 +29,7 @@ from ytktv.core.models import PlayStatus, VocalMode
 from ytktv.rooms import admin, binding
 from ytktv.rooms.client import RoomClient
 from ytktv.rooms.state import WARN_AT, format_left
+from ytktv.ui import backdrop, icons
 from ytktv.ui.games_page import GamesPage
 from ytktv.ui.home_page import HomePage
 from ytktv.ui.level_hud import LevelHud, from_segments, to_segments
@@ -129,7 +130,7 @@ class MainWindow(QMainWindow):
         self._last_current_id: str | None = None
         self._last_status = ""
 
-        root = QWidget()
+        root = backdrop.Backdrop()  # the night sky behind every page
         root.setObjectName("root")
         self.setCentralWidget(root)
         column = QVBoxLayout(root)
@@ -162,6 +163,7 @@ class MainWindow(QMainWindow):
         self.mv_window.on_light = lambda level, hue: controller.bus.emit(
             "glow", {"level": round(level, 2), "hue": round(hue, 3)}
         )
+        icons.apply(self)  # our own icons in place of the emoji in buttons and labels
         self._apply_state()
 
     # -- construction -----------------------------------------------------
@@ -738,7 +740,7 @@ class MainWindow(QMainWindow):
         self.mv_window.set_time_left(None if left is None else format_left(left))
         if client is None or left is None:
             return
-        self.time_left.setText(f"⏱ {format_left(left)} left")
+        self.time_left.setText(f"{format_left(left)} left")
         if 0 < left <= WARN_AT and not self._warned:
             self._warned = True
             self.show_toast("10 minutes left in this room")

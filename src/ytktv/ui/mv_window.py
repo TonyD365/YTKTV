@@ -408,7 +408,7 @@ class MvWindow(QWidget):
             )
         self._time_left.setVisible(text is not None)
         if text is not None:
-            self._time_left.setText(f"⏱ {text}")
+            self._time_left.setText(text)
             self._time_left.adjustSize()
             self._time_left.move(16, 16)
             self._time_left.raise_()

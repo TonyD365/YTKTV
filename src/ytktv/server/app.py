@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import json
 import logging
 import random
 import socket
@@ -14,11 +15,11 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from ytktv import catalog
+from ytktv import catalog, icon_set
 from ytktv.audio.sfx import SFX_NAMES
 from ytktv.core.controller import KTVController
 from ytktv.core.games import BIRTHDAY_SEARCH
@@ -77,6 +78,7 @@ class SoundIn(BaseModel):
     master_volume: int | None = Field(default=None, ge=0, le=100)
     guide_vocal: int | None = Field(default=None, ge=0, le=100)
     lights: bool | None = None
+    scene: str | None = None  # a mood scene, or "" for the usual lights
     scoring: bool | None = None
     show_lyrics: bool | None = None
     lyrics_offset: float | None = Field(default=None, ge=-10, le=10)
@@ -193,6 +195,25 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
     async def room_closed(_request: Request, exc: PermissionError) -> JSONResponse:
         return JSONResponse({"detail": str(exc)}, status_code=423)
 
+    @app.get("/icons/{name}.svg", include_in_schema=False)
+    def icon_svg(name: str) -> Response:
+        if name not in icon_set.ICONS:
+            raise HTTPException(404, "unknown icon")
+        return Response(
+            icon_set.svg(name),
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "max-age=86400"},
+        )
+
+    @app.get("/icons.js", include_in_schema=False)
+    def icons_js() -> Response:
+        """The emoji -> icon table for the phone page, which swaps them as text appears."""
+        return Response(
+            f"const ICON_FOR = {json.dumps(icon_set.EMOJI, ensure_ascii=False)};",
+            media_type="text/javascript",
+            headers={"Cache-Control": "no-cache"},
+        )
+
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
@@ -302,6 +323,8 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
             controller.set_guide_vocal(body.guide_vocal)
         if body.lights is not None:
             controller.set_lights(body.lights)
+        if body.scene is not None:
+            controller.set_scene(body.scene)
         if body.scoring is not None:
             controller.set_scoring(body.scoring)
         if body.show_lyrics is not None:

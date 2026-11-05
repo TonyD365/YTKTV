@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -18,19 +18,46 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ytktv.ui import icons
 from ytktv.ui.pages import Context, Page
 
 # (page, label, icon, colour): one tile each, in reading order.
 TILES = (
-    ("search", "Search", "🔍", "#d4537e"),
-    ("artists", "Artists", "★", "#7f77dd"),
-    ("hot", "Hot Songs", "🔥", "#1d9e75"),
-    ("playlists", "Playlists", "≡", "#ba7517"),
-    ("favorites", "Favorites", "♥", "#993556"),
-    ("queue", "Selected", "🎤", "#534ab7"),
-    ("history", "Sung", "✓", "#378add"),
-    ("mixer", "Mixer", "🎚", "#5f5e5a"),
+    ("search", "Search", "search", "#d4537e"),
+    ("artists", "Artists", "star", "#7f77dd"),
+    ("hot", "Hot Songs", "fire", "#1d9e75"),
+    ("playlists", "Playlists", "list", "#ba7517"),
+    ("favorites", "Favorites", "heart", "#b0365f"),
+    ("queue", "Selected", "mic", "#534ab7"),
+    ("history", "Sung", "check", "#378add"),
+    ("mixer", "Mixer", "sliders", "#5f5e5a"),
 )
+
+
+class Tile(QPushButton):
+    """A big touch tile: its icon and name together in the middle."""
+
+    def __init__(self, icon: str, text: str) -> None:
+        super().__init__()
+        column = QVBoxLayout(self)
+        column.setSpacing(10)
+        column.addStretch()
+        picture = QLabel()
+        picture.setPixmap(icons.pixmap(icon, "#ffffff", 64))
+        self.label = QLabel(text)
+        self.label.setStyleSheet("font-size: 22px; font-weight: 800; color: white;")
+        for widget in (picture, self.label):
+            widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            widget.setStyleSheet(widget.styleSheet() + "background: transparent;")
+            column.addWidget(widget)
+        column.addStretch()
+
+    def setText(self, text: str) -> None:  # noqa: N802 (Qt)
+        self.label.setText(text)
+
+    def text(self) -> str:
+        return self.label.text()
 
 
 class HomePage(Page):
@@ -96,14 +123,20 @@ class HomePage(Page):
         # The tile wall.
         grid = QGridLayout()
         grid.setSpacing(14)
-        self.tiles: dict[str, QPushButton] = {}
+        self.tiles: dict[str, Tile] = {}
         for index, (key, label, icon, colour) in enumerate(TILES):
-            tile = QPushButton(f"{icon}\n{label}")
+            tile = Tile(icon, label)
             tile.setObjectName("tile")
             tile.setCursor(Qt.CursorShape.PointingHandCursor)
             tile.setMinimumSize(150, 120)
             tile.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-            tile.setStyleSheet(f"#tile {{ background: {colour}; }}")
+            # A glossy tile: lighter at the top, with a bright edge, like a KTV touch screen.
+            top = QColor(colour).lighter(135).name()
+            tile.setStyleSheet(
+                "#tile { background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
+                f" stop:0 {top}, stop:0.5 {colour}, stop:1 {QColor(colour).darker(125).name()});"
+                " border: 1px solid rgba(255, 255, 255, 0.35); }"
+            )
             tile.clicked.connect(lambda _checked=False, k=key: open_page(k))
             grid.addWidget(tile, index // 4, index % 4)
             self.tiles[key] = tile
@@ -140,7 +173,7 @@ class HomePage(Page):
             self.next_rows[0].setText("Nothing queued yet")
             self.next_rows[0].setVisible(True)
         self.more.setText(f"See the whole queue ({len(queue)})" if queue else "See the whole queue")
-        self.tiles["queue"].setText(f"🎤\nSelected ({len(queue)})" if queue else "🎤\nSelected")
+        self.tiles["queue"].setText(f"Selected ({len(queue)})" if queue else "Selected")
 
     def _set_cover(self, pixmap: QPixmap) -> None:
         self.cover.setPixmap(pixmap)

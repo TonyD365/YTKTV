@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import QCloseEvent, QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -58,6 +58,7 @@ from ytktv.desk.store import CODE_SECONDS, Booking, DeskStore, Room
 from ytktv.desk.terminals import TerminalSettings
 from ytktv.desk.update import DeskUpdater
 from ytktv.rooms.state import format_left
+from ytktv.ui import icons
 
 COLUMNS = 4
 ICON = Path(__file__).parent / "assets" / "icon.png"
@@ -113,16 +114,16 @@ QCheckBox { color: white; }
 QAbstractSpinBox QLineEdit { padding: 0; margin: 0; border: 0; border-radius: 0;
   background: transparent; font-size: 16px; }
 """
-STATUS = {  # status: (label, tile colour, dot)
-    "free": ("Free", "#24506b", "🟢"),
-    "booked": ("Booked", "#5b3fa0", "📅"),
-    "in_use": ("In use", "#1d7a55", "🎤"),
-    "ending": ("Ending soon", "#a8781a", "⏳"),
-    "over": ("Time's up", "#9c2f45", "⏰"),
-    "calling": ("Calling", "#c2185b", "🛎"),
-    "cleaning": ("Cleaning", "#6b5a2a", "🧹"),
-    "maintenance": ("Maintenance", "#4a4a52", "🔧"),
-    "offline": ("Offline", "#14111f", "⚫"),
+STATUS = {  # status: (label, tile colour, icon)
+    "free": ("Free", "#24506b", "check"),
+    "booked": ("Booked", "#5b3fa0", "calendar"),
+    "in_use": ("In use", "#1d7a55", "mic"),
+    "ending": ("Ending soon", "#a8781a", "timer"),
+    "over": ("Time's up", "#9c2f45", "timer"),
+    "calling": ("Calling", "#c2185b", "bell"),
+    "cleaning": ("Cleaning", "#6b5a2a", "broom"),
+    "maintenance": ("Maintenance", "#4a4a52", "wrench"),
+    "offline": ("Offline", "#14111f", "close"),
 }
 LEGEND = ("free", "booked", "in_use", "ending", "calling", "cleaning", "maintenance", "offline")
 ROOM_TYPES = ("Small", "Medium", "Large", "VIP", "Party")
@@ -202,7 +203,7 @@ class DeskWindow(QMainWindow):
         money.addWidget(today_label, alignment=Qt.AlignmentFlag.AlignRight)
         bar.addLayout(money)
         bar.addSpacing(16)
-        self.offline_label = QLabel("⚠  Main Desk offline: reconnecting…")
+        self.offline_label = QLabel("Main Desk offline: reconnecting…")
         self.offline_label.setStyleSheet("color: #ff6b81; font-weight: 700;")
         self.offline_label.hide()
         bar.addWidget(self.offline_label)
@@ -272,6 +273,7 @@ class DeskWindow(QMainWindow):
         self._timer.timeout.connect(self.refresh)
         self._timer.start(1000)
         self.lobby.apply()
+        icons.apply(self)  # our own icons in place of the emoji in buttons and labels
         self.refresh()
         self.lock_screen = lock.LockScreen(root, self.store)
         self.lock_screen.lock()  # asks for the password at start when one is set
@@ -415,12 +417,12 @@ class DeskWindow(QMainWindow):
         """Offer a downloaded update in the top bar; installing quits the desk."""
 
         def ready(version: str) -> None:
-            self.update_button.setText(f"⬆  Update to {version}")
+            icons.set_text(self.update_button, f"⬆  Update to {version}")
             self.update_button.setToolTip("Install the new version and restart the desk")
             self.update_button.show()
 
         def available(version: str, page: str) -> None:
-            self.update_button.setText(f"⬆  {version} is out")
+            icons.set_text(self.update_button, f"⬆  {version} is out")
             self.update_button.setToolTip(page)
             self.update_button.show()
 
@@ -523,11 +525,11 @@ class DeskWindow(QMainWindow):
         try:
             work()
         except NotPaired as exc:
-            self.offline_label.setText(f"⚠  {exc}")
+            self.offline_label.setText(f"{exc}")
             self.offline_label.show()
             return False
         except DeskOffline:
-            self.offline_label.setText("⚠  Main Desk offline: reconnecting…")
+            self.offline_label.setText("Main Desk offline: reconnecting…")
             self.offline_label.show()
             return False
         self.offline_label.hide()
@@ -691,13 +693,15 @@ class DeskWindow(QMainWindow):
                 extra += f"\n{format_left(left)} left"
             singing = self.store.now_singing(room.room_id) if room.is_open else ""
             if singing:
-                extra += f"\n♪ {singing[:28]}"
+                extra += f"\n{singing[:28]}"
             booked = upcoming.get(room.room_id)
             if booked is not None and not room.is_open:
                 at = time.strftime("%H:%M", time.localtime(booked.starts))
                 extra += f"\n{at} · {booked.guest}"
-            text = f"{room.name}\n{room.room_type} · {room.capacity} seats\n\n{dot}  {label}{extra}"
+            text = f"{room.name}\n{room.room_type} · {room.capacity} seats\n\n{label}{extra}"
             tile.setText(text.replace("&", "&&"))  # a lone & would become a shortcut
+            tile.setIcon(icons.icon(dot))
+            tile.setIconSize(QSize(26, 26))
             tile.setStyleSheet(
                 f"#roomTile {{ background: {colour}; color: white; font-size: 15px;"
                 " font-weight: 700; text-align: left; padding: 12px 16px; }"
@@ -739,8 +743,8 @@ class DeskWindow(QMainWindow):
         )
         self.panel_name.setText(room.name)
         self.panel_head.setText(f"{room.room_type.upper()} ROOM · {room.capacity} SEATS")
-        label, _, dot = STATUS[self._status(room, online)]
-        lines = [f"{dot} {label}" + ("" if up else " · offline"), f"Last seen: {seen}"]
+        label = STATUS[self._status(room, online)][0]
+        lines = [label + ("" if up else " · offline"), f"Last seen: {seen}"]
         if room.is_open:
             lines.append(f"Guest: {room.guest or '—'}")
             lines.append(
@@ -768,7 +772,9 @@ class DeskWindow(QMainWindow):
         self.orders.show_room(room.room_id if room.is_open else None)
         for button in self.remote_buttons:
             button.setEnabled(room.is_open and up)
-        self.remote_buttons[4].setText("🔓" if room.room_id in self._locked else "🔒")
+        self.remote_buttons[4].setIcon(
+            icons.icon("unlock" if room.room_id in self._locked else "lock")
+        )
 
     def _status(self, room: Room, online: set[str]) -> str:
         if room.is_open and any(c.room_id == room.room_id for c in self.store.calls()):

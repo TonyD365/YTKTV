@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv.core import games
+from ytktv.ui import icons
 from ytktv.ui.pages import Context, Page
 from ytktv.ui.support import run_async
 from ytktv.youtube.search import HOT_CATEGORIES
@@ -42,6 +43,9 @@ SPIN_STYLE = (
 
 
 def stage_html(big: str, small: str = "", colour: str = "white", size: int = 64) -> str:
+    # Emoji on the stage are drawn with our own icons, as big as the text.
+    big = icons.html(big, colour if colour.startswith("#") else "#ffffff", size)
+    small = icons.html(small, "#c9c3e6", 20)
     small_html = f"<div style='font-size:20px;color:#c9c3e6'>{small}</div>" if small else ""
     return f"<div style='font-size:{size}px;font-weight:800;color:{colour}'>{big}</div>{small_html}"
 

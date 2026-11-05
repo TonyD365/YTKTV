@@ -262,6 +262,9 @@ def main(argv: list[str] | None = None) -> int:
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv[:1])
     app.setApplicationName("YTKTV")
+    from ytktv.ui import icons
+
+    icons.install(app)  # our own icons instead of system emoji, everywhere
     from PySide6.QtGui import QIcon
 
     from ytktv.ui.icon import ICON_FILE
