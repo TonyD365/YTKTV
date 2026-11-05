@@ -7,6 +7,13 @@ Smaller features that do not need a guide of their own.
 Each microphone channel in the **Mixer** has a voice box under its **MUTE** button. Pick
 **Chipmunk** (higher), **Deep** (lower) or **Robot**; **Voice: Off** turns it off again.
 
+## Mood scenes
+
+On the **Party** page, under **Mood**, pick **Birthday**, **Romantic**, **Party** or **Chill**.
+The MV screen's edge lights and any smart lights keep to that scene's colours and still pulse
+with the music; Birthday starts with a cheer and Party with an air horn. **Usual** goes back to
+the normal colours.
+
 ## Spotify and Apple Music playlists
 
 Open **Playlists → Import Playlist** and paste the link of a public Spotify or Apple Music

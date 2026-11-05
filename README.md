@@ -184,6 +184,8 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
   HDMI-CEC on a Raspberry Pi.
 - **Voice effects.** Chipmunk, deep or robot voice on any microphone, from its channel strip in
   the Mixer.
+- **Mood scenes.** Party → Mood switches the TV's edge lights and smart lights to Birthday,
+  Romantic, Party or Chill colours in one tap, with a cheer or an air horn to start.
 - **Smart lights.** WLED strips or Philips Hue lights change colour with the music, like the
   TV's edge lights (Settings → Smart Lights).
 - **Kids mode.** For a children's room: songs not meant for children are left out and cannot be
