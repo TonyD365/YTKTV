@@ -29,6 +29,7 @@ from PySide6.QtGui import (
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import QLabel, QWidget
 
+from ytktv.core.scenes import SCENES
 from ytktv.player.mpv_player import MpvPlayer
 from ytktv.ui import theme
 from ytktv.ui.level_hud import LevelHud
@@ -609,6 +610,7 @@ class MvWindow(QWidget):
         self._speed = float(state.get("speed") or 1.0)
         self._lyrics_offset = float(state.get("lyrics_offset") or 0.0)
         self._lights_enabled = bool(state.get("lights", True))
+        self._light_show.scene = SCENES.get(state.get("scene") or "")
         self.lyrics.set_duet(bool(state.get("duet")))
         if current is None:
             # Only when nothing is on: lyrics and the tune arrive while a song is still

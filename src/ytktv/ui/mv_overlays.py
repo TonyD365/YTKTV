@@ -25,6 +25,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QWidget
 
+from ytktv.core.scenes import Scene
 from ytktv.ui import theme
 from ytktv.youtube.lyrics import (
     PART_A,
@@ -540,6 +541,7 @@ class LightShow:
         self._average = 0.0
         self._hue = random.random()
         self._flash = 0.0
+        self.scene: Scene | None = None  # a mood scene keeps the colours near its own
 
     def step(self, peak: float, seconds: float) -> dict[str, tuple[float, float]]:
         """Advance by *seconds* at output level *peak* (0..1); gives side -> (intensity, hue)."""
@@ -555,11 +557,19 @@ class LightShow:
             self._flash = 1.0
             self._hue += 0.012
         self._flash = max(0.0, self._flash - seconds * 4.0)
-        self._hue = (self._hue + seconds * 0.05) % 1.0
+        scene = self.scene
+        self._hue = (self._hue + seconds * 0.05 * (scene.speed if scene else 1.0)) % 1.0
         # A perceptual curve: quiet passages still glow, loud ones do not just clip.
         intensity = (
             min(1.0, (self._level**0.5) * 0.85 + self._flash * 0.25) if self._level > 0.004 else 0.0
         )
+        if scene is not None:
+            # Sway around the scene's colour instead of going round the whole wheel.
+            sway = math.sin(self._hue * 2 * math.pi)
+            return {
+                side: (intensity, (scene.hue + (sway + offset * 2 - 0.75) * scene.spread) % 1.0)
+                for side, offset in self._OFFSETS.items()
+            }
         return {side: (intensity, self._hue + offset) for side, offset in self._OFFSETS.items()}
 
 

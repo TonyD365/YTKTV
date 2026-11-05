@@ -78,6 +78,7 @@ class KTVController:
         self.store = store
         self.room_closed = False  # set by the staff terminal; a closed room takes no songs
         self.pk_mode = False  # two microphones battle on the same song
+        self.scene = ""  # a mood scene from core.scenes, or "" for the usual lights
         self.duet_mode = False  # two singers share the song: the lyrics say whose line it is
         self.front_desk: Any = None  # the RoomClient when this machine is a room
         self.settings = store.settings
@@ -724,6 +725,20 @@ class KTVController:
         )
         self._emit_state()
 
+    def set_scene(self, key: str) -> None:
+        """Switch to a mood scene, or back to the usual lights with ""."""
+        from ytktv.core.scenes import SCENES
+
+        scene = SCENES.get(key)
+        self.scene = key if scene else ""
+        if scene is not None:
+            if not self.settings.lights:
+                self.set_lights(True)
+            if scene.sound:
+                self.play_sfx(scene.sound)
+            self.toast(scene.message or scene.title)
+        self._emit_state()
+
     def set_lights(self, enabled: bool) -> None:
         self.settings.lights = bool(enabled)
         self._save_soon()
@@ -1342,6 +1357,7 @@ class KTVController:
             "room_closed": self.room_closed,
             "pk": self.pk_mode,
             "duet": self.duet_mode,
+            "scene": self.scene,
             "service": self._service_menu(),
             "phone_mic_url": self.phone_mic_url,
             "lyrics_offset": self.lyrics_offset,
