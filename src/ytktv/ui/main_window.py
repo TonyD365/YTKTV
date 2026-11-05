@@ -809,6 +809,10 @@ class MainWindow(QMainWindow):
             self.mv_window.add_sung_pitch(payload["position"], payload["note"])
         elif topic == "score":
             self.mv_window.show_score(payload)
+            if self.ctx.room_client is not None:  # for the desk's lobby board
+                self.ctx.room_client.score(
+                    int(payload["points"]), str(payload["title"]), str(payload.get("singer") or "")
+                )
             self.show_toast(f"Score: {payload['points']}  ·  {payload['grade']}")
         elif topic == "game":
             self.mv_window.show_game(payload)

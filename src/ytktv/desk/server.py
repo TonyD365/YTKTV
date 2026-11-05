@@ -162,6 +162,15 @@ def receive(store: DeskStore, room_id: str, message: dict[str, Any]) -> None:
         return
     if kind == "heartbeat":
         store.note_song(room_id, str(message.get("song", "")))
+    elif kind == "score":
+        points = message.get("points")
+        if isinstance(points, int) and 0 <= points <= 100:
+            store.add_score(
+                room_id,
+                points,
+                str(message.get("title", ""))[:80],
+                str(message.get("singer", ""))[:40],
+            )
     elif kind == "call":
         store.add_call(room_id, str(message.get("kind", "Other")), str(message.get("note", "")))
     elif kind == "order":

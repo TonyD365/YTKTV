@@ -210,3 +210,8 @@ are sent when the Desk is back. Closed rooms stay closed.
 
 **Can the Desk computer also be a room?** Run YTKTV Desk on its own computer; any other computer
 can be a room.
+
+## Lobby screen
+
+**Settings → Lobby Screen** shows the rooms on a TV outside the desk: free rooms, when busy
+rooms come free, today's bookings and **tonight's best** scores from every room.

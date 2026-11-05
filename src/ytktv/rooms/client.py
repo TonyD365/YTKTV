@@ -51,6 +51,12 @@ class RoomClient:
         """Ask for the staff. False when this room is not open."""
         return self._post({"type": "call", "kind": kind[:40], "note": note[:200]})
 
+    def score(self, points: int, title: str, singer: str) -> bool:
+        """Tell the desk a song's score, for the lobby's board of tonight's best."""
+        return self._post(
+            {"type": "score", "points": int(points), "title": title[:80], "singer": singer[:40]}
+        )
+
     def order(self, items: list[tuple[int, int]]) -> bool:
         wanted = [{"product_id": p, "qty": q} for p, q in items if q > 0]
         return bool(wanted) and self._post({"type": "order", "items": wanted})
