@@ -14,7 +14,20 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; }
   body {
-    background: radial-gradient(1200px 500px at 50% -10%, #3a1a7a 0%, var(--bg) 60%) fixed;
+    /* The console's night sky: tiny stars over magenta, violet and teal glows. */
+    background:
+      radial-gradient(1px 1px at 12% 18%, #fff9, transparent),
+      radial-gradient(1px 1px at 68% 9%, #fffa, transparent),
+      radial-gradient(1.5px 1.5px at 40% 36%, #fff8, transparent),
+      radial-gradient(1px 1px at 86% 44%, #fff9, transparent),
+      radial-gradient(1px 1px at 22% 62%, #fff7, transparent),
+      radial-gradient(1.5px 1.5px at 58% 74%, #fff9, transparent),
+      radial-gradient(1px 1px at 92% 86%, #fff8, transparent),
+      radial-gradient(1px 1px at 6% 90%, #fff7, transparent),
+      radial-gradient(60% 40% at 10% 95%, #ff3d9a33, transparent),
+      radial-gradient(70% 45% at 55% 30%, #8b5cff40, transparent),
+      radial-gradient(55% 40% at 95% 75%, #2ee6ff22, transparent),
+      #0a0518 fixed;
     color: var(--text); font: 16px/1.4 -apple-system, "Segoe UI", Roboto, "PingFang SC", sans-serif;
     display: flex; flex-direction: column;
   }
@@ -32,10 +45,15 @@
   section { display: none; } section.active { display: block; }
   nav { display: flex; background: #0a0518; border-top: 1px solid var(--line);
     padding-bottom: env(safe-area-inset-bottom); }
-  nav button { flex: 1; background: none; border: 0; color: var(--muted); padding: 12px 0 10px;
-    font-size: 13px; font-weight: 700; letter-spacing: 1px; }
-  nav button.active { color: var(--pink); box-shadow: inset 0 3px 0 var(--pink); }
+  nav button { flex: 1; background: none; border: 0; color: var(--muted); padding: 8px 0 8px;
+    font-size: 11px; font-weight: 800; letter-spacing: 1px; display: flex; flex-direction: column;
+    align-items: center; gap: 3px; }
+  nav button img.ic { height: 24px; width: 24px; margin: 0; opacity: .6; }
+  nav button.active { color: #fff; box-shadow: inset 0 3px 0 var(--pink);
+    background: linear-gradient(180deg, #ff3d9a33, transparent); }
+  nav button.active img.ic { opacity: 1; }
   .badge { background: var(--pink); color: #fff; border-radius: 10px; padding: 0 7px; font-size: 11px; margin-left: 4px; }
+  nav button { position: relative; } nav .badge { position: absolute; top: 4px; left: calc(50% + 6px); margin: 0; }
   form.search { display: flex; gap: 8px; margin: 8px 0 12px; }
   input[type=text], input[type=search] { flex: 1; min-width: 0; background: var(--panel); color: var(--text);
     border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 16px; outline: none; }
@@ -71,10 +89,19 @@
   h3 { font-size: 12px; letter-spacing: 2px; color: var(--cyan); text-transform: uppercase; margin: 16px 0 8px; }
   /* minmax(0, ...): a long label wraps instead of widening the page past the screen. */
   .pad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .pad button { background: var(--panel); border: 1px solid var(--line); color: var(--text);
-    border-radius: 14px; padding: 16px 4px; font-weight: 800; font-size: 14px; }
+  /* Big glossy tiles, each in its own colour like the console's home page. */
+  .pad button { --tile: #534ab7; color: #fff; border: 1px solid #ffffff59; border-radius: 16px;
+    padding: 18px 4px; font-weight: 800; font-size: 14px; min-height: 64px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--tile) 70%, #fff) 0%, var(--tile) 50%,
+      color-mix(in srgb, var(--tile) 80%, #000) 100%); }
+  .pad button:nth-child(6n+1) { --tile: #d4537e; } .pad button:nth-child(6n+2) { --tile: #7f77dd; }
+  .pad button:nth-child(6n+3) { --tile: #1d9e75; } .pad button:nth-child(6n+4) { --tile: #ba7517; }
+  .pad button:nth-child(6n+5) { --tile: #378add; } .pad button:nth-child(6n+6) { --tile: #993556; }
+  .pad button img.ic { display: block; height: 26px; width: 26px; margin: 0 auto 4px; }
   .pad button.on { background: linear-gradient(135deg, var(--pink), var(--purple)); border-color: transparent; }
   .pad button.wide { grid-column: span 3; }
+  #glow-start { width: 100%; color: #fff; border: 1px solid #ffffff59; border-radius: 16px; padding: 14px;
+    font-weight: 800; background: linear-gradient(180deg, #5fe9ff, #1f8fd6 55%, #1b5fa8); }
   .game-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .game-cards button { text-align: left; border: 0; border-radius: 16px; padding: 14px; color: #fff;
     min-height: 92px; font-weight: 800; font-size: 16px; }
@@ -243,11 +270,11 @@
 </main>
 
 <nav>
-  <button data-tab="search" class="active">SEARCH</button>
-  <button data-tab="queue">QUEUE<span class="badge" id="count">0</span></button>
-  <button data-tab="lists">LISTS</button>
-  <button data-tab="remote">REMOTE</button>
-  <button data-tab="games">GAMES</button>
+  <button data-tab="search" class="active"><img class="ic" src="/icons/search.svg" alt="">SEARCH</button>
+  <button data-tab="queue"><img class="ic" src="/icons/mic.svg" alt="">QUEUE<span class="badge" id="count">0</span></button>
+  <button data-tab="lists"><img class="ic" src="/icons/list.svg" alt="">LISTS</button>
+  <button data-tab="remote"><img class="ic" src="/icons/sliders.svg" alt="">REMOTE</button>
+  <button data-tab="games"><img class="ic" src="/icons/dice.svg" alt="">GAMES</button>
 </nav>
 <div id="toast"></div>
 
