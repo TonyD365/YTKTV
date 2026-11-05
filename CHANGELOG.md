@@ -3,6 +3,18 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 3.2.1
+
+### 🛎 YTKTV Desk
+- **The 3.x look comes to the Desk**: the same night sky as the console behind see-through panels, and glossy room tiles in the usual status colours.
+- **Fix**: the Maintenance / Back in Service button no longer shows a system emoji next to its icon.
+
+### 📖 Docs
+- The Desk screenshot in the README shows the new look.
+
+### ✅ Works with older versions
+Only how the Desk looks has changed: it works with rooms of any 3.x version, and nothing needs setting up again.
+
 ## 3.2.0
 
 The TV and the phones now match the console's 3.0 look.
