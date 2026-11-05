@@ -76,6 +76,9 @@ def main() -> int:
 
     app = QApplication(sys.argv[:1])
     app.setApplicationName("YTKTV Desk")
+    from ytktv.ui import icons
+
+    icons.install(app)  # our own icons instead of system emoji, everywhere
     from PySide6.QtGui import QIcon
 
     from ytktv.desk.window import ICON

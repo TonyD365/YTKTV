@@ -210,3 +210,11 @@ def test_phone_switches_mood_scene(client):
     assert http.post("/api/sound", json={"scene": "chill"}).json()["scene"] == "chill"
     assert http.post("/api/sound", json={"scene": ""}).json()["scene"] == ""
     assert http.post("/api/sound", json={"scene": "nope"}).json()["scene"] == ""
+
+
+def test_phone_page_gets_our_icons(client):
+    http, _controller = client
+    svg = http.get("/icons/mic.svg")
+    assert svg.status_code == 200 and svg.headers["content-type"].startswith("image/svg+xml")
+    assert http.get("/icons/nope.svg").status_code == 404
+    assert '"🎤": "mic"' in http.get("/icons.js").text

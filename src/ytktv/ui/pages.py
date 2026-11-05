@@ -209,7 +209,16 @@ class SearchPage(Page):
         button.setMinimumWidth(120)
         button.clicked.connect(self.search)
         row.addWidget(button)
+        keys = QPushButton("Keyboard")
+        keys.setCheckable(True)
+        keys.setMinimumHeight(50)
+        keys.setToolTip("An on-screen keyboard for a touch screen; initials work: yldb")
+        row.addWidget(keys)
         self.body.addLayout(row)
+        self.keyboard = self._keyboard()
+        self.keyboard.setVisible(False)
+        keys.toggled.connect(self.keyboard.setVisible)
+        self.body.addWidget(self.keyboard)
 
         # Suggestions appear under the box while typing, after a short pause.
         self._suggestions = QStringListModel(self)
@@ -313,6 +322,34 @@ class SearchPage(Page):
     def search_for(self, query: str) -> None:
         self.input.setText(query)
         self.search()
+
+    def _keyboard(self) -> QWidget:
+        """Big letter keys, as on a KTV song machine: tap the initials of a song."""
+        board = QWidget()
+        board.setObjectName("keyboard")
+        grid = QGridLayout(board)
+        grid.setContentsMargins(0, 4, 0, 4)
+        grid.setSpacing(6)
+        rows = ("1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM")
+        for r, keys in enumerate(rows):
+            for c, key in enumerate(keys):
+                button = QPushButton(key)
+                button.setObjectName("key")
+                button.setMinimumHeight(44)
+                button.clicked.connect(lambda _c=False, k=key: self._type(k.lower()))
+                grid.addWidget(button, r, c + (r == 2) + (r == 3) * 2)
+        for text, action, row, column, span in (("⌫", "", 0, 10, 1), ("Space", " ", 3, 9, 2)):
+            button = QPushButton(text)
+            button.setObjectName("key")
+            button.setMinimumHeight(44)
+            button.clicked.connect(lambda _c=False, a=action: self._type(a))
+            grid.addWidget(button, row, column, 1, span)
+        return board
+
+    def _type(self, key: str) -> None:
+        text = self.input.text()
+        self.input.setText(text + key if key else text[:-1])
+        self._typing.start()
 
     def search(self) -> None:
         query = self.input.text().strip()

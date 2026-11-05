@@ -415,6 +415,9 @@ def main() -> None:
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     app = QApplication(sys.argv[:1])
+    from ytktv.ui import icons
+
+    icons.install(app)
     from ytktv.ui import theme
 
     app.setStyleSheet(theme.STYLESHEET)

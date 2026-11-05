@@ -26,7 +26,8 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 
 from ytktv.core.scenes import Scene
-from ytktv.ui import theme
+from ytktv.icon_set import split
+from ytktv.ui import icons, theme
 from ytktv.youtube.lyrics import (
     PART_A,
     PART_B,
@@ -156,6 +157,25 @@ class _TextSprite:
     def draw(self, painter: QPainter, x: float, baseline: float) -> None:
         """Paint with the text starting at *x* on *baseline*."""
         painter.drawPixmap(QPointF(x - self._pad, baseline - self._pad - self._ascent), self.pixmap)
+
+
+class _IconSprite:
+    """One of our icons, drawn once; painted like a _TextSprite of the same size."""
+
+    def __init__(self, pixmap: QPixmap, ratio: float) -> None:
+        pixmap.setDevicePixelRatio(ratio)
+        self.pixmap = pixmap
+        self.width = pixmap.width() / ratio
+
+    def draw(self, painter: QPainter, x: float, baseline: float) -> None:
+        painter.drawPixmap(QPointF(x, baseline - self.width * 0.85), self.pixmap)
+
+
+# Each reaction flies across the MV screen in its own colour.
+REACTION_COLOURS = {
+    "heart": "#ff4f8b", "fire": "#ff8a3d", "clap": "#ffc94d", "party": "#2ee6ff",
+    "rose": "#ff3355", "laugh": "#ffd84d", "hundred": "#ff3d5a", "beers": "#ffb02e",
+}  # fmt: skip
 
 
 @dataclass(slots=True)
@@ -436,14 +456,20 @@ class ReactionOverlay(_Overlay):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._items: list[dict[str, Any]] = []
-        self._sprites: dict[tuple[str, int, float], _TextSprite] = {}
+        self._sprites: dict[tuple[str, int, float], _TextSprite | _IconSprite] = {}
 
     def active(self) -> bool:
         return bool(self._items)
 
-    def _sprite(self, emoji: str) -> _TextSprite:
+    def _sprite(self, emoji: str) -> _TextSprite | _IconSprite:
         size = max(24, int(self.height() * 0.07))
         key = (emoji, size, self.devicePixelRatioF())
+        name, _rest = split(emoji)
+        if name is not None and key not in self._sprites:  # our own icon, in its colour
+            colour = REACTION_COLOURS.get(name, "#ffffff")
+            self._sprites[key] = _IconSprite(
+                icons.pixmap(name, colour, round(size * key[2])), key[2]
+            )
         if key not in self._sprites:
             font = QFont()
             font.setPixelSize(size)

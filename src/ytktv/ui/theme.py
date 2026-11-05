@@ -21,7 +21,7 @@ STYLESHEET = f"""
 * {{ font-family: "SF Pro Display", "Segoe UI", "Helvetica Neue", "PingFang SC",
      "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }}
 QWidget {{ color: {TEXT}; font-size: 14px; }}
-QMainWindow, #root {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+QMainWindow {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
     stop:0 #1b0b3d, stop:0.5 {BG}, stop:1 #07101f); }}
 QToolTip {{ background: #000; color: {TEXT}; border: 1px solid {CYAN}; padding: 4px 8px; }}
 
@@ -44,10 +44,13 @@ QProgressBar::chunk {{ border-radius: 3px;
     font-size: 15px; font-weight: 700; color: {MUTED}; background: transparent; }}
 #navBar QPushButton:hover {{ color: {TEXT}; background: rgba(139, 92, 255, 0.15); }}
 #navBar QPushButton:checked {{ color: {TEXT}; border-bottom: 4px solid {PINK}; }}
-#tile {{ border: none; border-radius: 18px; color: white; font-size: 22px; font-weight: 800;
-    padding: 14px; text-align: center; }}
+#tile {{ border-radius: 18px; color: white; font-size: 22px; font-weight: 800; padding: 14px; }}
 #tile:hover {{ border: 3px solid white; }}
 #tile:pressed {{ padding-top: 17px; }}
+#key {{ font-size: 20px; font-weight: 800; border-radius: 10px; color: {TEXT};
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3b2a6e, stop:1 #1c1240);
+    border: 1px solid {PINK}; }}
+#key:pressed {{ background: {PINK}; }}
 #reaction {{ font-size: 22px; padding: 6px 0; border-radius: 12px; }}
 #homeNow {{ background: {PANEL}; border: 1px solid {LINE}; border-radius: 18px; }}
 #homeCover {{ background: #000; border-radius: 12px; }}
