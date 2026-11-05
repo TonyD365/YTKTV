@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QGridLayout,
@@ -20,6 +23,25 @@ from ytktv.rooms.client import RoomClient
 KINDS = ("Drinks", "Snacks", "Equipment problem", "Other")
 MENU_KINDS = ("Drinks", "Snacks")  # not needed as calls once the menu can be ordered from
 MAX_QTY = 20
+
+
+def menu_picture(jpeg: str, side: int = 56) -> QLabel | None:
+    """The item's picture from the staff terminal, or None when it has none."""
+    image = QPixmap()
+    if not jpeg or not image.loadFromData(base64.b64decode(jpeg, validate=False), "JPEG"):
+        return None
+    label = QLabel()
+    label.setPixmap(
+        image.scaled(
+            side,
+            side,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+    )
+    label.setFixedSize(side, side)
+    label.setStyleSheet("border-radius: 8px;")
+    return label
 
 
 class Stepper(QWidget):
@@ -88,7 +110,7 @@ class ServiceDialog(QDialog):
         holder = QWidget()
         grid = QGridLayout(holder)
         grid.setAlignment(Qt.AlignmentFlag.AlignTop)
-        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
         self.quantities: dict[int, Stepper] = {}
         row = 0
         category = None
@@ -97,13 +119,18 @@ class ServiceDialog(QDialog):
                 category = item.get("category") or ""
                 heading = QLabel(category or "Other")
                 heading.setObjectName("caption")
-                grid.addWidget(heading, row, 0, 1, 2)
+                grid.addWidget(heading, row, 0, 1, 3)
                 row += 1
             name = QLabel(f"{item['name']}  ·  {client.currency}{float(item['price']):g}")
             name.setWordWrap(True)
             qty = Stepper()
-            grid.addWidget(name, row, 0)
-            grid.addWidget(qty, row, 1)
+            picture = menu_picture(str(item.get("picture") or ""))
+            if picture is not None:
+                grid.addWidget(picture, row, 0)
+                grid.addWidget(name, row, 1)
+            else:
+                grid.addWidget(name, row, 0, 1, 2)
+            grid.addWidget(qty, row, 2)
             self.quantities[int(item["product_id"])] = qty
             row += 1
         if not client.products:

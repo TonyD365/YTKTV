@@ -61,6 +61,10 @@ for drinks, snacks, help with the equipment or anything else, or to order from t
 Desk beeps, the room's tile turns pink and the call appears in the bar at the bottom. Click it
 when someone is on the way: the room is told **Staff is on the way**.
 
+Each item on the menu can have a picture: in **Settings → Menu and Prices**, press **Choose…**
+in its Picture column. The picture is made small and shown next to the item on the rooms'
+consoles and on the guests' phones; choose it again to change it.
+
 When a product on the menu runs low, it shows in the same bar ("📦 Cola: 2 left", or "sold
 out"). Click it to go to Settings and restock. **Settings → Shop → Warn when stock is down to**
 sets the number (5 at first; 0 turns the warnings off).

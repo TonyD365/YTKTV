@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import base64
 import time
 from collections.abc import Callable
 
-from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QTextDocument
+from PySide6.QtCore import QBuffer, QByteArray, QEvent, QIODevice, QObject, QSize, Qt
+from PySide6.QtGui import QIcon, QImage, QPixmap, QTextDocument
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
@@ -360,10 +361,25 @@ class OnMenu(QCheckBox):
         self.setText("On menu" if on else "Hidden")
 
 
+def picture_jpeg(path: str, side: int = 160) -> str:
+    """A picture file made small and square-ish for a menu: base64 JPEG, or "" if unreadable."""
+    image = QImage(path)
+    if image.isNull():
+        return ""
+    image = image.scaled(
+        side, side, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+    )
+    data = QByteArray()
+    buffer = QBuffer(data)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    image.save(buffer, "JPEG", 80)  # type: ignore[call-overload]  # str works at runtime
+    return base64.b64encode(bytes(data.data())).decode()
+
+
 class ShopSettings(QFrame):
     """The menu rooms can order from, and how rooms are charged."""
 
-    COLUMNS = ("Name", "Category", "Price", "Stock", "On menu")
+    COLUMNS = ("Name", "Category", "Price", "Stock", "On menu", "Picture")
 
     def __init__(self, store: DeskStore, changed: object = None) -> None:
         super().__init__()
@@ -458,6 +474,7 @@ class ShopSettings(QFrame):
         self.load()
 
     def load(self) -> None:
+        self._pictures = self.store.product_pictures()
         products = self.store.products()
         self.table.setRowCount(0)
         for product in products:
@@ -475,6 +492,48 @@ class ShopSettings(QFrame):
         stock.setToolTip("Leave empty if it never runs out")
         self.table.setItem(row, 3, stock)
         self.table.setCellWidget(row, 4, OnMenu(product.active))
+        picture = QPushButton()
+        picture.setToolTip("Choose a picture of this item, shown on the rooms' menus")
+        picture.clicked.connect(lambda _c=False, b=picture: self.choose_picture(b))
+        self.table.setCellWidget(row, 5, picture)
+        self._show_picture(picture, self._pictures.get(str(product.product_id), ""))
+
+    @staticmethod
+    def _show_picture(button: QPushButton, jpeg: str) -> None:
+        if jpeg:
+            image = QPixmap()
+            image.loadFromData(base64.b64decode(jpeg), "JPEG")
+            button.setIcon(QIcon(image))
+            button.setIconSize(QSize(34, 34))
+            button.setText("")
+        else:
+            button.setIcon(QIcon())
+            button.setText("Choose…")
+
+    def choose_picture(self, button: QPushButton, path: str | None = None) -> None:
+        """Pick a picture for the item in the button's row; an empty choice removes it."""
+        row = next(
+            (r for r in range(self.table.rowCount()) if self.table.cellWidget(r, 5) is button), -1
+        )
+        if row < 0:
+            return
+        if path is None:
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Picture of the item", "", "Pictures (*.png *.jpg *.jpeg *.webp *.bmp)"
+            )
+            if not path:
+                return
+        self.save()  # a new item needs its id first
+        item = self.table.item(row, 0)
+        product_id = int(item.data(Qt.ItemDataRole.UserRole) or 0) if item else 0
+        if not product_id:
+            return
+        jpeg = picture_jpeg(path) if path else ""
+        self.store.set_product_picture(product_id, jpeg)
+        self._pictures[str(product_id)] = jpeg
+        self._show_picture(button, jpeg)
+        if callable(self.changed):
+            self.changed()
 
     def add_row(self) -> None:
         self._row(Product(0, "New item", "Drinks", 0.0))
