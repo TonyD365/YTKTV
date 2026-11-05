@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import QPointF, QRect, QRectF, QSizeF, Qt
+from PySide6.QtCore import QPointF, QRect, QRectF, QSizeF, Qt, QTimer
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -804,3 +804,70 @@ class ScoreCard(_Overlay):
             _outlined_text(painter, font, label, QPointF(left, y), colour)
             font, width = sized(h * 0.055, QFont.Weight.Black, points, w * 0.2)
             _outlined_text(painter, font, points, QPointF(right - width, y), colour)
+
+
+class Celebration(_Overlay):
+    """Confetti bursting up and drifting down over the whole MV, after a great score."""
+
+    COLOURS = ("#ff3d9a", "#2ee6ff", "#ffc94d", "#8b5cff", "#5dffb0", "#ffffff")
+    SECONDS = 4.0
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._pieces: list[list[float]] = []  # x, y, dx, dy, spin, angle, colour, size
+        self._left = 0.0
+        self._timer = QTimer(self)
+        self._timer.setInterval(33)
+        self._timer.timeout.connect(self._step)
+
+    def burst(self, amount: int = 160) -> None:
+        w, h = float(self.width()), float(self.height())
+        pick = random.Random()
+        self._pieces = [
+            [
+                pick.uniform(0.15, 0.85) * w,  # from the bottom, like party poppers
+                h + pick.uniform(0, 40),
+                pick.uniform(-0.25, 0.25) * w,
+                -pick.uniform(0.9, 1.5) * h,
+                pick.uniform(-6, 6),
+                pick.uniform(0, 6.3),
+                float(pick.randrange(len(self.COLOURS))),
+                pick.uniform(0.008, 0.016) * h,
+            ]
+            for _ in range(amount)
+        ]
+        self._left = self.SECONDS
+        self.show()
+        self.raise_()
+        self._timer.start()
+
+    def _step(self) -> None:
+        dt = 0.033
+        self._left -= dt
+        h = float(self.height())
+        for piece in self._pieces:
+            piece[3] += h * 1.6 * dt  # gravity
+            piece[3] *= 0.985  # air
+            piece[0] += piece[2] * dt
+            piece[1] += piece[3] * dt
+            piece[5] += piece[4] * dt
+        if self._left <= 0:
+            self._timer.stop()
+            self.hide()
+        self.update()
+
+    def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 (Qt)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        fade = min(1.0, self._left / 0.8)
+        for x, y, _dx, _dy, _spin, angle, colour, size in self._pieces:
+            painter.save()
+            painter.translate(x, y)
+            painter.rotate(math.degrees(angle))
+            tint = QColor(self.COLOURS[int(colour)])
+            tint.setAlphaF(fade)
+            painter.setBrush(tint)
+            # A strip that flips as it turns: its width follows the spin.
+            painter.drawRect(QRectF(-size / 2, -size * abs(math.cos(angle)) / 2, size, size * 0.5))
+            painter.restore()

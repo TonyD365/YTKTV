@@ -36,6 +36,7 @@ from ytktv.ui.level_hud import LevelHud
 from ytktv.ui.mv_overlays import (
     BOARD_HEAD,
     BOARD_ROW,
+    Celebration,
     DanmakuOverlay,
     EdgeLight,
     LightShow,
@@ -227,6 +228,9 @@ class TransportBadge(QWidget):
             )
 
 
+CELEBRATE_FROM = 90  # a score this high gets confetti over the MV
+
+
 class MvWindow(QWidget):
     closed = Signal()
 
@@ -263,6 +267,7 @@ class MvWindow(QWidget):
         self.danmaku = DanmakuOverlay(self)
         self.reactions = ReactionOverlay(self)
         self.level_hud = LevelHud(self)
+        self.celebration = Celebration(self)
         self.score_card = ScoreCard(self)
         self.game_card = QLabel(self)
         self.game_card.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -294,6 +299,7 @@ class MvWindow(QWidget):
         if self.video is not None:
             self.video.setGeometry(self.rect())
         self.idle.setGeometry(self.rect())
+        self.celebration.setGeometry(self.rect())
         self._place_banner()
         self._place_badge()
         w, h = self.width(), self.height()
@@ -465,6 +471,8 @@ class MvWindow(QWidget):
             int(score["points"]), grade, caption, int(score.get("rank") or 0), board
         )
         self._place_score_card()
+        if int(score["points"]) >= CELEBRATE_FROM or int(score.get("rank") or 0) == 1:
+            self.celebration.burst()  # a great song, or tonight's best: confetti
         fade_in(self.score_card, 400)
         self.score_card.raise_()
         self._score_timer.start(9000 if len(board) > 1 else 7000)

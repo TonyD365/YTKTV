@@ -37,7 +37,7 @@ STYLE = """
 def describe(
     rooms: list[Room], status: Callable[[Room], str], bookings: list[Booking], now: float
 ) -> tuple[list[str], list[str], list[str]]:
-    """Lines for the three columns: free rooms, rooms in use, today's bookings."""
+    """Lines for the first three columns: free rooms, rooms in use, today's bookings."""
     names = {room.room_id: room.name for room in rooms}
     free, busy = [], []
     for room in sorted(rooms, key=lambda r: r.name):
@@ -81,7 +81,7 @@ class LobbyWindow(QWidget):
         row = QHBoxLayout()
         row.setSpacing(28)
         self.columns: list[QLabel] = []
-        for text in ("FREE NOW", "IN USE", "BOOKED TODAY"):
+        for text in ("FREE NOW", "IN USE", "BOOKED TODAY", "TONIGHT'S BEST"):
             card = QFrame()
             card.setObjectName("card")
             box = QVBoxLayout(card)
@@ -98,10 +98,13 @@ class LobbyWindow(QWidget):
             self.columns.append(body)
         page.addLayout(row, stretch=1)
 
-    def fill(self, free: list[str], busy: list[str], booked: list[str]) -> None:
+    def fill(
+        self, free: list[str], busy: list[str], booked: list[str], best: list[str] | None = None
+    ) -> None:
         self.clock.setText(time.strftime("%H:%M"))
-        empty = ("All rooms are taken", "—", "No more bookings today")
-        for label, lines, nothing in zip(self.columns, (free, busy, booked), empty, strict=True):
+        empty = ("All rooms are taken", "—", "No more bookings today", "Sing to get on the board!")
+        columns = (free, busy, booked, best or [])
+        for label, lines, nothing in zip(self.columns, columns, empty, strict=True):
             label.setText("<br>".join(escape(line) for line in lines[:12]) or escape(nothing))
 
     def place(self, screen_index: int) -> None:
@@ -202,4 +205,9 @@ class Lobby:
         now = time.time()
         start = time.mktime(time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1))
         bookings = self.store.bookings(start, start + 86400, live_only=True)
-        self.window.fill(*describe(rooms, status, bookings, now))
+        names = {room.room_id: room.name for room in rooms}
+        best = [
+            f"{points} · {singer or names.get(room_id, '?')} · {title[:24]}"
+            for points, title, singer, room_id in self.store.top_scores(start, start + 86400)
+        ]
+        self.window.fill(*describe(rooms, status, bookings, now), best)

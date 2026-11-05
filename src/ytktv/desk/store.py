@@ -749,6 +749,28 @@ class DeskStore:
             self._db.execute("DELETE FROM product_pictures WHERE product_id=?", (product_id,))
             self._db.commit()
 
+    def add_score(
+        self, room_id: str, points: int, title: str, singer: str, now: float | None = None
+    ) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO scores (room_id, points, title, singer, at) VALUES (?, ?, ?, ?, ?)",
+                (room_id, points, title, singer, time.time() if now is None else now),
+            )
+            self._db.commit()
+
+    def top_scores(
+        self, start: float, end: float, limit: int = 5
+    ) -> list[tuple[int, str, str, str]]:
+        """The best scores between start and end: (points, title, singer, room id)."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT points, title, singer, room_id FROM scores WHERE at>=? AND at<?"
+                " ORDER BY points DESC, at LIMIT ?",
+                (start, end, limit),
+            ).fetchall()
+        return [(int(p), str(t), str(s), str(r)) for p, t, s, r in rows]
+
     def set_product_picture(self, product_id: int, jpeg: str) -> None:
         """A small JPEG of the item, base64-encoded; "" removes it."""
         with self._lock:
@@ -985,6 +1007,13 @@ def _call_handled_at(db: sqlite3.Connection) -> None:
     db.execute("ALTER TABLE calls ADD COLUMN handled REAL")
 
 
+def _scores(db: sqlite3.Connection) -> None:
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS scores (id INTEGER PRIMARY KEY, room_id TEXT NOT NULL,"
+        " points INTEGER NOT NULL, title TEXT NOT NULL, singer TEXT NOT NULL, at REAL NOT NULL)"
+    )
+
+
 def _product_pictures(db: sqlite3.Connection) -> None:
     # Kept apart from products, which are saved with INSERT OR REPLACE.
     db.execute(
@@ -1001,5 +1030,6 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _room_local_folders,
     _call_handled_at,
     _product_pictures,
+    _scores,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
