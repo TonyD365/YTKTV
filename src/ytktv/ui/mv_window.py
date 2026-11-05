@@ -31,7 +31,7 @@ from PySide6.QtWidgets import QLabel, QWidget
 
 from ytktv.core.scenes import SCENES
 from ytktv.player.mpv_player import MpvPlayer
-from ytktv.ui import theme
+from ytktv.ui import backdrop, theme
 from ytktv.ui.level_hud import LevelHud
 from ytktv.ui.mv_overlays import (
     BOARD_HEAD,
@@ -123,6 +123,7 @@ class IdleCard(QWidget):
         super().__init__(parent)
         self._url = ""
         self._qr: QPixmap | None = None
+        self._sky = QPixmap(backdrop.path())
 
     def set_url(self, url: str) -> None:
         self._url = url
@@ -133,11 +134,7 @@ class IdleCard(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
-        background = QLinearGradient(0, 0, w, h)
-        background.setColorAt(0.0, QColor("#2a0f5e"))
-        background.setColorAt(0.5, QColor(theme.BG))
-        background.setColorAt(1.0, QColor("#04202e"))
-        painter.fillRect(self.rect(), background)
+        painter.drawPixmap(self.rect(), self._sky)  # the console's night sky
 
         unit = h / 100.0
         logo = QFont()
@@ -158,7 +155,7 @@ class IdleCard(QWidget):
         painter.setFont(body)
         painter.setPen(QColor(theme.TEXT))
         painter.drawText(
-            QRectF(0, unit * 33, w, unit * 7),
+            QRectF(0, unit * 31, w, unit * 7),
             Qt.AlignmentFlag.AlignCenter,
             "Scan with your phone to pick a song",
         )
@@ -166,6 +163,14 @@ class IdleCard(QWidget):
         if self._qr is not None:
             side = unit * 36
             x, y = (w - side) / 2, unit * 43
+            # A glass panel with a pink-to-cyan glowing edge, like a KTV touch screen.
+            frame = QRectF(x - unit * 3, y - unit * 3, side + unit * 6, side + unit * 6)
+            edge = QLinearGradient(frame.topLeft(), frame.bottomRight())
+            edge.setColorAt(0.0, QColor(theme.PINK))
+            edge.setColorAt(1.0, QColor(theme.CYAN))
+            painter.setPen(QPen(QBrush(edge), unit * 0.6))
+            painter.setBrush(QColor(255, 255, 255, 28))
+            painter.drawRoundedRect(frame, unit * 3, unit * 3)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor("white"))
             painter.drawRoundedRect(
@@ -325,8 +330,11 @@ class MvWindow(QWidget):
     def _place_banner(self) -> None:
         unit = max(1.0, self.height() / 100.0)
         self.banner.setStyleSheet(
-            "background: rgba(8, 4, 20, 0.78); color: white; font-weight: 800;"
-            f"border: {max(1, int(unit * 0.25))}px solid {theme.PINK};"
+            # A glossy pill: pink to violet, lighter at the top, with a bright edge.
+            "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255, 92, 170, 0.92),"
+            " stop:0.5 rgba(170, 60, 200, 0.88), stop:1 rgba(90, 40, 170, 0.9));"
+            " color: white; font-weight: 800;"
+            f"border: {max(1, int(unit * 0.25))}px solid rgba(255, 255, 255, 0.55);"
             f"border-radius: {int(unit * 1.6)}px; padding: {int(unit * 1.1)}px {int(unit * 2.4)}px;"
             f"font-size: {int(unit * 3.2)}px;"
         )
