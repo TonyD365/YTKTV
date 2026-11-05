@@ -72,6 +72,10 @@ sets the number (5 at first; 0 turns the warnings off).
 Orders appear in the room's panel. Mark them **Delivered** or **Cancel** them (cancelled items go
 back into stock). **🛒 Add Item** adds something the guests ordered at the counter.
 
+A call that waits longer than a set time (3 minutes unless you change it in **Settings →
+Service Calls**) turns bright red in the call bar, shows how long it has waited and beeps
+again. The shift report counts the calls and how many of them waited too long.
+
 ## Checking out: the till
 
 **💳 Check Out** opens the bill:

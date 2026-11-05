@@ -781,6 +781,32 @@ class ReceiptSettings(QFrame):
         self.store.set_setting("receipt_copies", str(self.copies.value()))
 
 
+class CallSettings(QFrame):
+    """How long a service call may wait before it turns red and beeps again."""
+
+    def __init__(self, store: DeskStore) -> None:
+        super().__init__()
+        self.setObjectName("panel")
+        column = QVBoxLayout(self)
+        column.setContentsMargins(24, 20, 24, 20)
+        head = QLabel("SERVICE CALLS")
+        head.setObjectName("panelHead")
+        row = QHBoxLayout()
+        row.addWidget(QLabel("A call waiting longer than"))
+        self.minutes = QSpinBox()
+        self.minutes.setRange(1, 30)
+        self.minutes.setSuffix(" min")
+        self.minutes.setValue(store.overdue_minutes())
+        self.minutes.valueChanged.connect(
+            lambda value: store.set_setting("call_overdue_minutes", str(value))
+        )
+        row.addWidget(self.minutes)
+        row.addWidget(QLabel("turns red, beeps again and counts as late in the shift report."))
+        row.addStretch()
+        column.addWidget(head)
+        column.addLayout(row)
+
+
 class UpdateSettings(QFrame):
     """The desk's version, whether it updates itself, and a button to check right now."""
 

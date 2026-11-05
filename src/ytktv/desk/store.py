@@ -839,11 +839,31 @@ class DeskStore:
             ).fetchall()
         return [Call(*row) for row in rows]
 
-    def finish_call(self, call_id: int) -> str | None:
+    def overdue_minutes(self) -> int:
+        """A call still waiting after this many minutes turns red and beeps again."""
+        try:
+            return max(1, int(self.setting("call_overdue_minutes", "3")))
+        except ValueError:
+            return 3
+
+    def late_calls(self, start: float, end: float) -> tuple[int, int]:
+        """Calls made between start and end: how many, and how many waited too long."""
+        limit = self.overdue_minutes() * 60
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT created, handled FROM calls WHERE created>=? AND created<?", (start, end)
+            ).fetchall()
+        late = sum(1 for created, handled in rows if (handled or end) - created > limit)
+        return len(rows), late
+
+    def finish_call(self, call_id: int, now: float | None = None) -> str | None:
         """Mark a call handled; returns its room."""
         with self._lock:
             row = self._db.execute("SELECT room_id FROM calls WHERE id=?", (call_id,)).fetchone()
-            self._db.execute("UPDATE calls SET done=1 WHERE id=?", (call_id,))
+            self._db.execute(
+                "UPDATE calls SET done=1, handled=? WHERE id=? AND done=0",
+                (time.time() if now is None else now, call_id),
+            )
             self._db.commit()
         return None if row is None else str(row[0])
 
@@ -961,6 +981,10 @@ def _room_local_folders(db: sqlite3.Connection) -> None:
     db.execute("ALTER TABLE rooms ADD COLUMN local_folders TEXT NOT NULL DEFAULT '[]'")
 
 
+def _call_handled_at(db: sqlite3.Connection) -> None:
+    db.execute("ALTER TABLE calls ADD COLUMN handled REAL")
+
+
 def _product_pictures(db: sqlite3.Connection) -> None:
     # Kept apart from products, which are saved with INSERT OR REPLACE.
     db.execute(
@@ -975,6 +999,7 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _packages_and_coupons,
     _local_only_rooms,
     _room_local_folders,
+    _call_handled_at,
     _product_pictures,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
