@@ -3,6 +3,25 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 3.1.0
+
+### 🎤 YTKTV
+- **Background videos.** Settings → Background Videos (off by default) plays music videos while nobody has chosen a song, like a KTV room before the first song. Play from your favorites and sung songs, or from one playlist. The first song anyone chooses takes over at once; background videos are not scored and not added to Sung.
+- **Confetti for a great song.** A score of 90 or more, or the best of the night, bursts confetti over the MV behind the score card.
+
+### 🛎 YTKTV Desk
+- **Tonight's best on the lobby screen.** Rooms send their scores to the Desk, and the lobby screen shows the five best of the day with the singer and the song.
+- A room's **Admin Settings** can turn background videos on or off.
+
+### 🔧 Under the hood
+- Pull requests run fewer macOS and Windows tests, so checks finish sooner; main still tests everything.
+- The benchmark check measures again before calling something a slowdown.
+
+### ✅ Works with older versions
+- A 3.1 room works with an older Desk, and an older room works with Desk 3.1; older rooms just do not send scores to the lobby board.
+- The Desk's records are upgraded in place the first time it starts; nothing is lost.
+- Background videos stay off until you turn them on.
+
 ## 3.0.0
 
 YTKTV 3.0 has a new look: our own icons everywhere and a console that feels like a KTV touch screen.
