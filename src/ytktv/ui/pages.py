@@ -878,6 +878,31 @@ class SettingsPage(Page):
         low.toggled.connect(self.set_low_power)
         display.addWidget(low)
 
+        # Background videos while nobody sings
+        idle_card = card("Background Videos")
+        idle_note = QLabel(
+            "Like a KTV room before the first song: when nobody has chosen a song, music videos"
+            " play by themselves. The first song anyone chooses takes over at once. Background"
+            " videos are not scored and are not added to Sung."
+        )
+        idle_note.setWordWrap(True)
+        idle_card.addWidget(idle_note)
+        self.idle_box = QCheckBox("Play music videos while nobody is singing")
+        self.idle_box.setChecked(settings.idle_mv)
+        self.idle_box.toggled.connect(lambda on: ctx.controller.set_idle_mv(on))
+        idle_card.addWidget(self.idle_box)
+        self.idle_source = QComboBox()
+        self.idle_source.addItem("Favorites and sung songs", "")
+        for entry in ctx.controller.playlists():
+            self.idle_source.addItem(f"Playlist: {entry['name']}", entry["name"])
+        self.idle_source.setCurrentIndex(max(0, self.idle_source.findData(settings.idle_playlist)))
+        self.idle_source.activated.connect(
+            lambda _i: ctx.controller.set_idle_mv(
+                settings.idle_mv, str(self.idle_source.currentData())
+            )
+        )
+        labelled(idle_card, "Play from", self.idle_source)
+
         # Kids
         kids_card = card("Kids Mode", admin=True)
         kids_note = QLabel(
