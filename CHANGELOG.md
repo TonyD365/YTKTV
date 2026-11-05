@@ -3,6 +3,25 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 3.2.0
+
+The TV and the phones now match the console's 3.0 look.
+
+### 📺 MV screen
+- **Between songs**, the TV shows the console's night sky, with the QR code in a glass panel with a glowing pink-to-cyan edge.
+- The **Now Playing / Up Next** banner is a glossy pink-to-violet pill.
+
+### 📱 Phone page
+- The same **night sky** behind everything.
+- **Tabs with icons**: search, queue, lists, remote and games, with the queue count on the mic.
+- **Big glossy tiles** in the console's colours for playback, vocals, crowd sounds and moods.
+
+### 📖 Docs
+- The README tells why YTKTV was made.
+
+### ✅ Works with older versions
+Only how things look has changed: rooms, the Desk and phones of any 3.x version work together, and nothing needs setting up again.
+
 ## 3.1.0
 
 ### 🎤 YTKTV
