@@ -45,6 +45,7 @@ from ytktv.desk.panels import (
     MAX_PRICE,
     BillDialog,
     BroadcastDialog,
+    CallSettings,
     OrdersBox,
     ReceiptSettings,
     SecuritySettings,
@@ -150,6 +151,7 @@ class DeskWindow(QMainWindow):
         self.terminal = terminal
         self.selected: str | None = None
         self._call_count = 0
+        self._overdue: set[int] = set()
         self._locked: set[str] = set()
         self._reminded: set[int] = set()
         self._calls_shown: list[object] = []
@@ -394,6 +396,8 @@ class DeskWindow(QMainWindow):
         column.addWidget(self.terminals)
         self.updates = UpdateSettings(self.store)
         column.addWidget(self.updates)
+        self.call_settings = CallSettings(self.store)
+        column.addWidget(self.call_settings)
         self.lobby_settings = LobbySettings(self.store, self._lobby_changed)
         column.addWidget(self.lobby_settings)
         return tab
@@ -557,12 +561,20 @@ class DeskWindow(QMainWindow):
 
     def _fill_calls(self, rooms: list[Room]) -> None:
         calls = self.store.calls()
-        if len(calls) > self._call_count:
+        limit = self.store.overdue_minutes() * 60
+        now = time.time()
+        overdue = {c.call_id for c in calls if now - c.created > limit}
+        # A new call beeps, and so does a call the moment it has waited too long.
+        if len(calls) > self._call_count or overdue - self._overdue:
             QApplication.beep()
         self._call_count = len(calls)
+        self._overdue = overdue
         self.stat_calls.setText(str(len(calls)))
         low = self.store.low_stock()
-        shown: list[object] = [c.call_id for c in calls]
+        # Overdue calls show how long they have waited, so redraw when the minute changes.
+        shown: list[object] = [
+            (c.call_id, int(now - c.created) // 60 if c.call_id in overdue else -1) for c in calls
+        ]
         shown += [(p.product_id, p.stock) for p in low]
         if shown == self._calls_shown:
             return
@@ -576,9 +588,12 @@ class DeskWindow(QMainWindow):
         self.calls_label.setVisible(not calls and not low)
         for call in calls[:6]:
             note = f": {call.note}" if call.note else ""
-            chip = QPushButton(f"🛎 {names.get(call.room_id, '?')} · {call.kind}{note}  ✓")
+            late = call.call_id in overdue
+            waited = f"  ⚠ {int(now - call.created) // 60} min" if late else ""
+            chip = QPushButton(f"🛎 {names.get(call.room_id, '?')} · {call.kind}{note}{waited}  ✓")
             chip.setToolTip("Mark as handled; the room is told staff is on the way")
-            chip.setStyleSheet("background: #9c2f45; color: white; border-radius: 14px;")
+            colour = "#ff1744; font-weight: 800" if late else "#9c2f45"
+            chip.setStyleSheet(f"background: {colour}; color: white; border-radius: 14px;")
             chip.clicked.connect(lambda _c=False, c=call.call_id: self.finish_call(c))
             self.call_chips.addWidget(chip)
         for product in low[:4]:
