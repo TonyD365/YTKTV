@@ -400,6 +400,13 @@ function renderService() {
       const name = document.createElement("span");
       name.style.flex = "1";
       name.textContent = `${p.name} · ${service.currency}${p.price}`;
+      if (p.picture) {
+        const pic = document.createElement("img");
+        pic.src = "data:image/jpeg;base64," + p.picture;
+        pic.alt = "";
+        pic.style.cssText = "width:48px;height:48px;object-fit:cover;border-radius:8px;flex:none";
+        row.append(pic);
+      }
       const count = document.createElement("span");
       count.style.cssText = "min-width:24px;text-align:center;font-weight:700";
       count.textContent = orderQty[p.product_id] || 0;

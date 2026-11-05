@@ -188,11 +188,18 @@ def receive(store: DeskStore, room_id: str, message: dict[str, Any]) -> None:
 
 
 def products_message(store: DeskStore) -> dict[str, Any]:
+    pictures = store.product_pictures()
     return {
         "type": "products",
         "currency": store.setting("currency", "$"),
         "items": [
-            {"product_id": p.product_id, "name": p.name, "category": p.category, "price": p.price}
+            {
+                "product_id": p.product_id,
+                "name": p.name,
+                "category": p.category,
+                "price": p.price,
+                "picture": pictures.get(str(p.product_id), ""),  # base64 JPEG, or ""
+            }
             for p in store.products(active_only=True)
         ],
     }

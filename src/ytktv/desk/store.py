@@ -17,6 +17,7 @@ from typing import Any
 from ytktv.rooms import crypto
 
 CODE_SECONDS = 300  # a pairing code works for five minutes, once
+MAX_PICTURE = 60_000  # base64 characters: plenty for a 160-pixel JPEG
 LOW_STOCK = 5  # warn when a product is down to this many, unless the shop sets otherwise
 
 
@@ -745,7 +746,26 @@ class DeskStore:
     def remove_product(self, product_id: int) -> None:
         with self._lock:
             self._db.execute("DELETE FROM products WHERE id=?", (product_id,))
+            self._db.execute("DELETE FROM product_pictures WHERE product_id=?", (product_id,))
             self._db.commit()
+
+    def set_product_picture(self, product_id: int, jpeg: str) -> None:
+        """A small JPEG of the item, base64-encoded; "" removes it."""
+        with self._lock:
+            if jpeg:
+                self._db.execute(
+                    "INSERT OR REPLACE INTO product_pictures (product_id, jpeg) VALUES (?, ?)",
+                    (product_id, jpeg[:MAX_PICTURE]),
+                )
+            else:
+                self._db.execute("DELETE FROM product_pictures WHERE product_id=?", (product_id,))
+            self._db.commit()
+
+    def product_pictures(self) -> dict[str, str]:
+        """Product id (as text, so it travels as JSON) -> base64 JPEG."""
+        with self._lock:
+            rows = self._db.execute("SELECT product_id, jpeg FROM product_pictures").fetchall()
+        return {str(product_id): jpeg for product_id, jpeg in rows}
 
     def add_order(
         self, room_id: str, items: list[tuple[int, int]], now: float | None = None
@@ -965,6 +985,14 @@ def _call_handled_at(db: sqlite3.Connection) -> None:
     db.execute("ALTER TABLE calls ADD COLUMN handled REAL")
 
 
+def _product_pictures(db: sqlite3.Connection) -> None:
+    # Kept apart from products, which are saved with INSERT OR REPLACE.
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS product_pictures (product_id INTEGER PRIMARY KEY,"
+        " jpeg TEXT NOT NULL)"
+    )
+
+
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _baseline,
     _staff_terminals,
@@ -972,5 +1000,6 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _local_only_rooms,
     _room_local_folders,
     _call_handled_at,
+    _product_pictures,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
