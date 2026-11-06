@@ -1,4 +1,9 @@
-"""Lyrics written by AI (Whisper) for songs that have none: an optional download."""
+"""Lyrics written by AI (Whisper) from the song's own audio: an optional download.
+
+With a GPU every song's lyrics are written here, so their timing matches the video; the
+lyrics found online only help with the words. Without one, AI writes only the lyrics of
+songs that have none online (a CPU is too slow to do every song).
+"""
 
 from __future__ import annotations
 
@@ -32,6 +37,8 @@ VARIANTS = {
     "whisper": Variant("whisper", "AI lyrics (CPU)", "about 300 MB", ("faster-whisper",), None),
 }
 FALLBACK = {"whisper-cuda": "whisper", "whisper-mlx": "whisper"}
+GPU_VARIANTS = frozenset({"whisper-cuda", "whisper-mlx"})
+HINT_CHARACTERS = 600  # Whisper's prompt holds about 224 tokens; more is cut anyway
 
 
 def best_variant(system: str | None = None, machine: str | None = None) -> str:
@@ -83,16 +90,28 @@ class AiLyrics:
         on_done: Callable[[str, list[LyricLine]], None] | None = None,
         run: Callable[..., Any] = subprocess.run,
         folder: Path | None = None,
+        vocals: Callable[[str], Path | None] = lambda _video_id: None,
     ) -> None:
+        """*audio* fetches a song's full mix; *vocals* gives its separated singer, if any."""
         self.env, self._audio, self.on_done, self._run = env, audio, on_done, run
+        self._vocals = vocals
         self.folder = folder or cache_dir() / "ai-lyrics"
         self._lock = threading.Lock()
-        self._waiting: list[tuple[str, str]] = []
+        self._waiting: list[tuple[str, str, str]] = []
         self._busy = False
 
     @property
     def installed(self) -> bool:
         return self.env.installed_variant() in VARIANTS
+
+    @property
+    def on_gpu(self) -> bool:
+        """Whether Whisper runs on a GPU here, fast enough to write every song's lyrics."""
+        return self.env.installed_variant() in GPU_VARIANTS
+
+    def pending(self, video_id: str) -> bool:
+        with self._lock:
+            return any(v == video_id for v, _, _ in self._waiting)
 
     def path(self, video_id: str) -> Path:
         return self.folder / f"{video_id}.json"
@@ -104,14 +123,27 @@ class AiLyrics:
             return None
         return [LyricLine.from_dict(line) for line in data]
 
-    def request(self, video_id: str, language: str = "") -> None:
-        """Write lyrics for *video_id* soon (nothing happens without the runtime)."""
+    def request(
+        self, video_id: str, language: str = "", hint: str = "", first: bool = False
+    ) -> None:
+        """Write lyrics for *video_id* soon (nothing happens without the runtime).
+
+        *hint* is the song's words from elsewhere: they help Whisper spell what it hears,
+        while the timing still comes from the audio. *first* jumps the queue (the song on).
+        """
         if not self.installed or self.cached(video_id) is not None:
             return
         with self._lock:
-            if any(v == video_id for v, _ in self._waiting):
+            known = next((i for i, (v, _, _) in enumerate(self._waiting) if v == video_id), None)
+            if known is not None:
+                if first and known:
+                    self._waiting.insert(0, self._waiting.pop(known))
                 return
-            self._waiting.append((video_id, language))
+            job = (video_id, language, hint[:HINT_CHARACTERS])
+            if first:
+                self._waiting.insert(0, job)
+            else:
+                self._waiting.append(job)
             if self._busy:
                 return
             self._busy = True
@@ -123,23 +155,27 @@ class AiLyrics:
                 if not self._waiting:
                     self._busy = False
                     return
-                video_id, language = self._waiting.pop(0)
+                video_id, language, hint = self._waiting.pop(0)
             try:
-                lines = self.write(video_id, language)
+                lines = self.write(video_id, language, hint)
             except Exception:
                 log.info("AI lyrics failed for %s", video_id, exc_info=True)
                 continue
             if self.on_done:
                 self.on_done(video_id, lines)
 
-    def write(self, video_id: str, language: str = "") -> list[LyricLine]:
+    def write(self, video_id: str, language: str = "", hint: str = "") -> list[LyricLine]:
         work = self.folder / "work" / video_id
         work.mkdir(parents=True, exist_ok=True)
         try:
-            audio = self._audio(video_id, work)
+            audio = self._vocals(video_id) or self._audio(video_id, work)
             out = work / "lyrics.json"
             command = [str(self.env.python), str(WORKER), str(audio), str(out),
                        str(self.env.root / "models"), language]  # fmt: skip
+            if hint:
+                prompt = work / "hint.txt"
+                prompt.write_text(hint, encoding="utf-8")
+                command.append(str(prompt))
             result = self._run(command, capture_output=True, text=True, timeout=TIMEOUT)
             if result.returncode != 0 or not out.exists():
                 raise RuntimeError((result.stderr or "")[-400:])

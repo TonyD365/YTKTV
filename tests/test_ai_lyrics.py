@@ -96,3 +96,105 @@ def test_worker_turns_segments_into_lines():
         {"start": 0.5, "end": 2.0, "text": "hello there", "words": [[0.5, 0], [1.2, 6]]}
     ]
     assert lyrics_ai.best_variant("Darwin", "arm64") == "whisper-mlx"
+
+
+class GpuRuntime(Runtime):
+    def installed_variant(self):
+        return "whisper-cuda"
+
+
+def gpu_writer(tmp_path, controller, run=fake_whisper, vocals=lambda _v: None):
+    return lyrics_ai.AiLyrics(
+        GpuRuntime(tmp_path / "rt", variants=lyrics_ai.VARIANTS),
+        lambda video_id, dest: (dest / "a.wav").write_bytes(b"x") or dest / "a.wav",
+        controller.ai_lyrics_ready,
+        run=run,
+        folder=tmp_path / "cache",
+        vocals=vocals,
+    )
+
+
+def test_with_a_gpu_every_song_is_written_here_and_replaces_the_online_lyrics(tmp_path):
+    from ytktv.youtube.lyrics import LyricLine
+
+    controller, _player, _ = make_controller(tmp_path)
+    seen = []
+    gate = __import__("threading").Event()
+
+    def slow_whisper(command, **kwargs):
+        seen.append(command)
+        gate.wait(5)
+        return fake_whisper(command, **kwargs)
+
+    try:
+        controller.ai_lyrics = gpu_writer(tmp_path, controller, slow_whisper)
+        online = [LyricLine(0.0, 2.0, "hello online")]
+        controller.resolver.lyrics = lambda *_a: online  # the video has subtitles
+        controller.enqueue(make_song(1))
+        wait_for(lambda: controller.lyrics_source == "online", timeout=5)
+        assert controller.lyrics[0].text == "hello online"  # shown while Whisper works
+        wait_for(lambda: bool(seen), timeout=5)
+        hint = Path(seen[0][-1]).read_text(encoding="utf-8")
+        assert hint == "hello online"  # the words help Whisper; the timing is its own
+        gate.set()
+        wait_for(lambda: controller.lyrics_source == "local", timeout=5)
+        assert controller.lyrics[0].text == "la la"
+    finally:
+        gate.set()
+        controller.close()
+
+
+def test_without_a_gpu_online_lyrics_stay(tmp_path):
+    from ytktv.youtube.lyrics import LyricLine
+
+    controller, _player, _ = make_controller(tmp_path)
+    calls = []
+    try:
+        controller.ai_lyrics = lyrics_ai.AiLyrics(
+            InstalledRuntime(tmp_path / "rt", variants=lyrics_ai.VARIANTS),
+            lambda *_a: calls.append("audio"),
+            controller.ai_lyrics_ready,
+            run=lambda *a, **k: calls.append("whisper"),
+            folder=tmp_path / "cache",
+        )
+        controller.resolver.lyrics = lambda *_a: [LyricLine(0.0, 2.0, "hello online")]
+        controller.enqueue(make_song(1))
+        wait_for(lambda: controller.lyrics_source == "online", timeout=5)
+        time.sleep(0.2)
+        assert calls == [] and controller.lyrics[0].text == "hello online"
+    finally:
+        controller.close()
+
+
+def test_the_separated_vocals_are_what_whisper_hears(tmp_path):
+    vocals = tmp_path / "vocals.flac"
+    vocals.write_bytes(b"v")
+    heard = []
+
+    def whisper(command, **kwargs):
+        heard.append(command[2])
+        return fake_whisper(command, **kwargs)
+
+    writer = lyrics_ai.AiLyrics(
+        GpuRuntime(tmp_path / "rt", variants=lyrics_ai.VARIANTS),
+        lambda *_a: (_ for _ in ()).throw(AssertionError("no download: the vocals are here")),
+        run=whisper,
+        folder=tmp_path / "cache",
+        vocals=lambda _v: vocals,
+    )
+    writer.write("abc")
+    assert heard == [str(vocals)]
+
+
+def test_the_song_on_jumps_the_queue(tmp_path):
+    writer = lyrics_ai.AiLyrics(
+        GpuRuntime(tmp_path / "rt", variants=lyrics_ai.VARIANTS),
+        lambda *_a: None,
+        folder=tmp_path / "cache",
+    )
+    writer._busy = True  # nothing is taken off the queue while we look at it
+    writer.request("later")
+    writer.request("next")
+    writer.request("now", first=True)
+    writer.request("next", first=True)
+    assert [v for v, _, _ in writer._waiting] == ["next", "now", "later"]

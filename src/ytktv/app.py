@@ -393,7 +393,10 @@ def main(argv: list[str] | None = None) -> int:
 
     # Lyrics written by Whisper for songs that have none (an optional download).
     controller.ai_lyrics = lyrics_ai.AiLyrics(
-        lyrics_ai.runtime(), song_audio, controller.ai_lyrics_ready
+        lyrics_ai.runtime(),
+        song_audio,
+        controller.ai_lyrics_ready,
+        vocals=lambda video_id: controller.stems.vocals(video_id) if controller.stems else None,
     )
     from ytktv.smart_lights import SmartLights
 

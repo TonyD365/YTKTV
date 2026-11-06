@@ -26,6 +26,9 @@ PREFIX = "@@YTKTV "
 HOP_SECONDS = 0.05  # one melody value every 50 ms
 
 
+VOCALS_FILE = "vocals.partial.flac"  # written next to the instrumental
+
+
 def send(message):
     sys.stdout.write(PREFIX + json.dumps(message) + "\n")
     sys.stdout.flush()
@@ -144,6 +147,9 @@ class Worker:
                     sys.stderr.write(f"melody extraction failed: {exc}\n")
             Path(output).parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(instrumental), output)
+            if vocals is not None and vocals.exists():
+                # Kept for AI lyrics: Whisper hears the singer far better without the band.
+                shutil.move(str(vocals), str(Path(output).with_name(VOCALS_FILE)))
         finally:
             for leftover in outputs:
                 if leftover.exists():

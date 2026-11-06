@@ -29,9 +29,20 @@ first, and the result is saved as a playlist.
 
 ## AI lyrics
 
-When a song has no lyrics anywhere, YTKTV can write them, with the timing, using Whisper on
-your computer. Turn it on in **Settings → AI Lyrics**; the first time, it downloads the model
-once. It runs on the GPU on Apple Silicon and NVIDIA, and on the processor elsewhere (slower).
+Lyrics found online are often timed for a different upload, so they run early or late. YTKTV
+can write the lyrics itself with Whisper, from the song's own audio, so they match the video.
+Download it once in **Settings → AI Lyrics**.
+
+- **With a GPU** (Apple Silicon or an NVIDIA card), every song's lyrics are written on your
+  computer. Whisper listens to the singer separated from the band, which it hears far better.
+  Until it is done, the lyrics found online are shown, then replaced. Songs coming up in the
+  queue are written ahead, so they are usually ready when they start.
+- **With only a processor**, that is too slow for every song: the lyrics found online are
+  used, and Whisper writes only those of songs that have none.
+- **Use the lyrics found online to get the words right** (on by default) gives Whisper those
+  words as a hint for spelling. The timing always comes from the song.
+
+Written lyrics are kept, so a song is only done once.
 
 ## Kids mode
 

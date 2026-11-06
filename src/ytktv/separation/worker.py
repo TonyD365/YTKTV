@@ -76,6 +76,10 @@ class StemManager:
     def path(self, video_id: str) -> Path | None:
         return self.cache.get(video_id)
 
+    def vocals(self, video_id: str) -> Path | None:
+        """The separated singer alone, when this song has been separated."""
+        return self.cache.vocals(video_id)
+
     def pitch(self, video_id: str) -> Path | None:
         """The melody file for a song, if it has been extracted."""
         return self.cache.pitch(video_id)
@@ -198,6 +202,9 @@ class StemManager:
             elif melody is not None:
                 with self._cond:
                     self._no_pitch.add(video_id)  # do not retry forever
+            vocals = partial.with_name("vocals.partial.flac")
+            if vocals.exists():
+                vocals.replace(self.cache.vocals_target(video_id))
             if not refresh:
                 partial.replace(self.cache.target(video_id))
         except Exception as exc:
