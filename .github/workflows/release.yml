@@ -258,13 +258,18 @@ jobs:
       # major version (see src/ytktv/patching.py). No patch just means the installer.
       - name: Make the patch from the previous release
         if: runner.os == 'Windows' && github.event_name == 'release'
+        # No patch is never a reason to hold up or fail the release.
+        timeout-minutes: 10
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
           PYTHON: python
-        run: packaging/make_patches.sh windows YTKTV ${{ matrix.arch }}
+        run: |
+          choco install innoextract --no-progress -y || echo "::warning::no innoextract"
+          packaging/make_patches.sh windows YTKTV ${{ matrix.arch }}
       - uses: actions/upload-artifact@v7
         if: runner.os == 'Windows' && github.event_name == 'release'
         with:
@@ -351,13 +356,18 @@ jobs:
       # major version (see src/ytktv/patching.py). No patch just means the installer.
       - name: Make the patch from the previous release
         if: runner.os == 'Windows' && github.event_name == 'release'
+        # No patch is never a reason to hold up or fail the release.
+        timeout-minutes: 10
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
           PYTHON: python
-        run: packaging/make_patches.sh windows YTKTV-Desk ${{ matrix.arch }}
+        run: |
+          choco install innoextract --no-progress -y || echo "::warning::no innoextract"
+          packaging/make_patches.sh windows YTKTV-Desk ${{ matrix.arch }}
       - uses: actions/upload-artifact@v7
         if: runner.os == 'Windows' && github.event_name == 'release'
         with:
@@ -414,6 +424,8 @@ jobs:
           packaging/macos/build_universal_pkg.sh "$arm" "$intel" "$version" dist YTKTV-Desk
       - name: Make the patches from the previous release
         if: github.event_name == 'release'
+        timeout-minutes: 10
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

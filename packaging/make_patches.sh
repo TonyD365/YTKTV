@@ -41,9 +41,14 @@ case "$1" in
     gh release download "$PREV_TAG" -p "$old_exe" -D "$WORK" || exit 0
     folder="YTKTV"; [ "$APP" = YTKTV-Desk ] && folder="YTKTV Desk"
     old_dir="$WORK/old"
-    # Installing it is the sure way to get exactly the files a user has.
-    "$WORK/$old_exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER /NOICONS \
-      "/DIR=$(cygpath -w "$old_dir")" || exit 0
+    # Unpack the installer rather than run it: run on the runner, it never returned.
+    if innoextract --silent --extract --output-dir "$WORK/x" "$WORK/$old_exe" && [ -d "$WORK/x/app" ]; then
+      mv "$WORK/x/app" "$old_dir"
+    else
+      echo "::warning::innoextract could not read $old_exe; trying a silent install"
+      timeout 300 "$WORK/$old_exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER /NOICONS \
+        "/DIR=$(cygpath -w "$old_dir")" || exit 0
+    fi
     patch "$APP" "$old_dir" "dist/$folder" "windows-$ARCH" "dist/$APP-$NEW-windows-$ARCH-setup.exe"
     ;;
 esac
