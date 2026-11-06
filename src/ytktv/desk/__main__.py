@@ -93,12 +93,14 @@ def main() -> int:
     store = DeskStore(data_dir() / "desk.sqlite3")
     hub = Hub()
     from ytktv.desk import staff
+    from ytktv.desk.metrics import Metrics
     from ytktv.rooms.discovery import Announcer
     from ytktv.server.tls import ensure_certificate
 
     ip = lan_ip()
     certificate = ensure_certificate(data_dir() / "desk-tls", ip)
-    desk_app = create_desk_app(store, hub, staff.certificate_hash(certificate[0]))
+    metrics = Metrics()
+    desk_app = create_desk_app(store, hub, staff.certificate_hash(certificate[0]), metrics)
     server = ServerThread(desk_app, DESK_PORT, certificate=certificate)
     server.start()
     try:
@@ -109,6 +111,8 @@ def main() -> int:
         announcer = None
     # What is done here is logged under this Desk's name, like a terminal's under its own.
     name = lambda: staff.machine_name(store)  # noqa: E731 - read again at every change
+    if store.setting(staff.SERVER_MODE_SETTING, "0") == "1":
+        return run_server_mode(app, store, hub, metrics, f"{ip}:{DESK_PORT}", server, announcer)
     window = DeskWindow(
         cast(DeskStore, staff.LoggedStore(store, name)),
         cast(Hub, staff.LoggedHub(hub, store, name)),
@@ -117,6 +121,25 @@ def main() -> int:
     try:
         return show(app, window)
     finally:
+        if announcer is not None:
+            announcer.close()
+        server.stop()
+
+
+def run_server_mode(
+    app: Any, store: Any, hub: Any, metrics: Any, address: str, server: Any, announcer: Any
+) -> int:
+    """This computer only runs the server; its window is the server console."""
+    from ytktv.desk.awake import KeepAwake
+    from ytktv.desk.console import ServerConsole
+
+    console = ServerConsole(store, hub, metrics, address, KeepAwake())
+    try:
+        console.show()
+        return int(app.exec())
+    finally:
+        if console.keep_awake is not None:
+            console.keep_awake.stop()
         if announcer is not None:
             announcer.close()
         server.stop()

@@ -160,6 +160,7 @@ class Room:
 
 class DeskStore:
     def __init__(self, path: Path | str = ":memory:") -> None:
+        self.path = str(path)
         self._db = sqlite3.connect(str(path), check_same_thread=False)
         self._lock = threading.Lock()
         self._codes: dict[str, float] = {}
@@ -694,6 +695,15 @@ class DeskStore:
             self._db.commit()
 
     # -- desk settings --------------------------------------------------------
+
+    def backup(self, target: Path | str) -> None:
+        """A consistent copy of every record, made while the Desk keeps running."""
+        copy = sqlite3.connect(str(target))
+        try:
+            with self._lock:
+                self._db.backup(copy)
+        finally:
+            copy.close()
 
     def setting(self, key: str, default: str = "") -> str:
         with self._lock:

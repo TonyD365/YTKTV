@@ -107,7 +107,20 @@ class TerminalSettings(QFrame):
         buttons.addStretch()
         buttons.addWidget(join)
         self.column.addLayout(buttons)
+        self._note(
+            "Server Mode: this computer only runs the server and shows a console with its"
+            " status, while staff work on the staff terminals. It stays on, restarts included,"
+            " until you leave it in the console's Settings."
+        )
+        server_mode = QPushButton("Switch to Server Mode…")
+        server_mode.clicked.connect(self.enter_server_mode)
+        self.column.addWidget(server_mode, alignment=Qt.AlignmentFlag.AlignLeft)
         self.load()
+
+    def enter_server_mode(self, _checked: bool = False) -> None:
+        from ytktv.desk.console import enter_server_mode
+
+        enter_server_mode(self, self.store)
 
     def save_name(self) -> None:
         name = self.name.text().strip()
