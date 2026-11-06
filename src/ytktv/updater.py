@@ -25,7 +25,7 @@ from typing import Any
 
 from packaging.version import InvalidVersion, Version
 
-from ytktv import GITHUB_REPO, __version__, children
+from ytktv import GITHUB_REPO, __version__, children, patching
 from ytktv.bootstrap import is_frozen
 from ytktv.net import urlopen
 
@@ -47,6 +47,12 @@ class UpdateInfo:
     checksum_url: str | None
     notes: str
     page_url: str
+    size: int = 0  # bytes of the installer
+    patch_name: str | None = None  # only the changed files, for an update within a major
+    patch_url: str | None = None
+    patch_size: int = 0
+    current: str = ""  # the version the patch applies to
+    app: str = "YTKTV"
 
 
 def parse_version(tag: str) -> Version | None:
@@ -114,6 +120,7 @@ def check_for_update(
     fetch: Fetch = _http_get,
     suffixes: list[str] | None = None,
     app: str = "YTKTV",
+    tag_for_patch: str | None = None,
 ) -> UpdateInfo | None:
     """Return the Latest release if it is newer than *current* and has an installer for us."""
     try:
@@ -134,14 +141,27 @@ def check_for_update(
         # Installers are attached a while after the release is published; until the
         # checksums are there too, treat the release as not ready.
         return None
+    new, mine = parse_version(tag), parse_version(current)
+    patch = None
+    if tag_for_patch is None:
+        tag_for_patch = patching.patch_tag(platform.system(), platform.machine())
+    if new is not None and mine is not None and new.major == mine.major and tag_for_patch:
+        wanted = patching.patch_name(app, str(mine), str(new), tag_for_patch)
+        patch = next((a for a in assets if a.get("name") == wanted), None)
     return UpdateInfo(
-        version=str(parse_version(tag)),
+        version=str(new),
         tag=tag,
         asset_name=str(asset["name"]),
         asset_url=str(asset["browser_download_url"]),
         checksum_url=str(checksums["browser_download_url"]),
         notes=str(release.get("body") or ""),
         page_url=str(release.get("html_url") or f"https://github.com/{repo}/releases"),
+        size=int(asset.get("size") or 0),
+        patch_name=str(patch["name"]) if patch else None,
+        patch_url=str(patch["browser_download_url"]) if patch else None,
+        patch_size=int(patch.get("size") or 0) if patch else 0,
+        current=str(mine),
+        app=app,
     )
 
 
@@ -162,28 +182,102 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
+def failed_marker(dest_dir: Path, version: str) -> Path:
+    """Left by a patch that did not go in: that version then comes as the installer."""
+    return dest_dir / f"{patching.FAILED_MARKER}-{version}"
+
+
+def can_patch() -> bool:
+    """Packaged macOS and Windows builds can take a patch; AppImages cannot."""
+    return is_frozen() and patching.patch_tag(platform.system(), platform.machine()) is not None
+
+
+def patch_usable(info: UpdateInfo, dest_dir: Path) -> bool:
+    return (
+        info.patch_url is not None
+        and can_patch()
+        and not failed_marker(dest_dir, info.version).exists()
+    )
+
+
+def download_size(info: UpdateInfo, dest_dir: Path) -> int:
+    """What the update will download, in bytes (0 when the release does not say)."""
+    return info.patch_size if patch_usable(info, dest_dir) else info.size
+
+
+def size_label(info: UpdateInfo, dest_dir: Path) -> str:
+    """ " (12 MB)" for a patch, " (full install, 480 MB)" for the installer."""
+    size = download_size(info, dest_dir)
+    if not size:
+        return ""
+    mb = max(1, round(size / 2**20))
+    return f" ({mb} MB)" if patch_usable(info, dest_dir) else f" (full install, {mb} MB)"
+
+
 def download_update(
     info: UpdateInfo,
     dest_dir: Path,
     fetch: Fetch = _http_get,
     progress: Callable[[float], None] | None = None,
+    root: Path | None = None,
 ) -> Path:
-    """Download and verify the installer. Raises if the checksum is missing or wrong."""
+    """Download and verify the update: a staged patch folder when one fits, else the installer.
+
+    Raises if the checksum is missing or wrong. *root* is the installed app (for tests).
+    """
     if info.checksum_url is None:
         raise RuntimeError("release has no SHA256SUMS; refusing to install it")
-    expected = expected_checksum(
-        fetch(info.checksum_url).decode("utf-8", "replace"), info.asset_name
-    )
+    sums = fetch(info.checksum_url).decode("utf-8", "replace")
+    if info.patch_name and (root is not None or patch_usable(info, dest_dir)):
+        try:
+            return _download_patch(info, dest_dir, sums, progress, root)
+        except Exception as exc:
+            log.info(
+                "the patch for %s cannot be used (%s): getting the installer", info.version, exc
+            )
+    return _download(info.asset_name, info.asset_url, dest_dir, sums, progress)
+
+
+def _download_patch(
+    info: UpdateInfo,
+    dest_dir: Path,
+    sums: str,
+    progress: Callable[[float], None] | None,
+    root: Path | None,
+) -> Path:
+    assert info.patch_name and info.patch_url
+    archive = _download(info.patch_name, info.patch_url, dest_dir, sums, progress)
+    staged = dest_dir / f"patch-{info.version}"
+    manifest = patching.stage(archive, staged)
+    archive.unlink(missing_ok=True)
+    root = root or patching.app_root()
+    if manifest.get("from") != info.current or manifest.get("to") != info.version:
+        raise RuntimeError("the patch is for other versions")
+    if not patching.check_base(manifest, root):
+        raise RuntimeError("the installed files are not the ones the patch expects")
+    if platform.system() == "Windows" and patching.needs_admin(manifest, root):
+        raise RuntimeError("the install folder is not writable")
+    return staged
+
+
+def _download(
+    name: str,
+    url: str,
+    dest_dir: Path,
+    sums: str,
+    progress: Callable[[float], None] | None,
+) -> Path:
+    expected = expected_checksum(sums, name)
     if expected is None:
-        raise RuntimeError(f"no checksum listed for {info.asset_name}")
+        raise RuntimeError(f"no checksum listed for {name}")
 
     dest_dir.mkdir(parents=True, exist_ok=True)
-    target = dest_dir / info.asset_name
+    target = dest_dir / name
     if target.exists() and sha256_of(target) == expected:
         return target
 
     partial = target.with_name(target.name + ".part")
-    request = urllib.request.Request(info.asset_url, headers={"User-Agent": _USER_AGENT})
+    request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     with urlopen(request, timeout=30) as response, partial.open("wb") as out:
         total = int(response.headers.get("Content-Length") or 0)
         done = 0
@@ -204,7 +298,8 @@ def can_self_install() -> bool:
     return is_frozen()
 
 
-_DOWNLOAD_NAME = re.compile(r"^YTKTV-(\d[^-]*)-")
+# An installer (YTKTV-4.0.2-...), a staged patch (patch-4.0.2) or a failed patch's marker.
+_DOWNLOAD_NAME = re.compile(r"^(?:YTKTV-|patch-|patch-failed-)(\d[^-]*?)(?:-|$)")
 
 
 def clean_old_downloads(dest_dir: Path, current: str = __version__) -> int:
@@ -217,10 +312,12 @@ def clean_old_downloads(dest_dir: Path, current: str = __version__) -> int:
     freed = 0
     try:
         running = Version(current)
-        files = [path for path in dest_dir.iterdir() if path.is_file()]
+        files = list(dest_dir.iterdir())
     except (InvalidVersion, OSError):
         return 0
     for path in files:
+        if path.is_dir() and not path.name.startswith("patch-"):
+            continue  # only staged patches are ours
         match = _DOWNLOAD_NAME.match(path.name)
         try:
             waiting = match is not None and Version(match.group(1)) > running
@@ -229,6 +326,9 @@ def clean_old_downloads(dest_dir: Path, current: str = __version__) -> int:
         if waiting:
             continue
         try:
+            if path.is_dir():
+                shutil.rmtree(path)
+                continue
             size = path.stat().st_size
             path.unlink()
             freed += size
@@ -240,8 +340,14 @@ def clean_old_downloads(dest_dir: Path, current: str = __version__) -> int:
 
 
 def install_update(installer: Path) -> None:
-    """Hand over to the platform installer. The caller must quit the app right after."""
+    """Hand over to the platform installer. The caller must quit the app right after.
+
+    *installer* may be a staged patch folder: then a script swaps the files once we quit.
+    """
     system = platform.system()
+    if installer.is_dir():
+        apply_patch(installer, system)
+        return
     if system == "Darwin":
         # Opens the standard macOS Installer, which asks for the admin password itself.
         children.launch_to_outlive(["open", str(installer)])
@@ -259,3 +365,30 @@ def install_update(installer: Path) -> None:
     else:
         raise RuntimeError(f"unsupported platform {system}")
     log.info("update handed to installer; exiting %s", sys.argv[0])
+
+
+def apply_patch(staged: Path, system: str, root: Path | None = None) -> None:
+    """Start the script that puts the staged patch in once this app has quit."""
+    manifest = json.loads((staged / patching.MANIFEST).read_text())
+    root = root or patching.app_root()
+    marker = failed_marker(staged.parent, str(manifest["to"]))
+    if system == "Windows":
+        script = staged / "apply.ps1"
+        script.write_text(
+            patching.powershell_script(manifest, staged, root, marker, os.getpid()),
+            encoding="utf-8-sig",
+        )
+        children.launch_to_outlive(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-WindowStyle", "Hidden", "-File", str(script)]
+        )  # fmt: skip
+    elif system == "Darwin":
+        apply = staged / "apply.sh"
+        apply.write_text(patching.shell_script(manifest, staged, root, marker))
+        launcher = staged / "launch.sh"
+        admin = patching.needs_admin(manifest, root)
+        launcher.write_text(patching.macos_launcher(apply, root, marker, os.getpid(), admin))
+        children.launch_to_outlive(["/bin/sh", str(launcher)])
+    else:
+        raise RuntimeError(f"patches are not used on {system}")
+    log.info("update %s handed to the patch script", manifest["to"])
