@@ -397,6 +397,11 @@ class DeskWindow(QMainWindow):
         column.addWidget(self.security)
         self.terminals = TerminalSettings(self.store, self.address, self.terminal)
         column.addWidget(self.terminals)
+        if self.terminal is None:  # done by the main Desk's computer, not a staff terminal
+            from ytktv.desk.processing_settings import ProcessingSettings
+
+            self.processing = ProcessingSettings(self.store)
+            column.addWidget(self.processing)
         self.updates = UpdateSettings(self.store)
         column.addWidget(self.updates)
         self.call_settings = CallSettings(self.store)

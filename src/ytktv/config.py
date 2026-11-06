@@ -109,6 +109,8 @@ class Settings:
     desk_key: str = ""  # the desk's public key: rooms obey only what it signs
     room_name: str = ""
     desk_last_seen: float = 0.0  # time.time() of the last contact with the desk
+    # A bound room has its songs separated (and lyrics written) on the Desk when it offers.
+    process_on_desk: bool = True
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Settings:

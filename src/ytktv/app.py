@@ -360,6 +360,22 @@ def main(argv: list[str] | None = None) -> int:
     offline = OfflineSongs(data_dir() / "offline", preload, kept_lyrics)
     offline.start()
 
+    from ytktv.rooms.processing import DeskStems
+    from ytktv.separation.cache import StemCache
+
+    # Looks like a StemManager: songs separated on the Desk when this room is bound to
+    # one that offers it; otherwise local instrumental tracks, or vocal separation here.
+    desk_stems = DeskStems(
+        store,
+        StemCache(cache_dir() / "desk-stems", int(settings.stem_cache_gb * 1024**3)),
+        cache_dir() / "ai-lyrics",
+        fallback=StemRouter(
+            local,
+            track_stems,
+            make_stem_manager(youtube, settings, ffmpeg, separator, local) if separator else None,
+        ),
+        audio=lambda video_id, dest: youtube.download_audio(video_id, dest, ffmpeg=ffmpeg),
+    )
     controller = KTVController(
         store,
         player,
@@ -368,17 +384,7 @@ def main(argv: list[str] | None = None) -> int:
         bus=bus,
         preloader=preloader,
         offline=offline,
-        # Looks like a StemManager: local instrumental tracks, or vocal separation.
-        stems=cast(
-            "StemManager",
-            StemRouter(
-                local,
-                track_stems,
-                make_stem_manager(youtube, settings, ffmpeg, separator, local)
-                if separator
-                else None,
-            ),
-        ),
+        stems=cast("StemManager", desk_stems),
         local=local,
         audio=audio,
     )
@@ -398,6 +404,14 @@ def main(argv: list[str] | None = None) -> int:
         controller.ai_lyrics_ready,
         vocals=lambda video_id: controller.stems.vocals(video_id) if controller.stems else None,
     )
+    desk_stems.hints = controller.lyric_hint
+
+    def desk_lyrics(video_id: str, _path: Path) -> None:
+        lines = controller.ai_lyrics.cached(video_id)
+        if lines:
+            controller.ai_lyrics_ready(video_id, lines)
+
+    desk_stems.on_lyrics = desk_lyrics
     # While a song needed soon is separated piece by piece, its lyrics are written likewise.
     controller.ai_pieces = lyrics_ai.PieceWriter(lyrics_ai.runtime(), controller.ai_lyrics_partial)
     from ytktv.smart_lights import SmartLights
