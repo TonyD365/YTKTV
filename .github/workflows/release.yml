@@ -268,7 +268,6 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
           PYTHON: python
         run: |
-          choco install innoextract --no-progress -y || echo "::warning::no innoextract"
           packaging/make_patches.sh windows YTKTV ${{ matrix.arch }}
       - uses: actions/upload-artifact@v7
         if: runner.os == 'Windows' && github.event_name == 'release'
@@ -366,7 +365,6 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
           PYTHON: python
         run: |
-          choco install innoextract --no-progress -y || echo "::warning::no innoextract"
           packaging/make_patches.sh windows YTKTV-Desk ${{ matrix.arch }}
       - uses: actions/upload-artifact@v7
         if: runner.os == 'Windows' && github.event_name == 'release'

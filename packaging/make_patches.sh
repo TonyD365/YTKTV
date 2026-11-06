@@ -2,13 +2,22 @@
 # Patches from the previous release to this one, for updates within a major version.
 #
 #   packaging/make_patches.sh macos              (in the macos-universal job)
-#   packaging/make_patches.sh windows APP ARCH   (in a Windows build job)
+#   packaging/make_patches.sh windows APP ARCH   (in a Windows build job; also writes
+#                                                 APP-VERSION-windows-ARCH-files.zip)
 #
 # Needs GH_TOKEN, GH_REPO and TAG. Writes dist/patches/*.zip. Any trouble here only
 # means no patch: users then get the installer, so this never fails the release.
 set -uo pipefail
 PY="${PYTHON:-python3}"
 NEW="${TAG#v}"
+mkdir -p dist/patches
+if [ "$1" = windows ]; then
+  # This build's files, attached to the release: the next release makes its patch from
+  # them. (Unpacking or running the old installer on the runner did not work.)
+  folder="YTKTV"; [ "$2" = YTKTV-Desk ] && folder="YTKTV Desk"
+  "$PY" -c "import shutil, sys; shutil.make_archive(sys.argv[1], 'zip', sys.argv[2])" \
+    "dist/patches/$2-$NEW-windows-$3-files" "dist/$folder"
+fi
 PREV_TAG="$(gh api "repos/$GH_REPO/releases?per_page=30" --jq \
   '[.[] | select(.draft | not) | select(.prerelease | not) | select(.tag_name != env.TAG)][0].tag_name')"
 if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "null" ]; then echo "no previous release"; exit 0; fi
@@ -37,19 +46,12 @@ case "$1" in
     ;;
   windows)
     APP="$2"; ARCH="$3"
-    old_exe="$APP-$OLD-windows-$ARCH-setup.exe"
-    gh release download "$PREV_TAG" -p "$old_exe" -D "$WORK" || exit 0
     folder="YTKTV"; [ "$APP" = YTKTV-Desk ] && folder="YTKTV Desk"
-    old_dir="$WORK/old"
-    # Unpack the installer rather than run it: run on the runner, it never returned.
-    if innoextract --silent --extract --output-dir "$WORK/x" "$WORK/$old_exe" && [ -d "$WORK/x/app" ]; then
-      mv "$WORK/x/app" "$old_dir"
-    else
-      echo "::warning::innoextract could not read $old_exe; trying a silent install"
-      timeout 300 "$WORK/$old_exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER /NOICONS \
-        "/DIR=$(cygpath -w "$old_dir")" || exit 0
-    fi
-    patch "$APP" "$old_dir" "dist/$folder" "windows-$ARCH" "dist/$APP-$NEW-windows-$ARCH-setup.exe"
+    old_zip="$APP-$OLD-windows-$ARCH-files.zip"
+    gh release download "$PREV_TAG" -p "$old_zip" -D "$WORK" || { echo "no $old_zip"; exit 0; }
+    "$PY" -c "import shutil, sys; shutil.unpack_archive(sys.argv[1], sys.argv[2])" \
+      "$WORK/$old_zip" "$WORK/old" || exit 0
+    patch "$APP" "$WORK/old" "dist/$folder" "windows-$ARCH" "dist/$APP-$NEW-windows-$ARCH-setup.exe"
     ;;
 esac
 exit 0
