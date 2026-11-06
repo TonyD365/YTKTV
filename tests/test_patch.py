@@ -119,7 +119,7 @@ def test_the_patch_turns_the_old_build_into_the_new_one(tmp_path):
     staged = tmp_path / "staged"
     manifest = patching.stage(archive, staged)
     marker = run_patch(tmp_path, old, staged, manifest)
-    assert not marker.exists()
+    assert not marker.exists(), marker.read_text()
     result = patching.scan(old)
     assert result == patching.scan(tmp_path / "new")
     assert (old / "unins000.exe").exists()  # the uninstaller stays

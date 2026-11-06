@@ -269,7 +269,7 @@ def powershell_script(
         "-ErrorAction SilentlyContinue",
         "} catch {",
         "  Restore",
-        f"  New-Item -ItemType File -Force -Path {_ps(str(marker))} | Out-Null",
+        f"  Set-Content -LiteralPath {_ps(str(marker))} -Value \"$_\"",  # why, for the log
         "}",
         f"Start-Process -FilePath {_ps(str(exe))}",
         "",
