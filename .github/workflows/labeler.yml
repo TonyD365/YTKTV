@@ -1,10 +1,10 @@
 # Labels pull requests by the parts of YTKTV they touch (.github/labeler.yml).
-# pull_request_target lets this label pull requests from forks too; it only reads
-# the list of changed files and never checks out or runs the pull request's code.
+# It runs on pull_request, so it never gets write access for code from a fork:
+# pull requests from forks get a read-only token and are simply left unlabelled.
 name: Label pull requests
 
 on:
-  pull_request_target:
+  pull_request:
 
 permissions:
   contents: read
@@ -13,5 +13,7 @@ permissions:
 jobs:
   label:
     runs-on: ubuntu-latest
+    # A fork's token cannot add labels; skip instead of failing.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/labeler@v7
