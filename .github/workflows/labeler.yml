@@ -1,6 +1,10 @@
 # Labels pull requests by the parts of YTKTV they touch (.github/labeler.yml).
-# It runs on pull_request, so it never gets write access for code from a fork:
-# pull requests from forks get a read-only token and are simply left unlabelled.
+# Two steps, so a pull request from a fork is labelled too without its code ever
+# getting write access:
+#   1. This job runs on pull_request with a read-only token and only saves the
+#      pull request's number.
+#   2. label-apply.yml runs afterwards from main, with write access, and labels
+#      that pull request from the list of changed files. It never runs its code.
 name: Label pull requests
 
 on:
@@ -8,12 +12,14 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
-  label:
+  note:
     runs-on: ubuntu-latest
-    # A fork's token cannot add labels; skip instead of failing.
-    if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/labeler@v7
+      - run: echo "${{ github.event.pull_request.number }}" > pr-number
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-number
+          path: pr-number
+          retention-days: 1
