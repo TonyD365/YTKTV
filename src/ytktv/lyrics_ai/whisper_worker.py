@@ -1,6 +1,8 @@
 """Write timed lyrics for one song with faster-whisper. Runs inside the AI lyrics runtime.
 
-usage: whisper_worker.py AUDIO OUTPUT.json MODELS_DIR [LANGUAGE]
+usage: whisper_worker.py AUDIO OUTPUT.json MODELS_DIR [LANGUAGE] [HINT.txt]
+
+HINT.txt holds the song's words from elsewhere: a prompt that helps with spelling.
 
 Standalone: the ytktv package is not installed in that environment.
 """
@@ -34,7 +36,7 @@ def lines_from(segments):
     return lines
 
 
-def transcribe(audio, models, language):
+def transcribe(audio, models, language, hint=None):
     try:  # Apple Silicon: the GPU through MLX
         import mlx_whisper
     except ImportError:
@@ -45,6 +47,7 @@ def transcribe(audio, models, language):
             path_or_hf_repo=f"mlx-community/whisper-{MODEL}-mlx",
             word_timestamps=True,
             language=language,
+            initial_prompt=hint,
         )
         return lines_from(result.get("segments", []))
     from faster_whisper import WhisperModel
@@ -54,7 +57,12 @@ def transcribe(audio, models, language):
     except Exception:
         model = WhisperModel(MODEL, device="cpu", compute_type="int8", download_root=models)
     segments, _info = model.transcribe(
-        audio, language=language, word_timestamps=True, vad_filter=True, beam_size=5
+        audio,
+        language=language,
+        word_timestamps=True,
+        vad_filter=True,
+        beam_size=5,
+        initial_prompt=hint,
     )
     return lines_from(segments)
 
@@ -62,7 +70,11 @@ def transcribe(audio, models, language):
 def main() -> int:
     audio, output, models = sys.argv[1], sys.argv[2], sys.argv[3]
     language = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else None
-    lines = transcribe(audio, models, language)
+    hint = None
+    if len(sys.argv) > 5:
+        with open(sys.argv[5], encoding="utf-8") as file:
+            hint = file.read().strip() or None
+    lines = transcribe(audio, models, language, hint)
     with open(output, "w", encoding="utf-8") as file:
         json.dump(lines, file, ensure_ascii=False)
     print("@@YTKTV " + json.dumps({"ok": True, "lines": len(lines)}), flush=True)

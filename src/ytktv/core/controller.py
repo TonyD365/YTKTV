@@ -127,6 +127,8 @@ class KTVController:
         self._skip_wait: str | None = None
         self._awaiting_start = False  # play() was called and the first frame is pending
         self.lyrics: list[Any] = []  # timed lines for the current song, if its video has subtitles
+        self.lyrics_source = ""  # "local" (Whisper, from the song's audio), "online" or ""
+        self._lyric_hints: dict[str, str] = {}  # video id -> its words found online
         self._danmaku_times: list[float] = []
         self._reaction_times: list[float] = []
         self._keeper: ScoreKeeper | None = None  # scores the song that is playing
@@ -372,6 +374,7 @@ class KTVController:
                 self.loading = "Loading video" if item else ""
                 self._awaiting_start = False
                 self.lyrics = []
+                self.lyrics_source = ""
                 self.position = 0.0
                 self.duration = float(item.song.duration) if item else 0.0
                 self.pitch = 0
@@ -956,49 +959,102 @@ class KTVController:
         self.bus.emit("reaction", {"emoji": emoji})
         return True
 
+    def _writer(self) -> Any:
+        """The AI lyrics writer when it is on and downloaded, else None."""
+        writer = self.ai_lyrics
+        if writer is None or not self.settings.ai_lyrics or not writer.installed:
+            return None
+        return writer
+
+    def _waits_for_vocals(self, video_id: str) -> bool:
+        """The song is being separated: Whisper should hear the singer alone, so wait."""
+        if self.stems is None or not self.settings.auto_separate:
+            return False
+        waiting = (StemStatus.QUEUED, StemStatus.DOWNLOADING, StemStatus.SEPARATING)
+        return self.stems.status(video_id) in waiting
+
+    def _ask_for_lyrics(self, video_id: str, first: bool) -> None:
+        writer = self._writer()
+        if writer is None or self._waits_for_vocals(video_id):
+            return  # once separated, _on_stem_change asks again
+        hint = self._lyric_hints.get(video_id, "") if self.settings.lyrics_hint else ""
+        writer.request(video_id, hint=hint, first=first)
+
+    def _remember_hint(self, video_id: str, lines: list[LyricLine]) -> None:
+        if lines:
+            self._lyric_hints[video_id] = " ".join(line.text for line in lines)
+            while len(self._lyric_hints) > 200:
+                self._lyric_hints.pop(next(iter(self._lyric_hints)))
+
     def _load_lyrics(self, item: QueueItem) -> None:
+        """Lyrics written here from the song's own audio when a GPU can; else online ones.
+
+        While the GPU is still writing them, the online lyrics are shown and then replaced.
+        """
         fetch = getattr(self.resolver, "lyrics", None)
-        kept = self.offline.lyrics(item.song.video_id) if self.offline else None
-        if self.local is not None and is_local(item.song.video_id):
-            kept = [line.to_dict() for line in self.local.lyrics(item.song.video_id)]
-        if (fetch is None and kept is None) or not self.settings.show_lyrics:
+        video_id = item.song.video_id
+        kept = self.offline.lyrics(video_id) if self.offline else None
+        if self.local is not None and is_local(video_id):
+            kept = [line.to_dict() for line in self.local.lyrics(video_id)]
+        writer = self._writer()
+        if (fetch is None and kept is None and writer is None) or not self.settings.show_lyrics:
             return
 
         def work() -> None:
-            try:
-                if (
-                    kept is not None or fetch is None
-                ):  # downloaded with the song: no internet needed
-                    lines = [LyricLine.from_dict(line) for line in kept or []]
-                else:
-                    # The video's own subtitles when they exist, automatic captions otherwise.
-                    lines = fetch(item.song.video_id, self.settings.max_height, True)
-            except Exception:
-                log.info("no lyrics for %s", item.song.video_id, exc_info=True)
-                lines = []
-            if not lines and self.ai_lyrics is not None and self.settings.ai_lyrics:
-                # None anywhere: AI writes them (from its cache, or in the background).
-                lines = self.ai_lyrics.cached(item.song.video_id) or []
-                if not lines:
-                    self.ai_lyrics.request(item.song.video_id)
+            written = writer.cached(video_id) if writer is not None else None
+            source = "local" if written else ""
+            lines: list[LyricLine] = list(written or [])
+            if not lines:
+                try:
+                    if kept is not None or fetch is None:  # downloaded with the song
+                        lines = [LyricLine.from_dict(line) for line in kept or []]
+                    else:
+                        # The video's own subtitles, automatic captions, or LRCLIB.
+                        lines = fetch(video_id, self.settings.max_height, True)
+                except Exception:
+                    log.info("no lyrics online for %s", video_id, exc_info=True)
+                    lines = []
+                source = "online" if lines else ""
+                self._remember_hint(video_id, lines)
+                if writer is not None and (writer.on_gpu or not lines):
+                    self._ask_for_lyrics(video_id, first=True)
             with self._lock:
                 if self.current is not item or not self.settings.show_lyrics:
                     return
-                self.lyrics = lines
+                if self.lyrics_source == "local":
+                    return  # AI finished while the online lyrics were being fetched
+                self.lyrics, self.lyrics_source = lines, source
             self.bus.emit("lyrics", {"id": item.id, "lines": [line.to_dict() for line in lines]})
             self._emit_state()
 
         self._prefetcher.submit(work)
 
+    def _prepare_lyrics(self, video_id: str, first: bool) -> None:
+        """A song was separated: have its lyrics written from the vocals (GPU only)."""
+        writer = self._writer()
+        if writer is None or not writer.on_gpu or writer.cached(video_id) is not None:
+            return
+        fetch = getattr(self.resolver, "lyrics", None)
+
+        def work() -> None:
+            if video_id not in self._lyric_hints and fetch is not None and not is_local(video_id):
+                try:
+                    self._remember_hint(video_id, fetch(video_id, self.settings.max_height, True))
+                except Exception:
+                    log.info("no lyrics online for %s", video_id, exc_info=True)
+            self._ask_for_lyrics(video_id, first)
+
+        self._prefetcher.submit(work)
+
     def ai_lyrics_ready(self, video_id: str, lines: list[LyricLine]) -> None:
-        """AI finished a song's lyrics: show them if that song is on and has none yet."""
+        """AI finished a song's lyrics: show them in place of the online ones, if it is on."""
         with self._lock:
             item = self.current
-            if item is None or item.song.video_id != video_id or self.lyrics:
+            if item is None or item.song.video_id != video_id or not lines:
                 return
-            if not self.settings.show_lyrics:
+            if not self.settings.show_lyrics or self.lyrics_source == "local":
                 return
-            self.lyrics = lines
+            self.lyrics, self.lyrics_source = lines, "local"
         self.bus.emit("lyrics", {"id": item.id, "lines": [line.to_dict() for line in lines]})
         self._emit_state()
 
@@ -1185,6 +1241,7 @@ class KTVController:
                 playing = self.current if is_current else None
             if playing is not None:
                 self._load_melody(playing)
+            self._prepare_lyrics(video_id, first=is_current)
         self._emit_state()
 
     def stem_status(self, video_id: str) -> StemStatus:
@@ -1394,6 +1451,7 @@ class KTVController:
             "speed": self.speed,
             "guide_vocal": settings.guide_vocal,
             "lyrics": bool(self.lyrics),
+            "lyrics_source": self.lyrics_source,
             "show_lyrics": settings.show_lyrics,
             "reactions": list(REACTIONS),
             "room_closed": self.room_closed,

@@ -12,6 +12,7 @@ log = logging.getLogger(__name__)
 
 STEM_NAME = "instrumental.flac"
 PITCH_NAME = "melody.json"  # the original singer's pitch, for scoring
+VOCALS_NAME = "vocals.flac"  # the singer alone, which Whisper hears far better than the mix
 
 
 class StemCache:
@@ -28,6 +29,13 @@ class StemCache:
 
     def pitch_target(self, video_id: str) -> Path:
         return self.folder(video_id) / PITCH_NAME
+
+    def vocals_target(self, video_id: str) -> Path:
+        return self.folder(video_id) / VOCALS_NAME
+
+    def vocals(self, video_id: str) -> Path | None:
+        path = self.vocals_target(video_id)
+        return path if path.exists() else None
 
     def pitch(self, video_id: str) -> Path | None:
         path = self.pitch_target(video_id)
@@ -46,7 +54,8 @@ class StemCache:
         for folder in self.root.iterdir():
             stem = folder / STEM_NAME
             if folder.is_dir() and stem.exists():
-                entries.append((folder.stat().st_mtime, stem.stat().st_size, folder))
+                size = sum(f.stat().st_size for f in folder.iterdir() if f.is_file())
+                entries.append((folder.stat().st_mtime, size, folder))
         return entries
 
     def size(self) -> int:

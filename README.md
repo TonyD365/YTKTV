@@ -178,8 +178,9 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 - **Local songs.** Add folders of video files (MP4, MKV and more) in Settings: they show first in
   Search and on the Local page. Karaoke MKVs with two audio tracks switch between original and
   instrumental straight away, and an .lrc file next to a video gives its lyrics.
-- **AI lyrics.** A song with no lyrics anywhere gets them written by Whisper, with the timing
-  (Settings → AI Lyrics, a one-time download; GPU on Apple Silicon and NVIDIA).
+- **AI lyrics.** With a GPU (Apple Silicon or NVIDIA), Whisper writes every song's lyrics from
+  the separated vocals, so the timing matches the video; without one, only songs that have no
+  lyrics online (Settings → AI Lyrics, a one-time download).
 - **Spotify and Apple Music playlists.** Paste a public playlist link (Playlists → Import
   Playlist), or a list of songs one per line; each song is found on YouTube, karaoke versions
   first.

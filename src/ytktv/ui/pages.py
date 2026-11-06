@@ -972,13 +972,21 @@ class SettingsPage(Page):
         # Lyrics written by AI
         ai = card("AI Lyrics", admin=True)
         ai_note = QLabel(
-            "When a song has no lyrics anywhere, Whisper listens to it and writes them, with"
-            " the timing. The first time it downloads about 300 MB (1.3 GB with an NVIDIA"
-            " card, which makes it much faster). The lyrics are kept for next time."
+            "Whisper listens to the singer (separated from the band) and writes the lyrics"
+            " with their timing, so they match the video. With an NVIDIA card or Apple"
+            " Silicon it does this for every song, and shows the lyrics found online until"
+            " it is done; with only a CPU, just for songs that have none online. The first"
+            " time it downloads about 300 MB (1.3 GB with an NVIDIA card). Lyrics are kept."
         )
         ai_note.setWordWrap(True)
         ai.addWidget(ai_note)
-        check(ai, "Write lyrics with AI for songs that have none", "ai_lyrics")
+        check(ai, "Write lyrics with AI", "ai_lyrics")
+        check(
+            ai,
+            "Use the lyrics found online to get the words right (the timing still comes"
+            " from the song)",
+            "lyrics_hint",
+        )
         self.ai_status = QLabel()
         self.ai_status.setObjectName("muted")
         self.ai_button = QPushButton("Download AI Lyrics")
@@ -1088,7 +1096,13 @@ class SettingsPage(Page):
         writer = self.ctx.controller.ai_lyrics
         installed = writer is not None and writer.installed
         self.ai_button.setVisible(writer is not None and not installed)
-        self.ai_status.setText(text or ("Ready" if installed else "Not downloaded yet"))
+        if not text and installed:
+            text = (
+                "Ready · GPU: every song's lyrics are written on this computer"
+                if writer.on_gpu
+                else "Ready · CPU: only songs without lyrics online"
+            )
+        self.ai_status.setText(text or "Not downloaded yet · lyrics come from online")
 
     def install_ai_lyrics(self) -> None:
         from ytktv import lyrics_ai
