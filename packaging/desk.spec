@@ -24,6 +24,11 @@ datas = [
     (str(PACKAGE / "desk" / "assets"), "ytktv/desk/assets"),
     (str(PACKAGE / "ui" / "assets"), "ytktv/ui/assets"),
     (str(PACKAGE / "server" / "static"), "ytktv/server/static"),
+    # Run inside the downloaded runtimes when this Desk processes songs for its rooms.
+    (str(PACKAGE / "separation" / "sep_worker.py"), "ytktv/separation"),
+    (str(PACKAGE / "separation" / "pitch_core.py"), "ytktv/separation"),
+    (str(PACKAGE / "separation" / "align.py"), "ytktv/separation"),
+    (str(PACKAGE / "lyrics_ai" / "whisper_worker.py"), "ytktv/lyrics_ai"),
 ]
 datas += collect_data_files("certifi")
 datas += copy_metadata("ytktv")
@@ -31,10 +36,16 @@ hiddenimports = ["uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols.htt
                  "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on",
                  "zeroconf._utils.ipaddress", "zeroconf._handlers.answers"]
 
+# uv installs the runtimes (vocal separation, AI lyrics) when the Desk processes songs.
+from uv import find_uv_bin
+
+binaries = [(find_uv_bin(), ".")]
+
 analysis = Analysis(
     [str(PACKAGE / "desk" / "__main__.py")],
     pathex=[str(ROOT / "src")],
     datas=datas,
+    binaries=binaries,
     hiddenimports=hiddenimports,
     excludes=["torch", "onnxruntime", "audio_separator", "librosa", "mpv", "sounddevice",
               "tkinter", "matplotlib"],

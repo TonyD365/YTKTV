@@ -72,7 +72,11 @@ class Hub:
 
 
 def create_desk_app(
-    store: DeskStore, hub: Hub | None = None, cert_hash: str = "", metrics: Metrics | None = None
+    store: DeskStore,
+    hub: Hub | None = None,
+    cert_hash: str = "",
+    metrics: Metrics | None = None,
+    processor: Any = None,
 ) -> FastAPI:
     """The Desk's server. *cert_hash* is its TLS certificate's, which staff terminals check.
     *metrics*, when given, counts requests and room connections for the server console."""
@@ -101,6 +105,11 @@ def create_desk_app(
             return response
 
     add_staff_routes(app, store, hub, cert_hash, guard)
+    from ytktv.desk.processing import add_processing_routes
+
+    # Songs separated (and lyrics written) here for the rooms, when that is switched on.
+    app.state.processor = processor
+    add_processing_routes(app, store, lambda: app.state.processor)
 
     @app.get("/api/desk")
     def desk() -> dict[str, str]:

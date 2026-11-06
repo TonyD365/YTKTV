@@ -6,6 +6,7 @@ import time
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -76,17 +77,29 @@ class FrontDeskCard(QFrame):
         self.bound_row = QWidget()
         self.bound_row.setLayout(row)
         layout.addWidget(self.bound_row)
+        self.on_desk = QCheckBox(
+            "Process songs on the Desk when it offers (vocal separation and AI lyrics on its"
+            " GPU; this computer does them when the Desk cannot)"
+        )
+        self.on_desk.setChecked(store.settings.process_on_desk)
+        self.on_desk.toggled.connect(self._set_on_desk)
+        layout.addWidget(self.on_desk)
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
         self._timer.start(2000)
         self.refresh()
 
+    def _set_on_desk(self, on: bool) -> None:
+        self.store.settings.process_on_desk = on
+        self.store.save()
+
     def refresh(self) -> None:
         settings = self.store.settings
         bound = binding.is_bound(settings)
         self.form.setVisible(not bound)
         self.bound_row.setVisible(bound)
+        self.on_desk.setVisible(bound)
         if not bound:
             self.status.setText(
                 "This machine is stand-alone. Bind it to a YTKTV Desk to run it as a room."

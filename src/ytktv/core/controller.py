@@ -985,6 +985,10 @@ class KTVController:
         hint = self._lyric_hints.get(video_id, "") if self.settings.lyrics_hint else ""
         writer.request(video_id, hint=hint, first=first)
 
+    def lyric_hint(self, video_id: str) -> str:
+        """The song's words found online, if any: a spelling hint for Whisper."""
+        return self._lyric_hints.get(video_id, "") if self.settings.lyrics_hint else ""
+
     def _remember_hint(self, video_id: str, lines: list[LyricLine]) -> None:
         if lines:
             self._lyric_hints[video_id] = " ".join(line.text for line in lines)
@@ -1002,11 +1006,15 @@ class KTVController:
         if self.local is not None and is_local(video_id):
             kept = [line.to_dict() for line in self.local.lyrics(video_id)]
         writer = self._writer()
-        if (fetch is None and kept is None and writer is None) or not self.settings.show_lyrics:
+        if (
+            fetch is None and kept is None and self.ai_lyrics is None
+        ) or not self.settings.show_lyrics:
             return
 
         def work() -> None:
-            written = writer.cached(video_id) if writer is not None else None
+            # Written here, or on the Desk's GPU and fetched: kept in the same folder.
+            kept_ai = self.ai_lyrics
+            written = kept_ai.cached(video_id) if kept_ai is not None else None
             source = "local" if written else ""
             lines: list[LyricLine] = list(written or [])
             if not lines:

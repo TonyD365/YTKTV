@@ -100,7 +100,20 @@ def main() -> int:
     ip = lan_ip()
     certificate = ensure_certificate(data_dir() / "desk-tls", ip)
     metrics = Metrics()
-    desk_app = create_desk_app(store, hub, staff.certificate_hash(certificate[0]), metrics)
+    from ytktv.config import cache_dir
+    from ytktv.desk import processing
+
+    processor = None
+    if store.setting(processing.SETTING, "0") == "1":
+        try:
+            processor = processing.make_processor(cache_dir() / "desk-processing")
+        except Exception:
+            logging.exception("could not start processing songs for the rooms")
+        if processor is not None:
+            processor.on_event = metrics.event
+    desk_app = create_desk_app(
+        store, hub, staff.certificate_hash(certificate[0]), metrics, processor
+    )
     server = ServerThread(desk_app, DESK_PORT, certificate=certificate)
     server.start()
     try:

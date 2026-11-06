@@ -190,6 +190,23 @@ Desk's till.
 machine's name and what was done ("Bar: Closed Kids, $60.00 by Card"). Choose a machine to see
 only its actions. Passwords are never written into the log.
 
+## Processing songs on the Desk
+
+A computer with a GPU can do the heavy work for every room: removing the vocals and writing
+the lyrics. The rooms' own computers then need no GPU, even a Raspberry Pi will do.
+
+1. On the main Desk, open **Settings → Process Songs for the Rooms**, press **Download Vocal
+   Separation** and **Download AI Lyrics**, and tick **Separate songs and write lyrics for the
+   rooms on this computer**. Open YTKTV Desk again.
+2. In each room, **Settings → Front Desk → Process songs on the Desk when it offers** is on by
+   default.
+
+The Desk works on every room's current song first, then every room's next one, and so on.
+A song sung in two rooms is done once. Rooms download the instrumental, the melody (for
+scoring) and the lyrics when they are ready. When the Desk is off, does not process songs,
+cannot download a song (the room then sends it the audio), or has not finished the song
+about to be sung within two minutes, the room does it itself, as before.
+
 ## Server Mode
 
 In a bigger venue the main Desk can sit in a back office as a server while staff work on the staff terminals. In **Settings → Staff Terminals**, press **Switch to Server Mode…** (the Desk password is asked when one is set). YTKTV Desk closes; open it again and it starts as the server.
