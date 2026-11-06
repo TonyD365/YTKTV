@@ -15,7 +15,7 @@ phone:
       - any-glob-to-any-file: ["src/ytktv/server/**", "src/ytktv/audio/phone_mic.py"]
 lyrics:
   - changed-files:
-      - any-glob-to-any-file: ["src/ytktv/youtube/lyrics.py"]
+      - any-glob-to-any-file: ["src/ytktv/youtube/lyrics.py", "src/ytktv/lyrics_ai/**"]
 scoring:
   - changed-files:
       - any-glob-to-any-file: ["src/ytktv/core/scoring.py", "src/ytktv/separation/pitch_core.py"]
@@ -34,3 +34,9 @@ documentation:
 dependencies:
   - changed-files:
       - any-glob-to-any-file: ["pyproject.toml"]
+desk:
+  - changed-files:
+      - any-glob-to-any-file: ["src/ytktv/desk/**", "src/ytktv/rooms/**", "packaging/desk.spec"]
+tests:
+  - changed-files:
+      - any-glob-to-any-file: ["tests/**"]
