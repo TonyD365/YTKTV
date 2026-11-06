@@ -1,0 +1,33 @@
+# Step 2 of labelling pull requests (see labeler.yml). This runs the workflow file
+# from main, never from the pull request, so its write access stays safe.
+name: Apply pull request labels
+
+on:
+  workflow_run:
+    workflows: [Label pull requests]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-number
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - id: pr
+        # The number comes from a fork's run: accept nothing but digits.
+        run: |
+          number=$(head -c 12 pr-number | tr -d '\n')
+          [[ "$number" =~ ^[0-9]+$ ]] || { echo "Not a pull request number"; exit 1; }
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+      - uses: actions/labeler@v7
+        with:
+          pr-number: ${{ steps.pr.outputs.number }}
