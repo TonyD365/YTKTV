@@ -254,6 +254,25 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # Only the files that changed since the previous release, for updates within a
+      # major version (see src/ytktv/patching.py). No patch just means the installer.
+      - name: Make the patch from the previous release
+        if: runner.os == 'Windows' && github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+          PYTHON: python
+        run: packaging/make_patches.sh windows YTKTV ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v7
+        if: runner.os == 'Windows' && github.event_name == 'release'
+        with:
+          name: installer-patch-${{ matrix.name }}
+          path: dist/patches/*.zip
+          if-no-files-found: ignore
+          retention-days: 7
+
   # YTKTV Desk, the front desk for rooms: a small app with no player or separation.
   desk:
     name: Build Desk (${{ matrix.name }})
@@ -328,6 +347,25 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # Only the files that changed since the previous release, for updates within a
+      # major version (see src/ytktv/patching.py). No patch just means the installer.
+      - name: Make the patch from the previous release
+        if: runner.os == 'Windows' && github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+          PYTHON: python
+        run: packaging/make_patches.sh windows YTKTV-Desk ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v7
+        if: runner.os == 'Windows' && github.event_name == 'release'
+        with:
+          name: installer-patch-desk-${{ matrix.name }}
+          path: dist/patches/*.zip
+          if-no-files-found: ignore
+          retention-days: 7
+
   macos-universal:
     name: Build (macos-universal)
     needs: [build, desk]
@@ -374,6 +412,20 @@ jobs:
           intel="$(ls desk-parts/*-macos-x86_64.pkg)"
           version="$(basename "$arm" | sed -E 's/^YTKTV-Desk-(.*)-macos-arm64\.pkg$/\1/')"
           packaging/macos/build_universal_pkg.sh "$arm" "$intel" "$version" dist YTKTV-Desk
+      - name: Make the patches from the previous release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: packaging/make_patches.sh macos
+      - uses: actions/upload-artifact@v7
+        if: github.event_name == 'release'
+        with:
+          name: installer-patch-macos
+          path: dist/patches/*.zip
+          if-no-files-found: ignore
+          retention-days: 7
       - uses: actions/upload-artifact@v7
         with:
           name: installer-macos-universal

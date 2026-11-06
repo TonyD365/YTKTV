@@ -46,3 +46,8 @@ Name: "{autodesktop}\YTKTV Desk"; Filename: "{app}\YTKTV Desk.exe"; Tasks: deskt
 
 [Run]
 Filename: "{app}\YTKTV Desk.exe"; Description: "Launch YTKTV Desk"; Flags: nowait postinstall skipifsilent
+
+; Patch updates (src/ytktv/patching.py) may add files the installer never wrote:
+; remove the whole folder on uninstall.
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"

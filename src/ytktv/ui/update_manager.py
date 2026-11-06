@@ -73,7 +73,8 @@ class UpdateManager(QObject):
                 info.page_url,
             )
             return
-        self.status.emit(f"Downloading YTKTV {info.version}...", info.page_url)
+        size = updater.size_label(info, cache_dir() / "updates")
+        self.status.emit(f"Downloading YTKTV {info.version}{size}...", info.page_url)
         self._busy = True
 
         def downloaded(path: Path) -> None:

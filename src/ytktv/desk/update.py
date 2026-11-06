@@ -62,7 +62,8 @@ class DeskUpdater(QObject):
                 self.status.emit(f"Version {info.version} is out.")
                 self.available.emit(info.version, info.page_url)
                 return
-            self.status.emit(f"Downloading version {info.version}…")
+            size = updater.size_label(info, cache_dir() / "desk-updates")
+            self.status.emit(f"Downloading version {info.version}{size}…")
             run_async(
                 lambda: updater.download_update(info, cache_dir() / "desk-updates"),
                 lambda path: self._downloaded(path, info.version),

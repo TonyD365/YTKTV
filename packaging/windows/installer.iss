@@ -49,3 +49,8 @@ Name: "{autodesktop}\YTKTV"; Filename: "{app}\YTKTV.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\YTKTV.exe"; Description: "Launch YTKTV"; Flags: nowait postinstall skipifsilent
+
+; Patch updates (src/ytktv/patching.py) may add files the installer never wrote:
+; remove the whole folder on uninstall.
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"

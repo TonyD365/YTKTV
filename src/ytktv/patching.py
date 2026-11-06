@@ -1,0 +1,300 @@
+"""Small updates as patches: only the files that changed between two builds.
+
+An update within the same major version (4.0.1 -> 4.0.2, 4.0.2 -> 4.1.0) can come as a
+patch instead of the whole installer. The release workflow compares the installed files
+of the previous build with the new one (:func:`make_patch`) and attaches a zip with the
+files that changed and a manifest. The app downloads it, checks it against the files it
+has (:func:`check_base`), and hands over to a small script that waits for the app to
+quit, swaps the files, checks every new file's hash, and puts the old files back if
+anything is wrong. A failed patch is remembered, and the next update is the installer.
+
+macOS: the patch root is the .app bundle (in /Applications, owned by root, so the swap
+asks for the admin password, as the installer does). Windows: the install folder, which
+is the user's own; Inno Setup's uninstall entry is updated to the new version so the
+Apps list and winget see it. Linux AppImages are one file and always update whole.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import shlex
+import stat
+import sys
+import zipfile
+from pathlib import Path
+from typing import Any
+
+MANIFEST = "manifest.json"
+FAILED_MARKER = "patch-failed"
+# Files the installer itself writes next to the app, never part of a build.
+IGNORED = re.compile(r"^(unins\d+\.(exe|dat|msg)|\.DS_Store|\.update-backup)$", re.IGNORECASE)
+# Inno Setup's uninstall entry of each app (AppId in packaging/windows/*.iss).
+WINDOWS_APP_IDS = {
+    "YTKTV": "{6B0C5B0E-6C1B-4D0B-9E0F-59A7C0E6B2A1}_is1",
+    "YTKTV-Desk": "{C2E7A1D4-3F6B-4E58-9A21-7D0B5E4C8F13}_is1",
+}
+EXECUTABLES = {"YTKTV": "YTKTV", "YTKTV-Desk": "YTKTV Desk"}
+
+
+def patch_tag(system: str, machine: str) -> str | None:
+    """The platform part of a patch's name, or None where patches are not made."""
+    machine = machine.lower()
+    arm = machine in ("arm64", "aarch64")
+    if system == "Darwin":
+        return "macos-arm64" if arm else "macos-x86_64"
+    if system == "Windows":
+        return "windows-arm64" if arm else "windows-x64"
+    return None
+
+
+def patch_name(app: str, old: str, new: str, tag: str) -> str:
+    return f"{app}-patch-{old}-{new}-{tag}.zip"
+
+
+def _sha(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def scan(root: Path) -> dict[str, dict[str, Any]]:
+    """Every file under *root*: {"sha", "mode"} or, for a symlink, {"link"}."""
+    found: dict[str, dict[str, Any]] = {}
+
+    def walk(folder: Path) -> None:
+        for entry in sorted(os.scandir(folder), key=lambda e: e.name):
+            if IGNORED.match(entry.name):
+                continue
+            path = Path(entry.path)
+            rel = path.relative_to(root).as_posix()
+            if entry.is_symlink():
+                found[rel] = {"link": os.readlink(path)}
+            elif entry.is_dir():
+                walk(path)
+            else:
+                found[rel] = {"sha": _sha(path), "mode": stat.S_IMODE(entry.stat().st_mode)}
+
+    walk(root)
+    return found
+
+
+def make_patch(old_root: Path, new_root: Path, out: Path, meta: dict[str, str]) -> dict[str, Any]:
+    """Write the patch from *old_root* to *new_root* to *out*; returns its manifest."""
+    old, new = scan(old_root), scan(new_root)
+    changed = {
+        rel: {**entry, "old": old.get(rel)} for rel, entry in new.items() if old.get(rel) != entry
+    }
+    manifest = {
+        **meta,
+        "changed": changed,
+        "deleted": {rel: entry for rel, entry in old.items() if rel not in new},
+        "same": {rel: entry for rel, entry in new.items() if rel not in changed},
+    }
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(MANIFEST, json.dumps(manifest, indent=1))
+        for rel, entry in changed.items():
+            if "sha" in entry:
+                archive.write(new_root / rel, f"files/{rel}")
+    return manifest
+
+
+def stage(patch: Path, dest: Path) -> dict[str, Any]:
+    """Unpack a downloaded patch into *dest* and check every file in it."""
+    import shutil
+
+    shutil.rmtree(dest, ignore_errors=True)
+    files = dest / "files"
+    files.mkdir(parents=True)
+    with zipfile.ZipFile(patch) as archive:
+        manifest: dict[str, Any] = json.loads(archive.read(MANIFEST))
+        for rel, entry in manifest["changed"].items():
+            _safe(rel)
+            target = files / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if "link" in entry:
+                os.symlink(entry["link"], target)
+                continue
+            with archive.open(f"files/{rel}") as source, target.open("wb") as out:
+                shutil.copyfileobj(source, out)
+            os.chmod(target, int(entry["mode"]))
+            if _sha(target) != entry["sha"]:
+                raise RuntimeError(f"patch file {rel} is damaged")
+    for rel in manifest["deleted"]:
+        _safe(rel)
+    (dest / MANIFEST).write_text(json.dumps(manifest))
+    return manifest
+
+
+def _safe(rel: str) -> None:
+    parts = Path(rel).parts
+    if not parts or Path(rel).is_absolute() or ".." in parts or ":" in rel:
+        raise RuntimeError(f"bad path in patch: {rel}")
+
+
+def _matches(path: Path, entry: dict[str, Any] | None) -> bool:
+    if entry is None:
+        return not os.path.lexists(path)
+    if "link" in entry:
+        return path.is_symlink() and os.readlink(path) == entry["link"]
+    return path.is_file() and not path.is_symlink() and _sha(path) == entry["sha"]
+
+
+def check_base(manifest: dict[str, Any], root: Path) -> bool:
+    """True when the installed files are exactly what the patch was made from."""
+    if not all(_matches(root / rel, e) for rel, e in manifest["same"].items()):
+        return False
+    if not all(_matches(root / rel, e.get("old")) for rel, e in manifest["changed"].items()):
+        return False
+    return all(_matches(root / rel, e) for rel, e in manifest["deleted"].items())
+
+
+def app_root(executable: str | None = None, system: str | None = None) -> Path:
+    """The folder a patch applies to: the .app bundle on macOS, else the install folder."""
+    exe = Path(executable or sys.executable).resolve()
+    if (system or sys.platform) in ("Darwin", "darwin"):
+        return exe.parents[2]  # YTKTV.app/Contents/MacOS/YTKTV
+    return exe.parent
+
+
+def needs_admin(manifest: dict[str, Any], root: Path) -> bool:
+    """Whether some folder the patch writes to is not ours to write."""
+    folders = {root}
+    for rel in (*manifest["changed"], *manifest["deleted"]):
+        parent = (root / rel).parent
+        while not parent.exists() and parent != root:
+            parent = parent.parent
+        folders.add(parent)
+    return not all(os.access(folder, os.W_OK) for folder in folders)
+
+
+def _moves(manifest: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """(paths backed up before the swap, paths put in from the patch)."""
+    backed = [r for r, e in manifest["changed"].items() if e.get("old") is not None]
+    return backed + list(manifest["deleted"]), list(manifest["changed"])
+
+
+def shell_script(manifest: dict[str, Any], staged: Path, root: Path, marker: Path) -> str:
+    """The POSIX script that swaps the files (run as admin when the app is root's)."""
+    q = shlex.quote
+    backup = staged / "backup"
+    backed, placed = _moves(manifest)
+    lines = ["#!/bin/sh", "set -u", "restore() {"]
+    for rel in placed:
+        lines.append(f"  rm -rf {q(str(root / rel))}")
+    for rel in backed:
+        src, dst = backup / rel, root / rel
+        lines.append(
+            f"  if [ -e {q(str(src))} ] || [ -L {q(str(src))} ]; then "
+            f"mkdir -p {q(str(dst.parent))} && mv {q(str(src))} {q(str(dst))}; fi"
+        )
+    lines += ["}", f"fail() {{ restore; : > {q(str(marker))}; exit 1; }}"]
+    for rel in backed:
+        src, dst = root / rel, backup / rel
+        lines.append(f"mkdir -p {q(str(dst.parent))} && mv {q(str(src))} {q(str(dst))} || fail")
+    for rel in placed:
+        src, dst = staged / "files" / rel, root / rel
+        lines.append(f"mkdir -p {q(str(dst.parent))} && mv {q(str(src))} {q(str(dst))} || fail")
+    for rel, entry in manifest["changed"].items():
+        path = q(str(root / rel))
+        if "link" in entry:
+            lines.append(f'[ "$(readlink {path})" = {q(entry["link"])} ] || fail')
+        else:
+            lines.append(f'[ "$(shasum -a 256 {path} | cut -c1-64)" = {entry["sha"]} ] || fail')
+    lines += [f"rm -rf {q(str(backup))}", "exit 0", ""]
+    return "\n".join(lines)
+
+
+def _ps(text: str) -> str:
+    return "'" + text.replace("'", "''") + "'"
+
+
+def powershell_script(
+    manifest: dict[str, Any], staged: Path, root: Path, marker: Path, pid: int
+) -> str:
+    """The Windows script: wait for the app, swap, check, update the Apps entry, restart."""
+    backup = staged / "backup"
+    backed, placed = _moves(manifest)
+    app = str(manifest.get("app", "YTKTV"))
+    exe = root / f"{EXECUTABLES.get(app, app)}.exe"
+    lines = [
+        "$ErrorActionPreference = 'Stop'",
+        f"try {{ Wait-Process -Id {int(pid)} -Timeout 120 }} catch {{}}",
+        "Start-Sleep -Milliseconds 500",
+        "function Move-To($from, $to) {",
+        "  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null",
+        "  Move-Item -LiteralPath $from -Destination $to -Force",
+        "}",
+        "function Restore {",
+    ]
+    for rel in placed:
+        target = _ps(str(root / rel))
+        lines.append(f"  Remove-Item -LiteralPath {target} -Force -ErrorAction SilentlyContinue")
+    for rel in backed:
+        src, dst = _ps(str(backup / rel)), _ps(str(root / rel))
+        lines.append(f"  if (Test-Path -LiteralPath {src}) {{ Move-To {src} {dst} }}")
+    lines += ["}", "try {"]
+    for rel in backed:
+        lines.append(f"  Move-To {_ps(str(root / rel))} {_ps(str(backup / rel))}")
+    for rel in placed:
+        lines.append(f"  Move-To {_ps(str(staged / 'files' / rel))} {_ps(str(root / rel))}")
+    for rel, entry in manifest["changed"].items():
+        path = _ps(str(root / rel))
+        lines.append(
+            f"  if ((Get-FileHash -LiteralPath {path} -Algorithm SHA256).Hash.ToLower() "
+            f"-ne '{entry['sha']}') {{ throw 'bad file' }}"
+        )
+    key = WINDOWS_APP_IDS.get(app)
+    if key:
+        old, new = _ps(str(manifest["from"])), _ps(str(manifest["to"]))
+        lines += [
+            "  foreach ($hive in 'HKCU:', 'HKLM:') {",
+            f'    $key = "$hive\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{key}"',
+            "    if (Test-Path -LiteralPath $key) {",
+            "      try {",
+            f"        Set-ItemProperty -LiteralPath $key -Name DisplayVersion -Value {new}",
+            "        $name = (Get-ItemProperty -LiteralPath $key).DisplayName",
+            f"        if ($name) {{ Set-ItemProperty -LiteralPath $key -Name DisplayName "
+            f"-Value $name.Replace({old}, {new}) }}",
+            "      } catch {}",
+            "    }",
+            "  }",
+        ]
+    lines += [
+        f"  Remove-Item -LiteralPath {_ps(str(backup))} -Recurse -Force "
+        "-ErrorAction SilentlyContinue",
+        "} catch {",
+        "  Restore",
+        f"  New-Item -ItemType File -Force -Path {_ps(str(marker))} | Out-Null",
+        "}",
+        f"Start-Process -FilePath {_ps(str(exe))}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def macos_launcher(
+    apply: Path, root: Path, marker: Path, pid: int, admin: bool, reopen: bool = True
+) -> str:
+    """Waits for the app to quit, runs *apply* (asking for the password if needed), reopens."""
+    q = shlex.quote
+    if admin:
+        run = (
+            "osascript -e 'on run argv' -e 'do shell script \"/bin/sh \" & quoted form of "
+            "(item 1 of argv) with administrator privileges' -e 'end run' "
+            f"{q(str(apply))} || : > {q(str(marker))}"
+        )
+    else:
+        run = f"/bin/sh {q(str(apply))}"
+    lines = [
+        "#!/bin/sh",
+        f"while kill -0 {int(pid)} 2>/dev/null; do sleep 0.5; done",
+        run,
+    ]
+    if reopen:
+        lines.append(f"open {q(str(root))}")
+    return "\n".join(lines) + "\n"
