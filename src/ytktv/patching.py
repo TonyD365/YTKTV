@@ -229,6 +229,13 @@ def powershell_script(
         "  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null",
         "  Move-Item -LiteralPath $from -Destination $to -Force",
         "}",
+        # .NET, not Get-FileHash: that module is not always loaded.
+        "function Hash-Of($path) {",
+        "  $sha = [System.Security.Cryptography.SHA256]::Create()",
+        "  $stream = [System.IO.File]::OpenRead($path)",
+        "  try { $bytes = $sha.ComputeHash($stream) } finally { $stream.Dispose() }",
+        "  return ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLower()",
+        "}",
         "function Restore {",
     ]
     for rel in placed:
@@ -245,8 +252,7 @@ def powershell_script(
     for rel, entry in manifest["changed"].items():
         path = _ps(str(root / rel))
         lines.append(
-            f"  if ((Get-FileHash -LiteralPath {path} -Algorithm SHA256).Hash.ToLower() "
-            f"-ne '{entry['sha']}') {{ throw 'bad file' }}"
+            f"  if ((Hash-Of {path}) -ne '{entry['sha']}') {{ throw 'bad file: ' + {path} }}"
         )
     key = WINDOWS_APP_IDS.get(app)
     if key:
@@ -269,7 +275,7 @@ def powershell_script(
         "-ErrorAction SilentlyContinue",
         "} catch {",
         "  Restore",
-        f"  Set-Content -LiteralPath {_ps(str(marker))} -Value \"$_\"",  # why, for the log
+        f'  Set-Content -LiteralPath {_ps(str(marker))} -Value "$_"',  # why, for the log
         "}",
         f"Start-Process -FilePath {_ps(str(exe))}",
         "",
