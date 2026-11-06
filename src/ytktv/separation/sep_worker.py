@@ -131,6 +131,10 @@ class Worker:
         try:
             if instrumental is None:
                 raise RuntimeError("separation produced no instrumental")
+            try:
+                align_stems(source, [p for p in (instrumental, vocals) if p is not None])
+            except Exception as exc:  # a stem a little off beats no stem at all
+                sys.stderr.write(f"alignment failed: {exc}\n")
             if pitch and vocals is not None:
                 # The singer's melody, used as the reference for scoring. A failure here
                 # must not cost the song its instrumental.
@@ -144,6 +148,31 @@ class Worker:
             for leftover in outputs:
                 if leftover.exists():
                     leftover.unlink()
+
+
+def align_stems(source, stems):
+    """Shift the stems so they match the original to the sample, at its exact length."""
+    import soundfile
+
+    try:
+        from ytktv.separation import align
+    except ImportError:  # running as a plain script in the downloaded environment
+        import align  # type: ignore[no-redef]
+
+    original, rate = soundfile.read(str(source), dtype="float32", always_2d=True)
+    first, first_rate = soundfile.read(str(stems[0]), dtype="float32", always_2d=True)
+    if first_rate != rate:
+        return  # the separator resampled: nothing to compare sample by sample
+    late = align.offset(original.mean(axis=1), first.mean(axis=1), rate)
+    for index, stem in enumerate(stems):
+        samples = (
+            first if index == 0 else soundfile.read(str(stem), dtype="float32", always_2d=True)[0]
+        )
+        if late == 0 and len(samples) == len(original):
+            continue
+        soundfile.write(str(stem), align.shift(samples, late, len(original)), rate, format="FLAC")
+    if late:
+        sys.stderr.write(f"instrumental moved by {late} samples ({1000 * late / rate:.1f} ms)\n")
 
 
 def write_pitch(vocals, destination):

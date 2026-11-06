@@ -70,6 +70,7 @@ datas = [
     (str(PACKAGE / "separation" / "sep_worker.py"), "ytktv/separation"),
     (str(PACKAGE / "lyrics_ai" / "whisper_worker.py"), "ytktv/lyrics_ai"),
     (str(PACKAGE / "separation" / "pitch_core.py"), "ytktv/separation"),
+    (str(PACKAGE / "separation" / "align.py"), "ytktv/separation"),
 ]
 datas += collect_data_files("imageio_ffmpeg")
 datas += collect_data_files("certifi")
