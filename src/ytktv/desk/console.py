@@ -10,6 +10,7 @@ import time
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCloseEvent
@@ -42,8 +43,14 @@ from ytktv.desk.store import DeskStore
 from ytktv.ui import backdrop
 
 ONLINE_SECONDS = 120  # a staff terminal that called within this long counts as online
-FILTERS = ("Everything", "Operations", "Rooms", "Errors", "Server")
-KINDS = {"Operations": "operation", "Rooms": "room", "Errors": "error", "Server": "server"}
+FILTERS = ("Everything", "Operations", "Rooms", "Songs", "Errors", "Server")
+KINDS = {
+    "Operations": "operation",
+    "Rooms": "room",
+    "Songs": "gpu",
+    "Errors": "error",
+    "Server": "server",
+}
 
 STYLE = """
 #console QLabel { color: #f3eeff; }
@@ -73,9 +80,11 @@ class ServerConsole(QMainWindow):
         metrics: Metrics,
         address: str,
         keep_awake: awake.KeepAwake | None = None,
+        processor: Any = None,
     ) -> None:
         super().__init__()
         self.store, self.hub, self.metrics, self.address = store, hub, metrics, address
+        self.processor = processor  # processing.SongProcessor while songs are done here
         self.keep_awake = keep_awake
         self.confirm_close = True
         self.setWindowTitle("YTKTV Desk · Server")
@@ -113,8 +122,9 @@ class ServerConsole(QMainWindow):
             ("requests", "REQUESTS / MIN"),
             ("machine", "THIS COMPUTER"),
             ("today", "TODAY"),
+            ("gpu", "SONGS FOR ROOMS"),
         )
-        for column, (key, head) in enumerate(cards):
+        for index, (key, head) in enumerate(cards):
             card = QFrame()
             card.setObjectName("card")
             box = QVBoxLayout(card)
@@ -129,7 +139,7 @@ class ServerConsole(QMainWindow):
             for widget in (label, value, detail):
                 box.addWidget(widget)
             box.addStretch()
-            grid.addWidget(card, 0, column)
+            grid.addWidget(card, index // 3, index % 3)
             self.values[key], self.details[key] = value, detail
         page.addLayout(grid)
 
@@ -227,7 +237,25 @@ class ServerConsole(QMainWindow):
         self.details["today"].setText(
             f"{len(visits)} sessions closed · {in_use} open · {len(orders)} orders"
         )
+        self._show_gpu()
         self.show_log(now)
+
+    def _show_gpu(self) -> None:
+        from ytktv.desk import processing
+
+        state = processing.describe(self.processor)
+        if not state["on"]:
+            self.values["gpu"].setText("Off")
+            self.details["gpu"].setText("Settings → Process Songs for the Rooms")
+            return
+        self.values["gpu"].setText(f"{state['queue']} queued")
+        parts = [f"working on {state['active']}" if state["active"] else "idle"]
+        if state["device"]:
+            parts.append(state["device"])
+        parts.append(f"cache {state['cache_mb'] / 1024:.1f} GB")
+        if not state["lyrics"]:
+            parts.append("AI lyrics not downloaded")
+        self.details["gpu"].setText(" · ".join(parts))
 
     def rows(self, now: float) -> list[tuple[float, str, str]]:
         """(time, kind, text) for the log, newest first."""
@@ -338,6 +366,9 @@ class ConsoleSettings(QDialog):
         self.autostart = QCheckBox("Start YTKTV Desk when this computer starts")
         self.autostart.setChecked(awake.starts_at_login())
         column.addWidget(self.autostart)
+        from ytktv.desk.processing_settings import ProcessingSettings
+
+        column.addWidget(ProcessingSettings(console.store))
         row = QHBoxLayout()
         save = QPushButton("Save")
         save.setObjectName("accent")
