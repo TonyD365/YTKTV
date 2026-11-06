@@ -125,7 +125,9 @@ def main() -> int:
     # What is done here is logged under this Desk's name, like a terminal's under its own.
     name = lambda: staff.machine_name(store)  # noqa: E731 - read again at every change
     if store.setting(staff.SERVER_MODE_SETTING, "0") == "1":
-        return run_server_mode(app, store, hub, metrics, f"{ip}:{DESK_PORT}", server, announcer)
+        return run_server_mode(
+            app, store, hub, metrics, f"{ip}:{DESK_PORT}", server, announcer, processor
+        )
     window = DeskWindow(
         cast(DeskStore, staff.LoggedStore(store, name)),
         cast(Hub, staff.LoggedHub(hub, store, name)),
@@ -140,13 +142,20 @@ def main() -> int:
 
 
 def run_server_mode(
-    app: Any, store: Any, hub: Any, metrics: Any, address: str, server: Any, announcer: Any
+    app: Any,
+    store: Any,
+    hub: Any,
+    metrics: Any,
+    address: str,
+    server: Any,
+    announcer: Any,
+    processor: Any = None,
 ) -> int:
     """This computer only runs the server; its window is the server console."""
     from ytktv.desk.awake import KeepAwake
     from ytktv.desk.console import ServerConsole
 
-    console = ServerConsole(store, hub, metrics, address, KeepAwake())
+    console = ServerConsole(store, hub, metrics, address, KeepAwake(), processor)
     try:
         console.show()
         return int(app.exec())

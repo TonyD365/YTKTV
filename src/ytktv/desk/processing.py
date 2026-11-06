@@ -263,7 +263,9 @@ def describe(processor: SongProcessor | None) -> dict[str, Any]:
         return {"on": False}
     stems = processor.stems
     cache = getattr(stems, "cache", None)
+    separator = getattr(stems, "_separator", None)
     return {
+        "device": getattr(separator, "device_label", ""),
         "on": True,
         "queue": len(processor.queue()),
         "active": getattr(stems, "_active", None),

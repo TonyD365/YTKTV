@@ -214,10 +214,10 @@ In a bigger venue the main Desk can sit in a back office as a server while staff
 Server Mode is kept: the computer starts in it every time until you leave it. Instead of the front desk, the screen shows the server console:
 
 - The Desk's name, its address, the certificate fingerprint staff terminals check, and how long the server has been up.
-- **Rooms online** (and which are offline), **staff terminals** online now, **requests per minute** with the refused or failed ones in the last hour, this computer's **CPU, memory and database size**, and **today's** takings, sessions and orders.
-- A **live log** of what every machine did, rooms connecting and disconnecting, and errors. Filter it by kind, or export it as a CSV file. Server events are kept for a week.
+- **Rooms online** (and which are offline), **staff terminals** online now, **requests per minute** with the refused or failed ones in the last hour, this computer's **CPU, memory and database size**, **today's** takings, sessions and orders, and **songs for rooms**: how many songs wait for this computer's GPU, the one it is working on, the GPU, and the size of the shared cache (see Processing songs on the Desk).
+- A **live log** of what every machine did, rooms connecting and disconnecting, songs separated and lyrics written (with how long each took), and errors. Filter it by kind, or export it as a CSV file. Server events are kept for a week.
 - **Back Up Now** saves a copy of every record to the `backups` folder in YTKTV's data folder.
-- **Settings** renames the Desk, turns on **Start YTKTV Desk when this computer starts**, and has **Leave Server Mode…** (asks for the Desk password).
+- **Settings** renames the Desk, switches processing songs for the rooms on or off, turns on **Start YTKTV Desk when this computer starts**, and has **Leave Server Mode…** (asks for the Desk password).
 
 While in Server Mode the computer does not go to sleep on its own. Closing the console asks first, because rooms and staff terminals lose the Desk until it is opened again.
 

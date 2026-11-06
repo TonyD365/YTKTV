@@ -127,3 +127,24 @@ def test_terminals_work_while_the_main_desk_is_in_server_mode(main_desk, tmp_pat
     terminal.set_setting("currency", "£")
     assert store.setting("currency") == "£"
     assert any(e.machine == "Bar" for e in store.oplog(0, 2**40))
+
+
+def test_the_gpu_card_shows_the_songs_done_for_the_rooms(console, tmp_path):
+    from tests.test_desk_processing import FakeLyrics, FakeStems
+    from ytktv.desk import processing
+
+    console.refresh()
+    assert console.values["gpu"].text() == "Off"
+    stems = FakeStems(tmp_path)
+    processor = processing.SongProcessor(stems, FakeLyrics(tmp_path))
+    processor.on_event = console.metrics.event
+    processor.ask("room1", [{"id": "a"}, {"id": "b"}])
+    console.processor = processor
+    console.refresh()
+    assert console.values["gpu"].text() == "2 queued"
+    stems.finish("a")
+    console.filter.setCurrentText("Songs")
+    console.refresh()
+    assert console.values["gpu"].text() == "1 queued"
+    lines = [console.log.item(i).text() for i in range(console.log.count())]
+    assert any("Separated a" in line for line in lines)
