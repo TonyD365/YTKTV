@@ -185,3 +185,107 @@ class AiLyrics:
 
             shutil.rmtree(work, ignore_errors=True)
         return self.cached(video_id) or []
+
+
+def keep_piece(lines: list[LyricLine], offset: float, start: float, end: float) -> list[LyricLine]:
+    """A piece's lines on the song's clock, keeping only those that begin inside the piece.
+
+    Each piece is heard with a few seconds more on both sides, so a line cut at an edge
+    is heard whole by the piece it begins in; the next piece drops it.
+    """
+    kept = []
+    for line in lines:
+        begin = line.start + offset
+        if start <= begin < end:
+            words = tuple((round(t + offset, 2), i) for t, i in line.words)
+            kept.append(LyricLine(round(begin, 2), round(line.end + offset, 2), line.text, words))
+    return kept
+
+
+class PieceWriter:
+    """Writes the lyrics of a song's pieces as separation finishes them (GPU only).
+
+    Whisper stays loaded in one worker process, since a piece comes every few seconds.
+    *on_partial* gets (video id, the lines so far, up to which second they reach).
+    """
+
+    def __init__(
+        self,
+        env: Runtime,
+        on_partial: Callable[[str, list[LyricLine], float], None] | None = None,
+        transcribe: Callable[[Path, str, str], list[LyricLine]] | None = None,
+    ) -> None:
+        self.env, self.on_partial = env, on_partial
+        self._transcribe = transcribe or self._serve
+        self._lock = threading.Lock()
+        self._waiting: list[tuple[str, dict[str, Any], str]] = []
+        self._busy = False
+        self._lines: dict[str, list[LyricLine]] = {}
+        self._process: subprocess.Popen[str] | None = None
+
+    def add(self, video_id: str, piece: dict[str, Any], hint: str = "") -> None:
+        with self._lock:
+            self._waiting.append((video_id, piece, hint))
+            if self._busy:
+                return
+            self._busy = True
+        threading.Thread(target=self._work, name="ytktv-ai-pieces", daemon=True).start()
+
+    def _work(self) -> None:
+        while True:
+            with self._lock:
+                if not self._waiting:
+                    self._busy = False
+                    return
+                video_id, piece, hint = self._waiting.pop(0)
+            audio = Path(str(piece["vocals"]))
+            try:
+                so_far = self._lines.setdefault(video_id, [])
+                if so_far:  # the words just before help Whisper carry on
+                    hint = " ".join(line.text for line in so_far[-3:])
+                heard = self._transcribe(audio, hint[:HINT_CHARACTERS], "")
+                start, end = float(piece["start"]), float(piece["end"])
+                so_far += keep_piece(heard, float(piece["offset"]), start, end)
+                if self.on_partial is not None:
+                    self.on_partial(video_id, list(so_far), end)
+            except Exception:
+                log.info("AI lyrics for a piece of %s failed", video_id, exc_info=True)
+            finally:
+                audio.unlink(missing_ok=True)
+                if piece.get("last"):
+                    self._lines.pop(video_id, None)
+
+    def _serve(self, audio: Path, hint: str, language: str) -> list[LyricLine]:
+        """Transcribe one piece with the worker that keeps Whisper loaded."""
+        if self._process is None or self._process.poll() is not None:
+            self._process = subprocess.Popen(  # noqa: S603
+                [str(self.env.python), "-u", str(WORKER), "--serve",
+                 str(self.env.root / "models")],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                text=True, encoding="utf-8",
+            )  # fmt: skip
+        process = self._process
+        assert process.stdin is not None and process.stdout is not None
+        out = audio.with_suffix(".json")
+        request = {"audio": str(audio), "out": str(out), "language": language, "hint": hint}
+        process.stdin.write(json.dumps(request) + "\n")
+        process.stdin.flush()
+        while True:
+            line = process.stdout.readline()
+            if not line:
+                raise RuntimeError("the AI lyrics worker stopped")
+            if line.startswith("@@YTKTV "):
+                reply = json.loads(line[len("@@YTKTV ") :])
+                break
+        try:
+            if not reply.get("ok"):
+                raise RuntimeError(str(reply.get("error")))
+            data = json.loads(out.read_text(encoding="utf-8"))
+            return [LyricLine.from_dict(line) for line in data]
+        finally:
+            out.unlink(missing_ok=True)
+
+    def close(self) -> None:
+        if self._process is not None:
+            self._process.kill()
+            self._process = None

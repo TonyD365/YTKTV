@@ -13,6 +13,7 @@ import os
 import subprocess
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import IO, Any
 
@@ -118,7 +119,27 @@ class SubprocessSeparator:
             return self.device_label
 
     def separate(self, source: Path, out_path: Path, pitch_path: Path | None = None) -> None:
-        request = {"source": str(source), "output": str(out_path)}
+        self._separate({"source": str(source), "output": str(out_path)}, pitch_path)
+
+    def separate_in_chunks(
+        self,
+        source: Path,
+        out_path: Path,
+        pitch_path: Path | None,
+        chunk_dir: Path,
+        on_chunk: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Like :meth:`separate`, calling *on_chunk* with each piece's vocals when ready."""
+        request = {"source": str(source), "output": str(out_path), "chunks": True}
+        request["chunk_dir"] = str(chunk_dir)
+        self._separate(request, pitch_path, on_chunk)
+
+    def _separate(
+        self,
+        request: dict[str, Any],
+        pitch_path: Path | None,
+        on_chunk: Callable[[dict[str, Any]], None] | None = None,
+    ) -> None:
         if pitch_path is not None:
             request["pitch"] = str(pitch_path)
         with self._lock:
@@ -129,6 +150,13 @@ class SubprocessSeparator:
                 process.stdin.write("\n")
                 process.stdin.flush()
                 reply = self._read_message(process)
+                while reply.get("event") == "chunk":
+                    if on_chunk is not None:
+                        try:
+                            on_chunk(reply)
+                        except Exception:
+                            log.exception("a separated piece could not be passed on")
+                    reply = self._read_message(process)
             except (OSError, WorkerError):
                 self._kill()
                 raise

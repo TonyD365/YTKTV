@@ -238,7 +238,7 @@ def test_worker_script_is_standalone():
     folder = Path(runtime.__file__).parent
     worker = folder.joinpath("sep_worker.py").read_text()
     # Each ytktv import has a plain-script fallback right next to it.
-    assert worker.count("from ytktv") == 2
+    assert worker.count("from ytktv") == worker.count("except ImportError") == 3
     assert "import pitch_core" in worker and "import align" in worker
     assert "import ytktv" not in worker
     for helper in ("pitch_core.py", "align.py"):

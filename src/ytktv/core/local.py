@@ -210,6 +210,9 @@ class LocalSongs:
         return []
 
 
+FORWARDED = ("on_change", "order", "pinned", "want_pitch", "on_chunk")
+
+
 class StemRouter:
     """The instrumentals of every song, from two places.
 
@@ -234,14 +237,14 @@ class StemRouter:
         return [m for m in (self.tracks, self.ai) if m is not None]
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if name in ("on_change", "order", "pinned", "want_pitch"):
+        if name in FORWARDED:
             for manager in self._both():
                 setattr(manager, name, value)
         object.__setattr__(self, name, value)
 
     def attach_ai(self, ai: Any) -> None:
         """Vocal separation became available (its runtime was just downloaded)."""
-        for name in ("on_change", "order", "pinned", "want_pitch"):
+        for name in FORWARDED:
             if name in self.__dict__:
                 setattr(ai, name, self.__dict__[name])
         previous, self.ai = self.ai, ai
@@ -263,6 +266,11 @@ class StemRouter:
     def pitch(self, video_id: str) -> Path | None:
         manager = self._for(video_id)
         return manager.pitch(video_id) if manager else None
+
+    def vocals(self, video_id: str) -> Path | None:
+        manager = self._for(video_id)
+        vocals = getattr(manager, "vocals", None)
+        return vocals(video_id) if vocals is not None else None
 
     def retain(self, wanted: set[str]) -> None:
         for manager in self._both():

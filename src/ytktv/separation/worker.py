@@ -7,6 +7,7 @@ import shutil
 import threading
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from ytktv.core.models import StemStatus
 from ytktv.separation.base import Separator
@@ -52,6 +53,9 @@ class StemManager:
         # Also extract the singer's melody (needed for scoring). Songs separated without
         # it are processed again when it is switched on.
         self.want_pitch = False
+        # Called with (video id, piece) as each piece of a song needed soon is separated,
+        # so its lyrics can be written while the rest is still being separated.
+        self.on_chunk: Callable[[str, dict[str, Any]], None] | None = None
 
     def start(self) -> None:
         if self._thread is None:
@@ -75,6 +79,19 @@ class StemManager:
 
     def path(self, video_id: str) -> Path | None:
         return self.cache.get(video_id)
+
+    def chunk_dir(self, video_id: str) -> Path:
+        """Where the pieces' vocals go until their lyrics are written (then deleted)."""
+        return self.cache.folder(video_id) / "pieces"
+
+    def _soon(self, video_id: str) -> bool:
+        """Singing now or next: worth separating in pieces to get the lyrics sooner."""
+        if self.order is None:
+            return False
+        try:
+            return video_id in list(self.order())[:2]
+        except Exception:
+            return False
 
     def vocals(self, video_id: str) -> Path | None:
         """The separated singer alone, when this song has been separated."""
@@ -196,7 +213,18 @@ class StemManager:
                 self._set(video_id, StemStatus.SEPARATING)
             partial = work / "instrumental.partial.flac"
             melody = work / "melody.partial.json" if self.want_pitch else None
-            self._separator.separate(source, partial, melody)
+            in_chunks = getattr(self._separator, "separate_in_chunks", None)
+            if in_chunks is not None and self.on_chunk is not None and self._soon(video_id):
+                handler = self.on_chunk
+                in_chunks(
+                    source,
+                    partial,
+                    melody,
+                    self.chunk_dir(video_id),
+                    lambda piece: handler(video_id, piece),
+                )
+            else:
+                self._separator.separate(source, partial, melody)
             if melody is not None and melody.exists():
                 melody.replace(self.cache.pitch_target(video_id))
             elif melody is not None:

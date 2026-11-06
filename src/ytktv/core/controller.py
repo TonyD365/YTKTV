@@ -11,6 +11,7 @@ import random
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from ytktv import __version__
@@ -129,6 +130,8 @@ class KTVController:
         self.lyrics: list[Any] = []  # timed lines for the current song, if its video has subtitles
         self.lyrics_source = ""  # "local" (Whisper, from the song's audio), "online" or ""
         self._lyric_hints: dict[str, str] = {}  # video id -> its words found online
+        self._online_lines: list[LyricLine] = []  # the current song's online lyrics
+        self.ai_pieces: Any = None  # lyrics_ai.PieceWriter: lyrics while a song separates
         self._danmaku_times: list[float] = []
         self._reaction_times: list[float] = []
         self._keeper: ScoreKeeper | None = None  # scores the song that is playing
@@ -145,6 +148,7 @@ class KTVController:
         if stems is not None:
             stems.on_change = self._on_stem_change
             stems.order = self._stem_order
+            stems.on_chunk = self._on_piece
         if preloader is not None:
             preloader.on_change = lambda _video_id: self._emit_state()
         if offline is not None:
@@ -375,6 +379,7 @@ class KTVController:
                 self._awaiting_start = False
                 self.lyrics = []
                 self.lyrics_source = ""
+                self._online_lines = []
                 self.position = 0.0
                 self.duration = float(item.song.duration) if item else 0.0
                 self.pitch = 0
@@ -1023,11 +1028,39 @@ class KTVController:
                     return
                 if self.lyrics_source == "local":
                     return  # AI finished while the online lyrics were being fetched
+                if self.lyrics_source == "partial":
+                    self._online_lines = lines  # shown after the part written so far
+                    return
                 self.lyrics, self.lyrics_source = lines, source
+                self._online_lines = lines if source == "online" else []
             self.bus.emit("lyrics", {"id": item.id, "lines": [line.to_dict() for line in lines]})
             self._emit_state()
 
         self._prefetcher.submit(work)
+
+    def _on_piece(self, video_id: str, piece: dict[str, Any]) -> None:
+        """A piece of a song needed soon was separated: write its lyrics now (GPU only)."""
+        writer, pieces = self._writer(), self.ai_pieces
+        if writer is None or not writer.on_gpu or pieces is None:
+            if piece.get("vocals"):
+                Path(str(piece["vocals"])).unlink(missing_ok=True)
+            return
+        hint = self._lyric_hints.get(video_id, "") if self.settings.lyrics_hint else ""
+        pieces.add(video_id, piece, hint)
+
+    def ai_lyrics_partial(self, video_id: str, lines: list[LyricLine], until: float) -> None:
+        """Lyrics written for the start of the song: show them, the online ones after them."""
+        with self._lock:
+            item = self.current
+            if item is None or item.song.video_id != video_id or not self.settings.show_lyrics:
+                return
+            if self.lyrics_source == "local":
+                return
+            later = [line for line in self._online_lines if line.start >= until]
+            self.lyrics, self.lyrics_source = [*lines, *later], "partial"
+            shown = self.lyrics
+        self.bus.emit("lyrics", {"id": item.id, "lines": [line.to_dict() for line in shown]})
+        self._emit_state()
 
     def _prepare_lyrics(self, video_id: str, first: bool) -> None:
         """A song was separated: have its lyrics written from the vocals (GPU only)."""
@@ -1214,6 +1247,7 @@ class KTVController:
             stems, previous = cast("StemManager", self.stems), None
         stems.on_change = self._on_stem_change
         stems.order = self._stem_order
+        stems.on_chunk = self._on_piece
         self.stems = stems
         if previous is not None:
             previous.stop()
