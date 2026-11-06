@@ -6,6 +6,8 @@ import sqlite3
 
 import pytest
 from fastapi.testclient import TestClient
+from PySide6.QtCore import QEvent
+from PySide6.QtWidgets import QApplication
 
 from ytktv.desk import awake, lock, remote, staff
 from ytktv.desk.console import ConsoleSettings, ServerConsole, enter_server_mode
@@ -23,7 +25,11 @@ def console(qapp, tmp_path):
     window = ServerConsole(store, Hub(), Metrics(), "127.0.0.1:8770")
     window.confirm_close = False
     yield window
+    # Delete it here, on the GUI thread. Left to Python's garbage collector it can be
+    # deleted later from another thread (the test server's), which crashes Qt.
     window.close()
+    window.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def test_metrics_count_requests_and_errors():
