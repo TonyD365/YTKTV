@@ -12,7 +12,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import imageio_ffmpeg
-from PySide6.QtCore import QPoint, QPointF, QTimer
+from PySide6.QtCore import QPoint, QPointF
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
@@ -122,13 +122,18 @@ def main() -> None:
         (9200, lambda: move(window.nav["Rooms"])),
         (10000, lambda: press(lambda: window.show_tab(0))),
     ]
-    for delay, step in steps:
-        QTimer.singleShot(delay, step)
-    timer = QTimer()
-    timer.timeout.connect(grab)
-    timer.start(1000 // FPS)
-    QTimer.singleShot(11500, app.quit)
-    app.exec()
+    # Driven by frame, not by the clock: saving a 1080p frame takes longer than 1/30 s,
+    # so a clock-driven recording drops frames and plays back too fast.
+    import time as _time
+
+    for frame in range(11500 * FPS // 1000):
+        for delay, step in steps:
+            if delay * FPS // 1000 == frame:
+                step()  # type: ignore[operator]
+        started = _time.monotonic()
+        while _time.monotonic() - started < 1 / FPS:
+            app.processEvents()
+        grab()
     subprocess.run(
         [
             imageio_ffmpeg.get_ffmpeg_exe(),

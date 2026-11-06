@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import imageio_ffmpeg
 import readme_images
-from PySide6.QtCore import QPoint, QPointF, Qt, QTimer
+from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
@@ -127,11 +127,16 @@ def main() -> None:
     if SCENE == "games2":
         steps = [
             (200, lambda: window.show_page("games")),
-            *press(900, "Number bomb", "games"),
-            *press(2600, "Liar's dice: roll", "games"),
-            *press(4300, "Challenge card", "games"),
+            *press(700, "Number Bomb", "games"),
+            *press(2000, "New Bomb", "games"),
+            *press(3600, "All games", "games"),
+            *press(4600, "Liar's Dice", "games"),
+            *press(5900, "Roll My Dice", "games"),
+            *press(7500, "All games", "games"),
+            *press(8500, "Challenge Cards", "games"),
+            *press(9800, "Draw a Card", "games"),
         ]
-        end = 6500
+        end = 12000
     elif SCENE == "controls":
         steps = [
             *tap(500, key_up),
@@ -147,9 +152,10 @@ def main() -> None:
         steps = [
             *press(600, "Instrumental"),
             *press(2400, "Games"),
-            *press(4000, "Who sings next", "games"),
+            *press(4000, "Who Sings Next", "games"),
+            *press(5600, "Spin!", "games"),
         ]
-        end = 7500
+        end = 9500
     else:
         steps = [
             *press(800, "Search", "home"),
@@ -166,13 +172,18 @@ def main() -> None:
             (t + 3600, lambda: window.show_page("home")),
         ]
         end = t + 6000
-    for delay, step in steps:
-        QTimer.singleShot(delay, step)
-    timer = QTimer()
-    timer.timeout.connect(grab)
-    timer.start(1000 // FPS)
-    QTimer.singleShot(end, app.quit)
-    app.exec()
+    # Driven by frame, not by the clock: saving a 1080p frame takes longer than 1/30 s,
+    # so a clock-driven recording drops frames and plays back too fast.
+    import time as _time
+
+    for frame in range(end * FPS // 1000):
+        for delay, step in steps:
+            if delay * FPS // 1000 == frame:
+                step()  # type: ignore[operator]
+        started = _time.monotonic()
+        while _time.monotonic() - started < 1 / FPS:
+            app.processEvents()
+        grab()
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     subprocess.run(
         [

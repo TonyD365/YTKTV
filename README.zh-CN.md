@@ -23,8 +23,8 @@
 **YTKTV 把一台电脑和一台电视变成 KTV 包厢。** YouTube 上的每一首歌都在点歌本里。电视上放 MV 和卡拉 OK 歌词，AI 把原唱的人声从歌里去掉，朋友们用手机扫码点歌（不用装 App），一台外观和用法都像真硬件的调音台把你的麦克风叠加上去，带回声和混响。免费，支持 macOS、Windows 和 Linux。
 
 <p align="center">
-  <a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><img src="docs/images/promo-poster.png" alt="70 秒看懂 YTKTV 和管理终端的视频" width="720"></a>
-  <br><a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><b>▶ 70 秒视频演示</b></a>
+  <a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><img src="docs/images/promo-poster.png" alt="85 秒看懂 YTKTV 和管理终端的视频" width="720"></a>
+  <br><a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><b>▶ 85 秒视频演示</b></a>
 </p>
 
 <p align="center">
@@ -84,6 +84,9 @@
 - **只放本地歌**：管理终端可以设置某个包厢只能唱那台电脑上的本地视频。
 - **多台管理终端**：其他电脑上的 YTKTV Desk 可以配对到主机，一起管理同样的包厢；「Log」页记录哪台机器在什么时候做了什么。
 - **手机版管理终端**：服务员用手机打开管理终端的 /staff 页面，用配对码配对后，就能在店里任何地方处理呼叫和点单、开房、续时、结账。
+- **服务器模式**：让管理终端独占一台电脑，屏幕变成服务器控制台，实时显示包厢、终端、请求和日志；有显卡的话，还能为所有包厢做伴奏和 AI 歌词。
+
+  <p align="center"><img src="docs/images/server.png" alt="服务器模式控制台：在线包厢、管理终端、每分钟请求、本机、今日营业、为包厢处理的歌曲，下面是实时日志" width="760"></p>
 - **经营看板**：最近 7、30、90 天的营业额、热门时段和星期、热门歌曲、商品销量、各包厢营业额。
 - **库存提醒**：商品快卖完时，呼叫栏会提示「Cola: 2 left」。
 - **更新**：Settings → Updates 里可以自动检查新版，也可以手动检查。

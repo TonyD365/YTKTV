@@ -57,11 +57,24 @@ COLOURS = [
 
 
 def run_for(app: QApplication, steps: list[tuple[int, object]]) -> None:
-    """Run (milliseconds, callable) steps on the Qt event loop, then stop."""
+    """Run (milliseconds, callable) steps in order, letting Qt work for the time between.
+
+    In order and one at a time: timers firing late on a slow machine once grabbed a
+    page before it was drawn.
+    """
+    now = 0
     for delay, step in steps:
-        QTimer.singleShot(delay, step)
-    QTimer.singleShot(max(delay for delay, _ in steps) + 200, app.quit)
-    app.exec()
+        settle(app, max(delay - now, 50))
+        step()  # type: ignore[operator]
+        now = delay
+    settle(app, 200)
+
+
+def settle(app: QApplication, ms: int) -> None:
+    end = time.monotonic() + ms / 1000
+    while time.monotonic() < end:
+        app.processEvents()
+        time.sleep(0.005)
 
 
 def cover(folder: Path, index: int, title: str) -> str:
