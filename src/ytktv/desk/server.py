@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from pydantic import BaseModel
 
 from ytktv.desk.guard import PairingGuard
+from ytktv.desk.metrics import Metrics
 from ytktv.desk.store import DeskStore, Room
 from ytktv.rooms import crypto
 
@@ -70,8 +71,11 @@ class Hub:
             asyncio.run_coroutine_threadsafe(self.send(room_id, message), self.loop)
 
 
-def create_desk_app(store: DeskStore, hub: Hub | None = None, cert_hash: str = "") -> FastAPI:
-    """The Desk's server. *cert_hash* is its TLS certificate's, which staff terminals check."""
+def create_desk_app(
+    store: DeskStore, hub: Hub | None = None, cert_hash: str = "", metrics: Metrics | None = None
+) -> FastAPI:
+    """The Desk's server. *cert_hash* is its TLS certificate's, which staff terminals check.
+    *metrics*, when given, counts requests and room connections for the server console."""
     from ytktv.desk.staff import add_staff_routes
 
     hub = hub or Hub()
@@ -79,6 +83,23 @@ def create_desk_app(store: DeskStore, hub: Hub | None = None, cert_hash: str = "
     app = FastAPI(title="YTKTV Desk")
     app.state.guard = guard
     app.state.hub = hub
+    app.state.metrics = metrics
+
+    if metrics is not None:
+
+        @app.middleware("http")
+        async def count(request: Request, call_next: Any) -> Any:
+            try:
+                response = await call_next(request)
+            except Exception as exc:
+                metrics.request(500)
+                metrics.event("error", f"{request.url.path}: {type(exc).__name__}")
+                raise
+            metrics.request(response.status_code)
+            if response.status_code >= 500:
+                metrics.event("error", f"{request.url.path}: HTTP {response.status_code}")
+            return response
+
     add_staff_routes(app, store, hub, cert_hash, guard)
 
     @app.get("/api/desk")
@@ -130,6 +151,8 @@ def create_desk_app(store: DeskStore, hub: Hub | None = None, cert_hash: str = "
             return
         hub.channels[room_id] = channel
         store.seen(room_id)
+        if metrics is not None:
+            metrics.event("room", f"{_room_name(store, room_id)} connected")
         await channel.send({"type": "ack"})
         room = store.room(room_id)
         if room is not None:  # a room that restarted learns whether it is open
@@ -150,8 +173,15 @@ def create_desk_app(store: DeskStore, hub: Hub | None = None, cert_hash: str = "
         finally:
             if hub.channels.get(room_id) is channel:
                 del hub.channels[room_id]
+                if metrics is not None:
+                    metrics.event("room", f"{_room_name(store, room_id)} disconnected")
 
     return app
+
+
+def _room_name(store: DeskStore, room_id: str) -> str:
+    room = store.room(room_id)
+    return room.name if room is not None else room_id
 
 
 def receive(store: DeskStore, room_id: str, message: dict[str, Any]) -> None:

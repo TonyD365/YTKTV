@@ -226,6 +226,7 @@ class LoggedHub:
 ASSETS = Path(__file__).parent / "assets"
 SERVER_SETTING = "terminal_server"  # "1" while other Desks may pair and work on this one
 NAME_SETTING = "machine_name"
+SERVER_MODE_SETTING = "server_mode"  # "1": this computer only runs the server and its console
 
 
 def certificate_hash(certificate_file: Path) -> str:

@@ -190,6 +190,20 @@ Desk's till.
 machine's name and what was done ("Bar: Closed Kids, $60.00 by Card"). Choose a machine to see
 only its actions. Passwords are never written into the log.
 
+## Server Mode
+
+In a bigger venue the main Desk can sit in a back office as a server while staff work on the staff terminals. In **Settings → Staff Terminals**, press **Switch to Server Mode…** (the Desk password is asked when one is set). YTKTV Desk closes; open it again and it starts as the server.
+
+Server Mode is kept: the computer starts in it every time until you leave it. Instead of the front desk, the screen shows the server console:
+
+- The Desk's name, its address, the certificate fingerprint staff terminals check, and how long the server has been up.
+- **Rooms online** (and which are offline), **staff terminals** online now, **requests per minute** with the refused or failed ones in the last hour, this computer's **CPU, memory and database size**, and **today's** takings, sessions and orders.
+- A **live log** of what every machine did, rooms connecting and disconnecting, and errors. Filter it by kind, or export it as a CSV file. Server events are kept for a week.
+- **Back Up Now** saves a copy of every record to the `backups` folder in YTKTV's data folder.
+- **Settings** renames the Desk, turns on **Start YTKTV Desk when this computer starts**, and has **Leave Server Mode…** (asks for the Desk password).
+
+While in Server Mode the computer does not go to sleep on its own. Closing the console asks first, because rooms and staff terminals lose the Desk until it is opened again.
+
 ## Settings and the desk password
 
 **Settings → Desk password** turns on a password that is asked when the Desk starts, after it
