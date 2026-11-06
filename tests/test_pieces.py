@@ -109,7 +109,11 @@ def test_the_client_passes_pieces_on_and_the_manager_uses_pieces_for_songs_soon(
         manager.start()
         for video_id in ("later", "now"):
             manager.request(video_id)
-        wait_for(lambda: manager.status("later") == StemStatus.READY, timeout=15)
+        # Both: on a slow runner "later" can start before "now" was even asked for.
+        wait_for(
+            lambda: all(manager.status(v) == StemStatus.READY for v in ("now", "later")),
+            timeout=30,
+        )
         assert ("now", 0) in pieces and ("now", 1) in pieces
         assert not any(v == "later" for v, _ in pieces)  # far off: separated whole
     finally:
