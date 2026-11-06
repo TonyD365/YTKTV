@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import sys
+import types
+
 import numpy as np
 import pytest
-import soundfile
 
 from ytktv.separation import align, sep_worker
 
@@ -36,7 +38,24 @@ def test_unrelated_audio_is_left_alone():
     assert align.offset(np.zeros(RATE * 5), np.zeros(RATE * 5), RATE) == 0
 
 
-def test_the_worker_aligns_both_stems_to_the_original_length(tmp_path):
+class FakeSoundfile(types.ModuleType):
+    """soundfile is only in the separation runtime, not in the app: keep audio in memory."""
+
+    def __init__(self) -> None:
+        super().__init__("soundfile")
+        self.files: dict[str, tuple[np.ndarray, int]] = {}
+
+    def write(self, path, samples, rate, format=None):  # noqa: A002 - soundfile's own name
+        self.files[str(path)] = (np.array(samples, dtype="float32"), rate)
+
+    def read(self, path, dtype="float32", always_2d=True):
+        samples, rate = self.files[str(path)]
+        return samples.copy(), rate
+
+
+def test_the_worker_aligns_both_stems_to_the_original_length(tmp_path, monkeypatch):
+    soundfile = FakeSoundfile()
+    monkeypatch.setitem(sys.modules, "soundfile", soundfile)
     original = song(20)
     stereo = np.stack([original, original], axis=1).astype("float32")
     source = tmp_path / "source.wav"
