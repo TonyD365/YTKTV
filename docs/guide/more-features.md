@@ -36,7 +36,9 @@ Download it once in **Settings → AI Lyrics**.
 - **With a GPU** (Apple Silicon or an NVIDIA card), every song's lyrics are written on your
   computer. Whisper listens to the singer separated from the band, which it hears far better.
   Until it is done, the lyrics found online are shown, then replaced. Songs coming up in the
-  queue are written ahead, so they are usually ready when they start.
+  queue are written ahead, so they are usually ready when they start. A song needed right
+  away (singing now or next) is separated in 30-second pieces, and each piece's lyrics appear
+  as soon as it is done, while the rest of the song is still being worked on.
 - **With only a processor**, that is too slow for every song: the lyrics found online are
   used, and Whisper writes only those of songs that have none.
 - **Use the lyrics found online to get the words right** (on by default) gives Whisper those

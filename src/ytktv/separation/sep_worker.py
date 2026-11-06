@@ -27,6 +27,9 @@ HOP_SECONDS = 0.05  # one melody value every 50 ms
 
 
 VOCALS_FILE = "vocals.partial.flac"  # written next to the instrumental
+CHUNK_SECONDS = 30.0  # a song needed soon is separated in pieces this long...
+MARGIN_SECONDS = 3.0  # ...each with this much more on both sides, cut off afterwards
+FADE_SECONDS = 0.03  # where two pieces meet, one fades into the other
 
 
 def send(message):
@@ -156,6 +159,33 @@ class Worker:
                     leftover.unlink()
 
 
+def plan_chunks(frames, rate):
+    """(start, end, from, to) frames of each piece: the part kept and the part separated."""
+    step, margin = int(CHUNK_SECONDS * rate), int(MARGIN_SECONDS * rate)
+    pieces = []
+    for start in range(0, frames, step):
+        end = min(frames, start + step)
+        pieces.append((start, end, max(0, start - margin), min(frames, end + margin)))
+    return pieces
+
+
+def join_piece(whole, piece, start, end, low, fade):
+    """Put the kept part of *piece* (separated from *low* on) into *whole* at *start*.
+
+    The few samples before *start* already hold the previous piece's end: fade from it
+    into this piece there, so the join cannot click.
+    """
+    import numpy as np
+
+    whole[start:end] = piece[start - low : end - low]
+    fade = min(fade, start - low, start)
+    if fade > 0:
+        weight = np.linspace(0.0, 1.0, fade, dtype=whole.dtype)[:, None]
+        before = whole[start - fade : start]
+        mine = piece[start - fade - low : start - low]
+        whole[start - fade : start] = before * (1.0 - weight) + mine * weight
+
+
 def align_stems(source, stems):
     """Shift the stems so they match the original to the sample, at its exact length."""
     import soundfile
@@ -179,6 +209,75 @@ def align_stems(source, stems):
         soundfile.write(str(stem), align.shift(samples, late, len(original)), rate, format="FLAC")
     if late:
         sys.stderr.write(f"instrumental moved by {late} samples ({1000 * late / rate:.1f} ms)\n")
+
+
+def separate_in_chunks(worker, source, output, pitch=None, chunk_dir=None):
+    """Separate *source* piece by piece, reporting each piece's vocals as soon as it is done.
+
+    Each piece is separated with a few seconds more on both sides (the model is least sure
+    at the edges), those are cut off, and the joins crossfade. The vocals of each piece are
+    written to *chunk_dir*, margins included, so lyrics can be written while the rest of
+    the song is still being separated. The result is the same files as ``separate`` gives.
+    """
+    import numpy as np
+    import soundfile
+
+    try:
+        from ytktv.separation import align
+    except ImportError:
+        import align  # type: ignore[no-redef]
+
+    original, rate = soundfile.read(str(source), dtype="float32", always_2d=True)
+    frames = len(original)
+    instrumental = np.zeros_like(original)
+    vocals = np.zeros_like(original)
+    work = Path(worker.args.work_dir)
+    pieces = plan_chunks(frames, rate)
+    fade = int(FADE_SECONDS * rate)
+    for index, (start, end, low, high) in enumerate(pieces):
+        piece = work / f"piece-{index}.wav"
+        soundfile.write(str(piece), original[low:high], rate)
+        outputs = [worker._resolve(name) for name in worker.load().separate(str(piece))]
+        try:
+            stems = {}
+            for path in outputs:
+                kind = "instrumental" if "instrumental" in path.name.lower() else "vocals"
+                samples, piece_rate = soundfile.read(str(path), dtype="float32", always_2d=True)
+                if piece_rate != rate:
+                    raise RuntimeError("the separator changed the sample rate")
+                stems[kind] = align.shift(samples, 0, high - low)
+            if "instrumental" not in stems:
+                raise RuntimeError("separation produced no instrumental")
+            join_piece(instrumental, stems["instrumental"], start, end, low, fade)
+            if "vocals" in stems:
+                join_piece(vocals, stems["vocals"], start, end, low, fade)
+                if chunk_dir:
+                    Path(chunk_dir).mkdir(parents=True, exist_ok=True)
+                    heard = Path(chunk_dir) / f"{index:03d}.wav"
+                    soundfile.write(str(heard), stems["vocals"], rate)
+                    send({
+                        "event": "chunk", "index": index, "last": index == len(pieces) - 1,
+                        "start": start / rate, "end": end / rate, "offset": low / rate,
+                        "vocals": str(heard),
+                    })  # fmt: skip
+        finally:
+            piece.unlink(missing_ok=True)
+            for leftover in outputs:
+                if leftover.exists():
+                    leftover.unlink()
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    soundfile.write(str(output), instrumental, rate, format="FLAC")
+    voice = Path(output).with_name(VOCALS_FILE)
+    soundfile.write(str(voice), vocals, rate, format="FLAC")
+    try:
+        align_stems(source, [Path(output), voice])
+    except Exception as exc:
+        sys.stderr.write(f"alignment failed: {exc}\n")
+    if pitch:
+        try:
+            write_pitch(voice, pitch)
+        except Exception as exc:
+            sys.stderr.write(f"melody extraction failed: {exc}\n")
 
 
 def write_pitch(vocals, destination):
@@ -223,7 +322,16 @@ def main(argv=None):
             continue
         try:
             request = json.loads(line)
-            worker.separate(request["source"], request["output"], request.get("pitch"))
+            if request.get("chunks"):
+                separate_in_chunks(
+                    worker,
+                    request["source"],
+                    request["output"],
+                    request.get("pitch"),
+                    request.get("chunk_dir"),
+                )
+            else:
+                worker.separate(request["source"], request["output"], request.get("pitch"))
         except Exception as exc:
             send({"ok": False, "error": f"{type(exc).__name__}: {exc}"})
         else:

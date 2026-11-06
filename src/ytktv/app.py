@@ -398,6 +398,8 @@ def main(argv: list[str] | None = None) -> int:
         controller.ai_lyrics_ready,
         vocals=lambda video_id: controller.stems.vocals(video_id) if controller.stems else None,
     )
+    # While a song needed soon is separated piece by piece, its lyrics are written likewise.
+    controller.ai_pieces = lyrics_ai.PieceWriter(lyrics_ai.runtime(), controller.ai_lyrics_partial)
     from ytktv.smart_lights import SmartLights
 
     smart_lights = SmartLights(settings)  # room lights follow the TV's edge lights
