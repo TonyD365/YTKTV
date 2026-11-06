@@ -29,8 +29,8 @@ looks and works like real hardware puts your microphones on top with echo and re
 for macOS, Windows and Linux.
 
 <p align="center">
-  <a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><img src="docs/images/promo-poster.png" alt="Watch the 70-second video of YTKTV and YTKTV Desk in use" width="720"></a>
-  <br><a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><b>▶ Watch the 70-second video</b></a>
+  <a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><img src="docs/images/promo-poster.png" alt="Watch the 85-second video of YTKTV and YTKTV Desk in use" width="720"></a>
+  <br><a href="https://tonyd365.github.io/YTKTV/images/promo.mp4"><b>▶ Watch the 85-second video</b></a>
 </p>
 
 <p align="center">
@@ -107,6 +107,11 @@ way a real KTV's staff terminal runs its rooms: the adults in one room, the kids
   work on the same rooms; the Log shows which machine did what, and when.
 - **Staff on their phones**: open the Desk's /staff page on a phone, pair it with a code, and
   handle calls and orders, open, extend and check out rooms from anywhere on the floor.
+- **Server Mode**: give the Desk a computer of its own. Its screen becomes a server console
+  with live rooms, terminals, requests and a log, and with a GPU it makes the backing tracks
+  and AI lyrics for every room.
+
+  <p align="center"><img src="docs/images/server.png" alt="Server Mode console: cards for rooms online, staff terminals, requests per minute, this computer, today's takings and songs done for the rooms, above a live log" width="760"></p>
 - **Insights**: takings, busy hours and weekdays, top songs, best-selling items and rooms for the
   last 7, 30 or 90 days.
 - **Stock alerts**: a product running low shows in the service bar ("Cola: 2 left").

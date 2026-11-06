@@ -1,6 +1,6 @@
-"""Cut the recorded clips into the 45-second promo: video/ytktv-promo.mp4.
+"""Cut the recorded clips into the promo (about 100 s): video/ytktv-promo.mp4.
 
-usage: compose.py ORIGINAL.wav INSTRUMENTAL.wav  (the same 45 s+ of the song, two stems)
+usage: compose.py ORIGINAL.wav INSTRUMENTAL.wav  (the same 110 s+ of the song, two stems)
 """
 
 from __future__ import annotations
@@ -21,13 +21,20 @@ W, H = 1920, 1080
 CLIP = (1600, 900, 160, 22)  # width, height, x, y of the app footage
 OUT = Path("video/parts")
 FF = imageio_ffmpeg.get_ffmpeg_exe()
-SWITCH = 22.5  # when the Instrumental key is pressed in the cut
+XF = 0.6  # seconds each transition overlaps the next shot
+# A different transition between every two shots (ffmpeg xfade).
+TRANSITIONS = [
+    "circleopen", "slideleft", "smoothup", "radial", "wipeleft", "zoomin", "dissolve",
+    "slideup", "circlecrop", "smoothleft", "pixelize", "diagtl", "hblur", "squeezeh",
+    "wiperight", "fadeblack", "slidedown", "coverleft",
+]  # fmt: skip
+VOCALS_OFF = "video/console_party.mp4"  # the shot where the Instrumental key is pressed
 # (seconds, source, start in source, English, Chinese)
 SHOTS = [
-    (4.0, "intro", 0, "", ""),
-    (7.0, "video/console_search.mp4", 0.3, "Pick songs on the console", "在点歌台点歌"),
+    (4.5, "intro", 0, "", ""),
+    (9.0, "video/console_search.mp4", 0.6, "Pick songs on the console", "在点歌台点歌"),
     (
-        4.0,
+        4.5,
         "docs/images/phone.png",
         0,
         "…or from any phone: scan the QR code. A phone can even be your mic",
@@ -40,58 +47,61 @@ SHOTS = [
         "🎤 A 1911 recording, with the original singers",
         "一首 1911 年的老唱片，带原唱",
     ),
+    (3.5, VOCALS_OFF, 0.3, "🎵 One click: AI takes the vocals out", "一键 AI 去原唱，马上变伴奏"),
     (
-        3.5,
-        "video/console_party.mp4",
-        0,
-        "🎵 One click: AI takes the vocals out",
-        "一键 AI 去原唱，马上变伴奏",
-    ),
-    (
-        4.0,
+        5.0,
         "video/mv.mp4",
         6,
-        "Lyrics follow you · live pitch · cheers from phones",
-        "歌词逐字跟唱 · 音高线 · 手机发弹幕表情",
+        "Lyrics written by AI on your own GPU, word by word",
+        "本地 GPU 用 AI 生成歌词，逐字跟唱",
     ),
     (
-        5.5,
+        7.5,
         "video/console_controls.mp4",
-        0,
+        0.3,
         "Change the key · volume keys with a pop-up display",
         "一键升降调 · 音量按键，屏幕弹出音量条",
     ),
     (
-        4.5,
-        "video/console_party.mp4",
-        2.2,
-        "Party games: who sings next?",
-        "派对小游戏：谁唱下一首？",
+        4.0,
+        "docs/images/mixer.png",
+        0,
+        "A real mixer: echo, reverb, EQ",
+        "专业调音台：回声、混响、均衡器",
     ),
+    (5.0, VOCALS_OFF, 3.8, "Party games: who sings next?", "派对小游戏：谁唱下一首？"),
     (4.0, "video/mv.mp4", 12.2, "…and the answer pops up on the TV", "结果直接显示在电视上"),
     (
-        5.5,
+        10.0,
         "video/console_games2.mp4",
-        0.2,
-        "14 games: number bomb, liar's dice, random song, challenge cards…",
-        "14 个小游戏：数字炸弹、大话骰、随机点歌、挑战卡……",
+        0.5,
+        "14 games: number bomb, liar's dice, challenge cards…",
+        "14 个小游戏：数字炸弹、大话骰、挑战卡……",
     ),
     (4.0, "video/mv.mp4", 20.2, "Live scores and tonight's best", "唱完打分，还有本场排行榜"),
     (
-        5.5,
+        6.0,
         "video/desk.mp4",
         0.3,
-        "🛎 NEW · YTKTV Desk: one front desk for every room",
-        "新：YTKTV Desk 服务台，一台管所有包厢",
+        "🛎 YTKTV Desk: one front desk for every room",
+        "YTKTV Desk 服务台，一台管所有包厢",
     ),
     (
         5.5,
         "video/desk.mp4",
-        5.8,
+        6.0,
         "Service calls, bookings, bills and shift reports",
         "呼叫服务、预定、结账、交班报表",
     ),
-    (5.0, "outro", 0, "", ""),
+    (
+        7.5,
+        "video/server.mp4",
+        0,
+        "🆕 Server Mode: one GPU makes backing tracks and lyrics for every room",
+        "新：服务器模式，一块显卡为所有包厢做伴奏和歌词",
+    ),
+    (4.5, "updates", 0, "", ""),
+    (5.5, "outro", 0, "", ""),
 ]
 
 
@@ -150,6 +160,12 @@ def card(kind: str) -> QImage:
         ]
         if kind == "intro"
         else [
+            ("🆕 4.1", 110, "#ff3d9a"),
+            ("Updates download only what changed", 56, "white"),
+            ("小更新只下载变了的文件，几十 MB 搞定", 40, "#2ee6ff"),
+        ]
+        if kind == "updates"
+        else [
             ("YTKTV", 130, "#ff3d9a"),
             ("Free · macOS · Windows · Linux", 52, "white"),
             ("免费 · 支持 Mac / Windows / Linux", 36, "#c9c3e6"),
@@ -179,10 +195,15 @@ def main() -> None:
     parts = []
     for n, (secs, source, start, en, zh) in enumerate(SHOTS):
         part = OUT / f"{n:02d}.mp4"
-        fade = f"fade=in:st=0:d=0.35,fade=out:st={secs - 0.35}:d=0.35"
-        if source in ("intro", "outro"):
+        # Only the very start and end fade; between shots the transitions do it.
+        fade = "null"
+        if n == 0:
+            fade = "fade=in:st=0:d=0.5"
+        elif n == len(SHOTS) - 1:
+            fade = f"fade=out:st={secs - 0.8}:d=0.8"
+        if source in ("intro", "outro", "updates"):
             card(source).save(str(OUT / f"{source}.png"))
-            zoom = "1.12-0.12*min(on/24\\,1)" if source == "intro" else "1+0.0008*on"
+            zoom = "1.12-0.12*min(on/24\\,1)" if source != "outro" else "1+0.0008*on"
             run(
                 "-framerate",
                 "30",
@@ -245,28 +266,30 @@ def main() -> None:
                 str(part),
             )
         parts.append(part)
-    (OUT / "list.txt").write_text("".join(f"file '{p.name}'\n" for p in parts))
-    run(
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        str(OUT / "list.txt"),
-        "-c",
-        "copy",
-        str(OUT / "video.mp4"),
-    )
-    total = sum(s[0] for s in SHOTS)
+    inputs: list[str] = []
+    for part in parts:
+        inputs += ["-i", str(part)]
+    chain, last, offset = [], "[0:v]", 0.0
+    for n in range(1, len(parts)):
+        offset += SHOTS[n - 1][0] - XF
+        out = f"[x{n}]"
+        kind = TRANSITIONS[(n - 1) % len(TRANSITIONS)]
+        chain.append(f"{last}[{n}:v]xfade=transition={kind}:duration={XF}:offset={offset:.2f}{out}")
+        last = out
+    run(*inputs, "-filter_complex", ";".join(chain), "-map", last, *enc, str(OUT / "video.mp4"))
+    total = sum(s[0] for s in SHOTS) - XF * (len(SHOTS) - 1)
+    first = next(n for n, shot in enumerate(SHOTS) if shot[1] == VOCALS_OFF)
+    switch = sum(s[0] for s in SHOTS[:first]) - XF * first + 1.0  # the key press
+
     run(
         "-i",
         original,
         "-i",
         instrumental,
         "-filter_complex",
-        f"[0]atrim=0:{SWITCH + 0.15},afade=out:st={SWITCH - 0.05}:d=0.2[a];"
-        f"[1]atrim={SWITCH}:{total},asetpts=PTS-STARTPTS,afade=in:d=0.15,"
-        f"afade=out:st={total - SWITCH - 3}:d=3[b];[a][b]concat=n=2:v=0:a=1,loudnorm=I=-16[o]",
+        f"[0]atrim=0:{switch + 0.15},afade=out:st={switch - 0.05}:d=0.2[a];"
+        f"[1]atrim={switch}:{total},asetpts=PTS-STARTPTS,afade=in:d=0.15,"
+        f"afade=out:st={total - switch - 3}:d=3[b];[a][b]concat=n=2:v=0:a=1,loudnorm=I=-16[o]",
         "-map",
         "[o]",
         "-ar",
