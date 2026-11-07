@@ -1,15 +1,20 @@
-# A status comment on every pull request, kept up to date (like winget-pkgs' policy bot):
-# which checks passed or failed, what each failure usually means, the labels and what they
-# start, and what happens next. It runs from main after the other workflows finish
-# (workflow_run), never runs the pull request's code, and so works for forks too.
+# Like winget-pkgs' policy bot, on every pull request:
+# - a status comment: which checks passed or failed, what a failure usually means, the
+#   labels, and what happens next. When the status changes, the old comment is removed and
+#   a new one posted, so it is the latest comment; otherwise it is edited in place.
+# - status labels (Checks-Running, Checks-Passed, Checks-Failed, Internal-Error,
+#   Needs-Author-Action, Needs-Review, Maintainer-Approved, Needs-Terms-Agreement).
+# - a "Contribution terms" check: the author ticks the box in the pull request template.
+# It runs from main (pull_request_target, and workflow_run after the other workflows and
+# after reviews), never runs the pull request's code, and so works for forks too.
 name: PR assistant
 
 on:
   workflow_run:
-    workflows: [CI, Security, Installer tests, Area tests, Benchmark, Apply pull request labels]
+    workflows: [CI, Security, Installer tests, Area tests, Benchmark, Apply pull request labels, Review noted]
     types: [completed]
   pull_request_target:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize, edited]
 
 permissions:
   contents: read
@@ -17,6 +22,7 @@ permissions:
   checks: read
   pull-requests: write
   issues: write
+  statuses: write
 
 concurrency:
   group: pr-assistant-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}
@@ -24,7 +30,10 @@ concurrency:
 
 jobs:
   comment:
-    if: github.event_name == 'pull_request_target' || github.event.workflow_run.event == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      github.event.workflow_run.event == 'pull_request' ||
+      github.event.workflow_run.event == 'pull_request_review'
     runs-on: ubuntu-latest
     steps:
       - name: Write the status comment
@@ -42,7 +51,7 @@ jobs:
               -q ".[] | select(.headRefOid == \"$SHA\") | .number" | head -n 1)
           fi
           [ -n "$NUMBER" ] || { echo "no open pull request for $SHA"; exit 0; }
-          pr=$(gh pr view "$NUMBER" --json headRefOid,author,labels,isDraft,reviewDecision,state)
+          pr=$(gh pr view "$NUMBER" --json headRefOid,author,labels,isDraft,reviewDecision,state,body)
           [ "$(jq -r .state <<<"$pr")" = OPEN ] || exit 0
           head=$(jq -r .headRefOid <<<"$pr")
           author=$(jq -r .author.login <<<"$pr")
@@ -70,8 +79,48 @@ jobs:
             esac
           }
 
+          # Contribution terms: the box in the template, ticked (maintainer and bots excepted).
+          case "$author" in
+            TonyD365|TonyD365-Agent|dependabot\[bot\]|github-actions\[bot\]|app/dependabot) terms=exempt ;;
+            *) if jq -r .body <<<"$pr" | grep -Eiq '^\s*[-*] \[[xX]\] .*agree to the contribution terms'; then terms=yes; else terms=no; fi ;;
+          esac
+          if [ "$terms" = no ]; then state=failure; desc="Tick the box agreeing to the contribution terms"; else state=success; desc="Agreed"; [ "$terms" = exempt ] && desc="Not needed for the maintainer"; fi
+          gh api -X POST "repos/$GH_REPO/statuses/$head" -f state="$state" -f context="Contribution terms" \
+            -f description="$desc" -f target_url="$SERVER/$GH_REPO/blob/main/CONTRIBUTING.md#contribution-terms" >/dev/null
+
+          internal=$(awk -F'\t' '$3=="cancelled"||$3=="timed_out"||$3=="startup_failure"||$3=="stale"' checks.tsv | wc -l | tr -d ' ')
+          review=$(jq -r .reviewDecision <<<"$pr")
+
+          # Status labels: exactly the ones that fit now.
+          want=()
+          if [ "$total" = 0 ] || [ "$running" != 0 ]; then want+=(Checks-Running); fi
+          [ "$failed" != 0 ] && want+=(Checks-Failed)
+          [ "$internal" != 0 ] && want+=(Internal-Error)
+          [ "$total" != 0 ] && [ "$running" = 0 ] && [ "$failed" = 0 ] && want+=(Checks-Passed)
+          if [ "$failed" != 0 ] || [ "$terms" = no ] || [ "$review" = CHANGES_REQUESTED ]; then want+=(Needs-Author-Action); fi
+          [ "$terms" = no ] && want+=(Needs-Terms-Agreement)
+          if [ "$review" = APPROVED ]; then want+=(Maintainer-Approved); else want+=(Needs-Review); fi
+          declare -A colours=([Checks-Running]=c5def5 [Checks-Passed]=0e8a16 [Checks-Failed]=d73a4a
+            [Internal-Error]=e99695 [Needs-Author-Action]=b60205 [Needs-Review]=fbca04
+            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7)
+          have=$(jq -r '.labels[].name' <<<"$pr")
+          for label in "${!colours[@]}"; do
+            if printf '%s\n' "${want[@]}" | grep -qx "$label"; then
+              printf '%s\n' "$have" | grep -qx "$label" && continue
+              gh label create "$label" --color "${colours[$label]}" 2>/dev/null || true
+              gh pr edit "$NUMBER" --add-label "$label" >/dev/null || true
+            elif printf '%s\n' "$have" | grep -qx "$label"; then
+              gh pr edit "$NUMBER" --remove-label "$label" >/dev/null || true
+            fi
+          done
+
+          # The kind of status: a new kind is posted as a new comment (see the end).
+          if [ "$terms" = no ]; then kind=terms
+          elif [ "$total" = 0 ] || [ "$running" != 0 ] && [ "$failed" = 0 ]; then kind=running
+          elif [ "$failed" != 0 ]; then kind=failed
+          else kind="passed-$review"; fi
           {
-            echo "<!-- ytktv-pr-assistant -->"
+            echo "<!-- ytktv-pr-assistant kind=$kind -->"
             if [ "$total" = 0 ]; then
               echo "### ⏳ Checks are starting"
             elif [ "$failed" != 0 ]; then
@@ -92,7 +141,15 @@ jobs:
                   echo "- [$name]($url): $(hint "$name")"
                 done
             fi
-            labels=$(jq -r '[.labels[].name] | join(", ")' <<<"$pr")
+            if [ "$internal" != 0 ]; then
+              echo
+              echo "**Internal error:** $internal check(s) were cancelled or timed out, which is usually GitHub, not this change. A maintainer can re-run them."
+            fi
+            if [ "$terms" = no ]; then
+              echo
+              echo "**Contribution terms:** please read the [contribution terms]($SERVER/$GH_REPO/blob/main/CONTRIBUTING.md#contribution-terms) and tick the box \"I have read and agree to the contribution terms\" in the description above (edit the description). Nothing can be merged before that."
+            fi
+            labels=$(gh pr view "$NUMBER" --json labels -q '[.labels[].name] | join(", ")')
             if [ -n "$labels" ]; then
               echo
               echo "**Labels:** $labels"
@@ -105,12 +162,14 @@ jobs:
             echo "**Next**"
             if [ "$(jq -r .isDraft <<<"$pr")" = true ]; then
               echo "- This is a draft: mark it ready for review when it is done."
+            elif [ "$terms" = no ]; then
+              echo "- Agree to the contribution terms (see above)."
             elif [ "$failed" != 0 ]; then
               echo "- Fix the failures above and push; the checks run again by themselves."
             elif [ "$running" != 0 ]; then
               echo "- Wait for the running checks; this comment updates when they finish."
             fi
-            case "$(jq -r .reviewDecision <<<"$pr")" in
+            case "$review" in
               APPROVED) echo "- Approved by the maintainer: it is merged once every check passes." ;;
               CHANGES_REQUESTED) echo "- The maintainer asked for changes: see the review." ;;
               *) echo "- It needs the maintainer's approval before it can be merged." ;;
@@ -119,11 +178,13 @@ jobs:
             echo "<sub>[How the checks work](${SERVER}/${GH_REPO}/blob/main/CONTRIBUTING.md#before-you-open-a-pull-request) · updated $(date -u '+%Y-%m-%d %H:%M UTC') for ${head:0:7}</sub>"
           } > body.md
 
-          # One comment per pull request, edited in place.
+          # One comment per pull request. A new kind of status is posted as a new
+          # comment, removing the old one, so it is the latest; otherwise it is edited in place.
           existing=$(gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \
-            -q '[.[] | select(.body | startswith("<!-- ytktv-pr-assistant -->"))][0].id // empty')
-          if [ -n "$existing" ]; then
-            gh api -X PATCH "repos/$GH_REPO/issues/comments/$existing" -F body=@body.md >/dev/null
+            -q '[.[] | select(.body | startswith("<!-- ytktv-pr-assistant"))] | last | if . then "\(.id)\t\(.body | split("\n")[0])" else "" end')
+          if [ -n "$existing" ] && [ "${existing#*$'\t'}" = "$(head -n 1 body.md)" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/${existing%%$'\t'*}" -F body=@body.md >/dev/null
           else
+            [ -n "$existing" ] && gh api -X DELETE "repos/$GH_REPO/issues/comments/${existing%%$'\t'*}" >/dev/null
             gh pr comment "$NUMBER" --body-file body.md
           fi

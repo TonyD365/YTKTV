@@ -63,7 +63,20 @@ A few conventions:
 
 The layout of the code is described in the [README](README.md#development).
 
-## License
+## Contribution terms
 
-By contributing you agree that your work is released under the [YTKTV License](LICENSE):
-free to use, also in a business, but the software and anything based on it may not be sold.
+Every pull request asks you to tick "I have read and agree to the contribution terms"; a check
+called **Contribution terms** stays red until you do. By ticking it you agree that:
+
+1. **License.** Your contribution is released under the [YTKTV License](LICENSE), like the rest
+   of YTKTV: free to use, also in a business, but the software and anything based on it may not
+   be sold.
+2. **It is yours to give.** You wrote it, or you have the right to contribute it under that
+   license. Code or assets from elsewhere are marked, with their source and license, and that
+   license allows this.
+3. **It may be changed or declined.** The maintainer may edit, rearrange or decline a
+   contribution, and you are credited in the project's history (git), not paid.
+4. **No warranty.** You give it as is, like the rest of YTKTV.
+5. **Conduct.** You follow the [code of conduct](CODE_OF_CONDUCT.md).
+
+The maintainer and the project's bots are not asked.

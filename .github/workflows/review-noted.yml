@@ -1,0 +1,16 @@
+# Does nothing but finish, so that "PR assistant" (workflow_run) runs again after a review:
+# a review event from a fork only gets a read-only token, the assistant has a writable one.
+name: Review noted
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions:
+  contents: read
+
+jobs:
+  note:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Review on pull request ${{ github.event.pull_request.number }}"
