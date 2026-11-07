@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ytktv import updater
 from ytktv.desk import lock
 from ytktv.desk.admin_dialog import AdminSettingsDialog
 from ytktv.desk.billing import bill
@@ -433,6 +434,13 @@ class DeskWindow(QMainWindow):
             self.update_button.show()
 
         def install() -> None:
+            if updates.installer is not None and updater.password_needed(updates.installer):
+                note = updater.PASSWORD_NOTE.format(app="YTKTV Desk")
+                answer = QMessageBox.question(
+                    self, "Install the update", f"YTKTV Desk will close and reopen.\n\n{note}"
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
             if updates.install():
                 QApplication.quit()
             else:
