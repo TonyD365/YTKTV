@@ -226,3 +226,25 @@ def test_download_uses_the_patch_and_falls_back_to_the_installer(tmp_path, monke
     (old / "lib/qt.dll").write_bytes(b"not the build the patch is for")
     got = updater.download_update(info, tmp_path / "dl", fetch=lambda url: sums.encode(), root=old)
     assert got.name == INSTALLER
+
+
+def _make_patch_script():
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "make_patch.py"
+    spec = importlib.util.spec_from_file_location("make_patch_script", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_release_checks_each_patch_by_applying_it(tmp_path, capsys):
+    script = _make_patch_script()
+    old, archive, _ = make(tmp_path)
+    assert script.verify(old, tmp_path / "new", archive) == 0
+    assert "verified" in capsys.readouterr().out
+    # A patch that does not give the new build is caught (and the old build is untouched).
+    (tmp_path / "new" / "app.exe").write_bytes(b"a different new program")
+    assert script.verify(old, tmp_path / "new", archive) == 1
+    assert (old / "app.exe").read_bytes() == b"old program"
