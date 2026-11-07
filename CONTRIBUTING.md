@@ -91,5 +91,7 @@ you agree that:
 4. **No warranty.** You give it as is, like the rest of YTKTV.
 5. **Conduct.** You follow the [code of conduct](CODE_OF_CONDUCT.md).
 
-The maintainer and the project's bots are not asked. Once you have agreed on one pull request,
-your later ones are recorded as agreed too.
+The maintainer and the project's bots are not asked. Your answer is recorded (in an issue the
+bot keeps), so once you have agreed, your later pull requests count as agreed too, until you
+withdraw by replying `I do not agree to the YTKTV contribution terms`. A pull request whose
+author has not agreed is labelled `Needs-Terms-Agreement`, and `Terms-Declined` after a no.
