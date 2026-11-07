@@ -128,9 +128,13 @@ jobs:
             const issue_number = context.issue.number;
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
             const previous = comments.find((c) => c.body && c.body.includes(marker));
-            if (previous) {
+            // Edited in place only when it is ours; one by another identity is replaced.
+            let me = 'github-actions[bot]';
+            try { me = (await github.rest.users.getAuthenticated()).data.login; } catch (e) {}
+            if (previous && previous.user && previous.user.login === me) {
               await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
             } else {
+              if (previous) await github.rest.issues.deleteComment({ owner, repo, comment_id: previous.id });
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
 
