@@ -518,6 +518,21 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$TAG" installers/* --clobber
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: packaging/release
+      - name: Install instructions at the end of the notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          # Every release ends with how to install it (packaging/release/install-notes.md).
+          gh release view "$TAG" --json body -q .body > notes.md
+          if ! grep -q '^## Install$' notes.md; then
+            cat packaging/release/install-notes.md >> notes.md
+            gh release edit "$TAG" --notes-file notes.md
+          fi
 
   winget:
     # Opens a pull request on microsoft/winget-pkgs for the new version, with the user's
