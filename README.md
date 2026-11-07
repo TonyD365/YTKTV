@@ -273,6 +273,13 @@ version, checks it and installs it. Later updates come by themselves from inside
 winget comes with Windows 10 (1809 and later) and Windows 11. To update by hand:
 `winget upgrade TonyD365.YTKTV`; to remove: `winget uninstall TonyD365.YTKTV`.
 
+Or without winget: open **PowerShell** and paste this line. It lets you tick YTKTV, YTKTV Desk
+or both, shows the license, and installs the latest release after checking it:
+
+```powershell
+irm https://tonyd365.github.io/YTKTV/install.ps1 | iex
+```
+
 #### macOS (Apple Silicon and Intel)
 
 1. Open **Terminal** (press ⌘ Space, type `Terminal`, press Enter).
