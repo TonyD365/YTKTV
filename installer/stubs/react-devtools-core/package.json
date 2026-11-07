@@ -1,0 +1,8 @@
+{
+  "name": "react-devtools-core",
+  "version": "4.28.5",
+  "description": "Empty stand-in: Ink only loads React DevTools when DEV=true, which the installer never sets.",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js"
+}

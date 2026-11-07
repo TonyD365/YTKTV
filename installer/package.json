@@ -1,0 +1,24 @@
+{
+  "name": "ytktv-installer",
+  "private": true,
+  "type": "module",
+  "description": "The interactive YTKTV installer for the terminal, built into one program per platform with Bun.",
+  "scripts": {
+    "start": "bun src/main.tsx",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build.ts"
+  },
+  "dependencies": {
+    "ink": "6.0.1",
+    "ink-spinner": "5.0.0",
+    "react": "19.1.0",
+    "react-devtools-core": "file:stubs/react-devtools-core"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.8",
+    "bun": "1.2.19",
+    "bun-types": "1.2.19",
+    "typescript": "5.6.3"
+  }
+}

@@ -443,9 +443,35 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  installer-cli:
+    # The interactive terminal installer (installer/, Ink), one program per platform, run by
+    # site/install.sh and site/install.ps1. Built on macOS so the Mac ones can be signed.
+    name: Build (terminal installer)
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build
+        working-directory: installer
+        run: |
+          npm ci --no-audit --no-fund
+          PATH="$PWD/node_modules/.bin:$PATH"
+          bun build.ts
+          tsc --noEmit
+          bun test
+          cd dist
+          for file in *; do gzip -9 -n "$file"; done
+          ls -la
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installer-cli
+          path: installer/dist/*.gz
+          if-no-files-found: error
+          retention-days: 7
+
   attach:
     name: Attach installers to the release
-    needs: [build, macos-universal, desk]
+    needs: [build, macos-universal, desk, installer-cli]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:

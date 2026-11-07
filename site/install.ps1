@@ -11,10 +11,14 @@
 # SHA256SUMS and installs them silently for the current user. Same pages as the installers
 # (packaging/installer/). winget install TonyD365.YTKTV still works too.
 #
+# In a console it first runs the full-screen installer program from the release
+# (installer/, built with Ink like Claude Code's CLI), checked against SHA256SUMS. When the
+# release has none yet, or with -Plain, this script does the same itself.
+#
 # This file is plain ASCII on purpose: the symbols are made from code points, so it reads
 # the same whatever encoding the download is decoded with.
 
-param([switch]$Room, [switch]$Desk, [switch]$Yes, [switch]$Help)
+param([switch]$Room, [switch]$Desk, [switch]$Yes, [switch]$Plain, [switch]$Help)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'  # Invoke-WebRequest's own bar is very slow on 5.1
@@ -22,7 +26,7 @@ $ProgressPreference = 'SilentlyContinue'  # Invoke-WebRequest's own bar is very 
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
 
 $Repo = 'TonyD365/YTKTV'
-if ($Help) { Get-Content $PSCommandPath -TotalCount 15 -ErrorAction SilentlyContinue; return }
+if ($Help) { Get-Content $PSCommandPath -TotalCount 20 -ErrorAction SilentlyContinue; return }
 
 function Sym([int]$code) { [string][char]$code }
 $Tick = Sym 0x2713; $Cross = Sym 0x2717; $Pointer = Sym 0x203A
@@ -126,6 +130,39 @@ function Hash-Of([string]$path) {
     finally { $stream.Dispose(); $sha.Dispose() }
 }
 
+# The installer program: download it, check it, unpack it and run it. $false when there is none.
+function Run-Program {
+    $base = if ($env:YTKTV_INSTALLER_BASE) { $env:YTKTV_INSTALLER_BASE } else { "https://github.com/$Repo/releases/latest/download" }
+    $name = 'ytktv-installer-windows-x64.exe.gz'  # Windows on ARM runs it emulated
+    $work = Join-Path ([IO.Path]::GetTempPath()) ("ytktv-installer-" + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $work | Out-Null
+    try {
+        $gz = Join-Path $work $name
+        try {
+            (New-Object Net.WebClient).DownloadFile("$base/$name", $gz)
+            $sums = (New-Object Net.WebClient).DownloadString("$base/SHA256SUMS")
+        } catch { return $false }
+        $line = ($sums -split "`n") | Where-Object { $_ -match "\s\*?$([regex]::Escape($name))\s*$" } | Select-Object -First 1
+        if (-not $line -or (Hash-Of $gz) -ne ($line -split '\s+')[0].ToLower()) { return $false }
+        $exe = Join-Path $work 'ytktv-installer.exe'
+        $in = [IO.File]::OpenRead($gz)
+        $out = [IO.File]::Create($exe)
+        try {
+            $unzip = New-Object IO.Compression.GZipStream($in, [IO.Compression.CompressionMode]::Decompress)
+            $unzip.CopyTo($out)
+            $unzip.Dispose()
+        } finally { $out.Dispose(); $in.Dispose() }
+        $arguments = @()
+        if ($Room) { $arguments += '--room' }
+        if ($Desk) { $arguments += '--desk' }
+        & $exe @arguments
+        $script:ProgramExit = $LASTEXITCODE
+        return $true
+    } finally {
+        Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
+    }
+}
+
 function Install-YTKTV {
     # --- What to install -------------------------------------------------------------
     $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'x64' }
@@ -216,4 +253,5 @@ function Install-YTKTV {
     Write-Host ''
 }
 
+if ($Tui -and -not $Plain -and (Run-Program)) { return }
 try { Install-YTKTV } catch { if ($_.Exception.Message -ne 'YTKTV install stopped.') { throw } }

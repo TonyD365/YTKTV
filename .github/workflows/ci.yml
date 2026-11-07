@@ -27,6 +27,25 @@ jobs:
       - run: ruff format --check .
       - run: mypy src
 
+  installer:
+    name: Terminal installer
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: installer
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm ci --no-audit --no-fund
+      - name: Type-check, test and build
+        run: |
+          PATH="$PWD/node_modules/.bin:$PATH"
+          bun build.ts linux-x64
+          tsc --noEmit
+          bun test
+          dist/ytktv-installer-linux-x64 --help
+          dist/ytktv-installer-linux-x64 --licenses | head -n 3
+
   test:
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}

@@ -1,8 +1,11 @@
 YTKTV is installed.
 
-- Open YTKTV from Applications (macOS) or the Start menu (Windows).
+Getting started
+- Open YTKTV from Applications (macOS), the Start menu (Windows), or run the AppImage (Linux).
+- Search for a song, or add a folder of your own songs in Settings.
 - Scan the QR code on the screen with a phone to choose songs and use it as a remote.
-- YTKTV updates itself. Small updates download only the files that changed.
+- Plug in microphones and set them up on the Mixer page.
+- With a second display, the MV goes full screen there.
 
 Help and source code: https://github.com/TonyD365/YTKTV
 Report a problem: https://github.com/TonyD365/YTKTV/issues

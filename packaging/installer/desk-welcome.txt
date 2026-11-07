@@ -1,9 +1,27 @@
 Welcome to YTKTV Desk
 
-YTKTV Desk runs a karaoke venue's front desk: it opens and closes the rooms running YTKTV, takes orders, bookings and members, prints receipts and reports, and can show the rooms on a lobby TV.
+YTKTV Desk runs the front desk of a karaoke venue whose rooms use YTKTV.
 
-Before you start
-- Install YTKTV Desk on the front desk computer, and YTKTV on each room's computer. Rooms pair with the Desk on the same network.
-- With a graphics card (GPU), the Desk can remove vocals and write lyrics for every room.
+What it does
+- Opens and closes the rooms, with timers, extensions and packages.
+- Bills each room: time, food and drinks, coupons and members' balances; prints receipts.
+- Takes bookings and keeps a waiting list.
+- Members with points, top-ups and birthdays.
+- Orders and service calls from the rooms, on the Desk and on staff terminals.
+- Reports and insights: takings, busy hours, top songs and best sellers.
+- A lobby TV showing which rooms are free, in use or booked (never what a room sings).
+- Server Mode: a computer with a graphics card removes vocals and writes lyrics for every room.
 
-YTKTV Desk is free to use and must not be sold. Read the license on the next page.
+What you need
+- macOS 15 or later, Windows 10 (1809) or 11, or a 64-bit Linux.
+- About 500 MB of free disk space.
+- The Desk and the rooms on the same network. Each room runs YTKTV and pairs with a code from the Desk.
+
+Where it goes
+- macOS: /Applications/YTKTV Desk.app. Windows: your Programs folder. Linux: ~/Applications/YTKTV-Desk.AppImage.
+- The venue's records stay in your user folder, so updating or reinstalling keeps them. Back them up from the Desk's settings.
+
+Updates
+- YTKTV Desk checks for updates by itself. Small updates download only the files that changed.
+
+YTKTV Desk is free to use and must not be sold. Read the license next.
