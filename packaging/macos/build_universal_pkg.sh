@@ -16,8 +16,8 @@ VERSION="$3"
 OUT_DIR="${4:-dist}"
 APP="${5:-YTKTV}"
 case "$APP" in
-  YTKTV) TITLE="YTKTV"; ID="com.tonyd365.ytktv" ;;
-  YTKTV-Desk) TITLE="YTKTV Desk"; ID="com.tonyd365.ytktv.desk" ;;
+  YTKTV) TITLE="YTKTV"; ID="com.tonyd365.ytktv"; PAGES="ytktv" ;;
+  YTKTV-Desk) TITLE="YTKTV Desk"; ID="com.tonyd365.ytktv.desk"; PAGES="desk" ;;
   *) echo "unknown app $APP" >&2; exit 1 ;;
 esac
 OUT="$OUT_DIR/${APP}-${VERSION}-macos-universal.pkg"
@@ -26,6 +26,12 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 cp "$ARM_PKG" "$WORK/ytktv-arm64.pkg"
 cp "$INTEL_PKG" "$WORK/ytktv-x86_64.pkg"
+# The installer's Introduction, License and Summary pages
+HERE="$(cd "$(dirname "$0")" && pwd)"
+mkdir -p "$WORK/resources"
+cp "$HERE/../installer/${PAGES}-welcome.txt" "$WORK/resources/welcome.txt"
+cp "$HERE/../installer/${PAGES}-done.txt" "$WORK/resources/conclusion.txt"
+cp "$HERE/../../LICENSE" "$WORK/resources/license.txt"
 
 # Each choice is selected only on its own architecture. Installer itself runs
 # natively, so hw.optional.arm64 is reliable even for apps under Rosetta.
@@ -33,6 +39,9 @@ cat > "$WORK/distribution.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
     <title>${TITLE}</title>
+    <welcome file="welcome.txt" mime-type="text/plain"/>
+    <license file="license.txt" mime-type="text/plain"/>
+    <conclusion file="conclusion.txt" mime-type="text/plain"/>
     <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
     <script>
     function isAppleSilicon() { return system.sysctl('hw.optional.arm64') == 1; }
@@ -58,6 +67,7 @@ mkdir -p "$OUT_DIR"
 SIGN_ARGS=()
 if [ -n "${INSTALLER_IDENTITY:-}" ]; then SIGN_ARGS=(--sign "$INSTALLER_IDENTITY"); fi
 productbuild --distribution "$WORK/distribution.xml" --package-path "$WORK" \
+  --resources "$WORK/resources" \
   ${SIGN_ARGS[@]+"${SIGN_ARGS[@]}"} "$OUT"
 
 if [ -n "${APPLE_ID:-}" ] && [ -n "${INSTALLER_IDENTITY:-}" ]; then

@@ -33,6 +33,9 @@ UninstallDisplayIcon={app}\YTKTV.exe
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+LicenseFile=..\..\LICENSE
+InfoBeforeFile=..\installer\ytktv-welcome.txt
+InfoAfterFile=..\installer\ytktv-done.txt
 ; Lets the auto-updater replace a running copy and start it again.
 CloseApplications=yes
 RestartApplications=yes
