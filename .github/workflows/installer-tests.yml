@@ -36,12 +36,15 @@ jobs:
           EVENT: ${{ github.event_name }}
           ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
+          SENDER: ${{ github.event.sender.login }}
         run: |
           run=false
           if [ "$EVENT" != "pull_request" ]; then
             run=true
           elif [ "$ACTION" = "labeled" ]; then
-            [ "$LABEL" = "installer" ] && run=true
+            # A label the bot added from the files is already covered by the run for those
+            # files; only a label added by hand starts one.
+            [ "$LABEL" = "installer" ] && [ "$SENDER" != TonyD365-Agent ] && run=true
           else
             gh pr view "$NUMBER" --json labels -q '.labels[].name' | grep -qx installer && run=true
             gh pr diff "$NUMBER" --name-only | grep -Eq \

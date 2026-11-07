@@ -37,7 +37,7 @@ jobs:
         if: always() && github.event_name == 'schedule'
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
           GH_REPO: ${{ github.repository }}
           OUTCOME: ${{ steps.check.outcome }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
