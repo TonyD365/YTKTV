@@ -3,6 +3,10 @@
 #
 #   curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash
 #   curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash -s -- --desk
+#   add --yes to accept the license without being asked (for scripts)
+#
+# It shows what the app is and its license, asks you to accept the license, and at the
+# end how to start: the same pages as the installers (packaging/installer/).
 #
 # macOS: downloads the universal .pkg and installs it with the system's installer (it asks
 # for your password once). Downloaded this way, macOS does not quarantine it, so there is
@@ -12,10 +16,12 @@ set -euo pipefail
 
 REPO="TonyD365/YTKTV"
 APP="YTKTV"
+YES=""
 for arg in "$@"; do
   case "$arg" in
     --desk) APP="YTKTV-Desk" ;;
-    -h|--help) sed -n '2,10p' "$0" 2>/dev/null || true; exit 0 ;;
+    -y|--yes) YES=1 ;;
+    -h|--help) sed -n '2,14p' "$0" 2>/dev/null || true; exit 0 ;;
     *) echo "Unknown option: $arg (use --desk for YTKTV Desk)" >&2; exit 1 ;;
   esac
 done
@@ -42,6 +48,27 @@ URL=$(printf '%s' "$RELEASE" | grep -o '"browser_download_url": *"[^"]*"' | cut 
 [ -n "$URL" ] || fail "The latest release has no ${APP} file for this computer yet. Try again in a while."
 NAME="${URL##*/}"
 
+# The welcome page, the license and the finish page, from the release's own tag.
+TAG=$(printf '%s' "$RELEASE" | grep -o '"tag_name": *"[^"]*"' | head -n 1 | cut -d'"' -f4)
+RAW="https://raw.githubusercontent.com/$REPO/${TAG:-main}"
+PAGES="ytktv"; [ "$APP" = "YTKTV-Desk" ] && PAGES="desk"
+page() { curl -fsSL "$RAW/$1" 2>/dev/null || curl -fsSL "https://raw.githubusercontent.com/$REPO/main/$1" 2>/dev/null || true; }
+echo
+page "packaging/installer/${PAGES}-welcome.txt"
+echo
+if [ -z "$YES" ]; then
+  { : </dev/tty; } 2>/dev/null || fail "Cannot ask you to accept the license here. Read it at $RAW/LICENSE and run again with --yes."
+  while true; do
+    printf 'Do you accept the YTKTV License? [y = yes, n = no, v = view it] ' >/dev/tty
+    read -r answer </dev/tty || answer=n
+    case "$answer" in
+      y|Y|yes) break ;;
+      v|V) page LICENSE | ${PAGER:-less} >/dev/tty 2>&1 </dev/tty || page LICENSE ;;
+      *) fail "You did not accept the license, so nothing was installed." ;;
+    esac
+  done
+fi
+
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 say "Downloading ${NAME}…"
@@ -63,8 +90,7 @@ case "$SUFFIX" in
   *.pkg)
     say "Installing (macOS asks for your password)…"
     sudo installer -pkg "$WORK/$NAME" -target /
-    LABEL="${APP/-/ }"
-    say "Done. Open ${LABEL} from Applications or Launchpad."
+    say "Done."
     ;;
   *.AppImage)
     mkdir -p "$HOME/Applications"
@@ -74,3 +100,5 @@ case "$SUFFIX" in
     say "Done. Run it with: $TARGET"
     ;;
 esac
+echo
+page "packaging/installer/${PAGES}-done.txt"
