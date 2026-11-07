@@ -87,24 +87,34 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: echo "version=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName | sed 's/^v//')" | tee -a "$GITHUB_OUTPUT"
+        run: |
+          echo "version=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName | sed 's/^v//')" | tee -a "$GITHUB_OUTPUT"
+          # While a new release is still being built it has no installers (SHA256SUMS comes
+          # last): there is nothing to install yet, which is not a failure of this change.
+          if gh release view --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -qx SHA256SUMS; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The latest release is still being built; the installs are skipped this time."
+          fi
 
       - name: YTKTV through the installer program
+        if: steps.latest.outputs.ready == 'true'
         shell: bash
         run: |
           program=installer/dist/ytktv-installer-${{ matrix.target }}
           [ -f "$program.exe" ] && program="$program.exe"
           "$program" --room --yes
       - name: YTKTV Desk through the one-line script (macOS, Linux)
-        if: runner.os != 'Windows'
+        if: steps.latest.outputs.ready == 'true' && runner.os != 'Windows'
         run: bash site/install.sh --desk --yes
       - name: YTKTV Desk through the one-line script (Windows)
-        if: runner.os == 'Windows'
+        if: steps.latest.outputs.ready == 'true' && runner.os == 'Windows'
         shell: pwsh
         run: '& ./site/install.ps1 -Desk -Yes'
 
       - name: Check what is installed (macOS)
-        if: runner.os == 'macOS'
+        if: steps.latest.outputs.ready == 'true' && runner.os == 'macOS'
         env:
           WANT: ${{ steps.latest.outputs.version }}
         run: |
@@ -113,7 +123,7 @@ jobs:
             echo "$app: $have"; [ "$have" = "$WANT" ]
           done
       - name: Check what is installed (Linux)
-        if: runner.os == 'Linux'
+        if: steps.latest.outputs.ready == 'true' && runner.os == 'Linux'
         env:
           WANT: ${{ steps.latest.outputs.version }}
         run: |
@@ -123,7 +133,7 @@ jobs:
             have=$(cat "$file.version"); echo "$app: $have"; [ "$have" = "$WANT" ]
           done
       - name: Check what is installed (Windows)
-        if: runner.os == 'Windows'
+        if: steps.latest.outputs.ready == 'true' && runner.os == 'Windows'
         shell: pwsh
         env:
           WANT: ${{ steps.latest.outputs.version }}
@@ -139,6 +149,7 @@ jobs:
           }
 
       - name: Up to date is left alone
+        if: steps.latest.outputs.ready == 'true'
         shell: bash
         run: |
           program=installer/dist/ytktv-installer-${{ matrix.target }}
