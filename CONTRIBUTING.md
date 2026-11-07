@@ -51,6 +51,11 @@ the benchmarks:
   `separation` (the real model) and `packaging` (the whole release build with the built apps'
   self-tests). A maintainer can also add a label to run them.
 - A pull request needs the maintainer's approval, and every check passing, before it is merged.
+- The bot also keeps **status labels** up to date: `Checks-Running`, `Checks-Passed`,
+  `Checks-Failed`, `Internal-Error` (a check was cancelled or timed out, usually not the
+  change's fault), `Needs-Author-Action`, `Needs-Terms-Agreement`, `Needs-Review` and
+  `Maintainer-Approved`. When the status changes it posts a new comment, so the newest status
+  is always the latest comment.
 
 A few conventions:
 
