@@ -117,7 +117,9 @@
    winget install TonyD365.YTKTV
    ```
 
-   安装管理终端：在 PowerShell 里运行 `irm https://tonyd365.github.io/YTKTV/install.ps1 | iex`，勾选 YTKTV Desk（它还没上 winget）。
+   安装管理终端：在 PowerShell 里运行 `irm https://tonyd365.github.io/YTKTV/install.ps1 | iex`，勾选 YTKTV Desk。
+
+   > **YTKTV Desk 暂时不提供 winget 安装。** 它已经提交给 winget，但等了很久一直没有被收录，所以暂时撤下了。YTKTV 本体照常可以用 winget 安装。
 3. 从「开始」菜单打开 **YTKTV**。
 
 Windows 10（1809 及以后）和 Windows 11 都自带 winget。手动更新：`winget upgrade TonyD365.YTKTV`；卸载：`winget uninstall TonyD365.YTKTV`。
