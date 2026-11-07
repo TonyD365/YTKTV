@@ -28,7 +28,16 @@ echo "patches $OLD -> $NEW"
 
 patch() { # APP OLD_DIR NEW_DIR TAG INSTALLER
   "$PY" scripts/make_patch.py patch "$2" "$3" dist/patches --app "$1" \
-    --from "$OLD" --to "$NEW" --tag "$4" --installer "$5" || echo "::warning::no patch for $1 $4"
+    --from "$OLD" --to "$NEW" --tag "$4" --installer "$5" || { echo "::warning::no patch for $1 $4"; return; }
+  # Apply it as the app would, to a copy of the old build: only a patch that turns it into
+  # exactly the new build is attached. Otherwise users get the installer, as without one.
+  local zip="dist/patches/$1-patch-$OLD-$NEW-$4.zip"
+  [ -f "$zip" ] || return 0
+  if ! "$PY" scripts/make_patch.py verify "$2" "$3" "$zip"; then
+    echo "::error::the $1 $4 patch did not turn $OLD into $NEW; it is not attached"
+    rm -f "$zip"
+    VERIFY_FAILED=1
+  fi
 }
 
 case "$1" in
@@ -54,4 +63,6 @@ case "$1" in
     patch "$APP" "$WORK/old" "dist/$folder" "windows-$ARCH" "dist/$APP-$NEW-windows-$ARCH-setup.exe"
     ;;
 esac
+# A failed check shows in red on the release run (the step itself may not stop it).
+[ -z "${VERIFY_FAILED:-}" ] || exit 1
 exit 0
