@@ -69,13 +69,18 @@ run_program() {
     printf '\033[K' >/dev/tty; rm -rf "$work"; return 1
   fi
   printf '\033[K' >/dev/tty
-  expected=$(curl -fsSL --retry 3 "$base/SHA256SUMS" 2>/dev/null | grep " \*\?ytktv-installer-$target.gz\$" | cut -d' ' -f1 || true)
+  # Its own checksum file is attached first, before the release's SHA256SUMS exists.
+  expected=$( { curl -fsSL --retry 3 "$base/ytktv-installer.sha256" 2>/dev/null || curl -fsSL --retry 3 "$base/SHA256SUMS" 2>/dev/null; } \
+    | grep " \*\?ytktv-installer-$target.gz\$" | cut -d' ' -f1 || true)
   if command -v sha256sum >/dev/null; then actual=$(sha256sum "$work/i.gz" | cut -d' ' -f1)
   else actual=$(shasum -a 256 "$work/i.gz" | cut -d' ' -f1); fi
   if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then rm -rf "$work"; return 1; fi
   gunzip "$work/i.gz" && chmod +x "$work/i" || { rm -rf "$work"; return 1; }
   code=0
-  "$work/i" "$@" </dev/tty || code=$?
+  # The terminal's real device: the program gets no keys through the /dev/tty alias on macOS.
+  term="/dev/$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')"
+  { [ -c "$term" ] && : <"$term"; } 2>/dev/null || term=/dev/tty
+  "$work/i" "$@" <"$term" || code=$?
   rm -rf "$work"
   exit "$code"
 }
@@ -224,7 +229,8 @@ esac
 
 WORK=$(mktemp -d)
 spin "Looking up the latest release…" \
-  curl -fsSL --retry 3 -o "$WORK/release.json" "https://api.github.com/repos/$REPO/releases/latest" \
+  curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
+    -o "$WORK/release.json" "https://api.github.com/repos/$REPO/releases/latest" \
   || fail "Could not reach GitHub. Check the internet connection and try again."
 RELEASE=$(cat "$WORK/release.json")
 TAG=$(printf '%s' "$RELEASE" | grep -o '"tag_name": *"[^"]*"' | head -n 1 | cut -d'"' -f4)

@@ -448,6 +448,8 @@ jobs:
     # site/install.sh and site/install.ps1. Built on macOS so the Mac ones can be signed.
     name: Build (terminal installer)
     runs-on: macos-15
+    permissions:
+      contents: write
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -462,6 +464,18 @@ jobs:
           cd dist
           for file in *; do gzip -9 -n "$file"; done
           ls -la
+      - name: Attach to the release now
+        # Before the installers are built, so the one-line installs use it at once.
+        if: github.event_name == 'release'
+        working-directory: installer/dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          shasum -a 256 *.gz > ytktv-installer.sha256
+          cat ytktv-installer.sha256
+          gh release upload "$TAG" *.gz ytktv-installer.sha256 --clobber
       - uses: actions/upload-artifact@v7
         with:
           name: installer-cli

@@ -140,8 +140,12 @@ function Run-Program {
         $gz = Join-Path $work $name
         try {
             (New-Object Net.WebClient).DownloadFile("$base/$name", $gz)
-            $sums = (New-Object Net.WebClient).DownloadString("$base/SHA256SUMS")
         } catch { return $false }
+        # Its own checksum file is attached first, before the release's SHA256SUMS exists.
+        $sums = ''
+        foreach ($file in @('ytktv-installer.sha256', 'SHA256SUMS')) {
+            try { $sums = (New-Object Net.WebClient).DownloadString("$base/$file"); break } catch { }
+        }
         $line = ($sums -split "`n") | Where-Object { $_ -match "\s\*?$([regex]::Escape($name))\s*$" } | Select-Object -First 1
         if (-not $line -or (Hash-Of $gz) -ne ($line -split '\s+')[0].ToLower()) { return $false }
         $exe = Join-Path $work 'ytktv-installer.exe'
@@ -167,7 +171,9 @@ function Install-YTKTV {
     # --- What to install -------------------------------------------------------------
     $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'x64' }
     Say 'Looking up the latest release...'
-    try { $release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest" }
+    $headers = @{}
+    if ($env:GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $env:GITHUB_TOKEN" }  # CI machines share addresses
+    try { $release = Invoke-RestMethod -Headers $headers "https://api.github.com/repos/$Repo/releases/latest" }
     catch { Fail 'Could not reach GitHub. Check the internet connection and try again.' }
     $script:Tag = $release.tag_name
 
