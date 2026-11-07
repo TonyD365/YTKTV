@@ -564,6 +564,21 @@ The pictures in the README and on the website come from `python scripts/readme_i
 To build the macOS package locally: `pip install -e ".[package]"`, then
 `packaging/macos/build_pkg.sh`.
 
+## Security: please look for holes
+
+**We welcome security research on YTKTV and YTKTV Desk.** If you find a way to get into a
+room, the Desk, a phone page or an update that you should not be able to, we want to hear it.
+
+- **Report it privately:** [Report a vulnerability](https://github.com/TonyD365/YTKTV/security/advisories/new) (the repository's Security tab),
+  not in a public issue. Say what it is, how to reproduce it, and which version and system.
+- **What happens next:** an answer within a week; the fix is made in private and shipped as
+  an update (YTKTV updates itself), then a security advisory is published, with a CVE number
+  when it is serious.
+- **Credit:** you are named in the advisory, unless you would rather not be.
+
+What is in scope, and what is by design (for example, the phone page has no password on a
+home network), is in [SECURITY.md](SECURITY.md).
+
 ## Contributing
 
 Bug reports, ideas and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and

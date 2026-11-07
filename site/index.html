@@ -268,6 +268,7 @@
       <details><summary data-i18n="q3.q">Do I need a graphics card?</summary><p data-i18n="q3.a">No. Apple Silicon Macs use their GPU, and on Windows and Linux YTKTV uses an NVIDIA or DirectX 12 card when there is one and the processor otherwise.</p></details>
       <details><summary data-i18n="q4.q">Does it need the internet?</summary><p data-i18n="q4.a">Yes, the songs come from YouTube. The next songs in the queue are downloaded ahead, so a short drop usually goes unnoticed.</p></details>
       <details><summary data-i18n="q5.q">Something does not work.</summary><p data-i18n="q5.a" data-html>Please <a href="https://github.com/TonyD365/YTKTV/issues/new/choose">open an issue</a> with the version, your system and what happened.</p></details>
+      <details><summary data-i18n="q6.q">Found a security problem?</summary><p data-i18n="q6.a" data-html>Thank you, and please look for more: security research is welcome. Report it privately with <a href="https://github.com/TonyD365/YTKTV/security/advisories/new">Report a vulnerability</a> on GitHub, not in a public issue. You get an answer within a week, the fix ships as an update, and you are credited in the security advisory. See <a href="https://github.com/TonyD365/YTKTV/blob/main/SECURITY.md">SECURITY.md</a>.</p></details>
     </div>
   </section>
 </main>
@@ -276,7 +277,7 @@
   <div class="wrap">
     <div>© 2026 TonyD365 · <a href="https://github.com/TonyD365/YTKTV/blob/main/LICENSE" data-i18n="foot.license">YTKTV License: free to use, not for sale</a></div>
     <div data-i18n="foot.disclaimer">YTKTV is not affiliated with YouTube or Google.</div>
-    <div><a href="https://github.com/TonyD365/YTKTV/blob/main/CHANGELOG.md" data-i18n="foot.changes">What's new</a> · <a href="https://github.com/TonyD365/YTKTV/blob/main/CONTRIBUTING.md" data-i18n="foot.contribute">Contribute</a></div>
+    <div><a href="https://github.com/TonyD365/YTKTV/blob/main/CHANGELOG.md" data-i18n="foot.changes">What's new</a> · <a href="https://github.com/TonyD365/YTKTV/blob/main/CONTRIBUTING.md" data-i18n="foot.contribute">Contribute</a> · <a href="https://github.com/TonyD365/YTKTV/blob/main/SECURITY.md" data-i18n="foot.security">Security: reports welcome</a></div>
   </div>
 </footer>
 
@@ -324,7 +325,8 @@ const ZH = {
   "q4.q": "需要联网吗？", "q4.a": "需要，歌曲来自 YouTube。队列里接下来的歌会提前下载，网络短暂断一下一般听不出来。",
   "q5.q": "遇到问题？", "q5.a": "请<a href=\"https://github.com/TonyD365/YTKTV/issues/new/choose\">提交 issue</a>，写上版本、系统和发生了什么，中英文都可以。",
   "foot.license": "YTKTV License：免费使用，不得出售", "foot.disclaimer": "YTKTV 与 YouTube 和 Google 没有关联。",
-  "foot.changes": "更新记录", "foot.contribute": "参与贡献",
+  "q6.q": "发现了安全问题？", "q6.a": "谢谢，也欢迎继续找：我们欢迎安全研究。请在 GitHub 上用 <a href=\"https://github.com/TonyD365/YTKTV/security/advisories/new\">Report a vulnerability</a> 私下报告，不要发公开 issue。一周内会回复，修复会随更新发布，安全公告里会写上你的名字。详见 <a href=\"https://github.com/TonyD365/YTKTV/blob/main/SECURITY.md\">SECURITY.md</a>。",
+  "foot.changes": "更新记录", "foot.contribute": "参与贡献", "foot.security": "安全：欢迎报告漏洞",
 };
 const original = new Map();
 for (const el of document.querySelectorAll("[data-i18n]")) {

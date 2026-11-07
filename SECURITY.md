@@ -1,5 +1,7 @@
 # Security
 
+**Looking for security holes in YTKTV is welcome.** Reports are answered, fixed and credited.
+
 ## Reporting a problem
 
 **Please do not open a public issue for a security problem.** Report it privately instead:
@@ -10,6 +12,16 @@
 
 Say what the problem is, how to reproduce it, and which version and system you used. You will
 get an answer within a week. Please give a reasonable time to fix it before telling anyone else.
+
+## What happens after you report
+
+1. You get an answer within a week, saying whether it is a vulnerability and how serious it is.
+2. The fix is made in a private fork of the repository, where you are welcome to check it.
+3. It ships as an update; YTKTV and YTKTV Desk update themselves, so most installs get it soon.
+4. A few days later a security advisory is published here, with a CVE number when it is
+   serious, and **you are credited in it** (unless you would rather not be).
+
+Please keep it private until the advisory is out.
 
 ## What is in scope
 
