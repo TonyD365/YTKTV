@@ -1,0 +1,38 @@
+# Every two months: an issue reminding to do a manual security review. Automatic scans
+# (security.yml, Dependabot, CodeQL) miss whole kinds of problems, such as how files and
+# privileges change hands; the first manual review found one (GHSA-xxrc-5rc3-xqgp).
+name: Security review reminder
+
+on:
+  schedule:
+    - cron: "0 9 1 */2 *" # 09:00 UTC on the 1st, every other month
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          title="Security review due ($(date -u '+%B %Y'))"
+          gh label create security --color b60205 --description "Security findings" 2>/dev/null || true
+          if gh issue list --state open --label security --search "\"Security review due\" in:title" --json number -q '.[0].number' | grep -q .; then
+            echo "a review reminder is still open"; exit 0
+          fi
+          cat > body.md <<'MD'
+          Time for the regular manual security review (the automatic scans keep running on their own).
+
+          - [ ] **Network:** the phone page and mic server, the Desk server, staff terminals, room pairing and signing, uploads to the Desk.
+          - [ ] **Updates and installers:** the updater and patches (what runs as admin, from where), downloaded runtimes and tools (pinned and checked?), the one-line installers, the workflows and their secrets.
+          - [ ] **Local data and input:** data from YouTube, lyrics sites and files (subprocesses, paths, rich text), the Desk's records and password, keys and their file permissions, logs.
+          - [ ] Open Dependabot and code scanning alerts are handled.
+
+          Fix anything serious privately (Security → Advisories → a draft advisory with a temporary private fork), release, then publish the advisory. Close this issue when done.
+          MD
+          sed -i 's/^          //' body.md
+          gh issue create --title "$title" --label security --body-file body.md
