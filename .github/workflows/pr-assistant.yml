@@ -154,6 +154,12 @@ jobs:
 
           internal=$(awk -F'\t' '$3=="cancelled"||$3=="timed_out"||$3=="startup_failure"||$3=="stale"' checks.tsv | wc -l | tr -d ' ')
           review=$(jq -r .reviewDecision <<<"$pr")
+          # The latest review asking for changes, to point to it.
+          if [ "$review" = CHANGES_REQUESTED ]; then
+            asked=$(gh api "repos/$GH_REPO/pulls/$NUMBER/reviews?per_page=100" \
+              -q '[.[] | select(.state == "CHANGES_REQUESTED")] | last | "\(.user.login)\t\(.html_url)"')
+            asked_by=${asked%%$'\t'*}; asked_url=${asked#*$'\t'}
+          fi
 
           # Status labels: exactly the ones that fit now.
           want=()
@@ -163,13 +169,14 @@ jobs:
           [ "$total" != 0 ] && [ "$running" = 0 ] && [ "$failed" = 0 ] && want+=(Checks-Passed)
           if [ "$failed" != 0 ] || [ "$terms" = no ] || [ "$review" = CHANGES_REQUESTED ] || [ -n "$conflict" ]; then want+=(Needs-Author-Action); fi
           [ -n "$conflict" ] && want+=(Merge-Conflict)
+          [ "$review" = CHANGES_REQUESTED ] && want+=(Changes-Requested)
           [ "$terms" = no ] && want+=(Needs-Terms-Agreement)
           [ "$terms" = yes ] && want+=(Terms-Agreed)
           [ -n "${declined:-}" ] && want+=(Terms-Declined)
           if [ "$review" = APPROVED ]; then want+=(Maintainer-Approved); else want+=(Needs-Review); fi
           declare -A colours=([Checks-Running]=c5def5 [Checks-Passed]=0e8a16 [Checks-Failed]=d73a4a
             [Internal-Error]=e99695 [Needs-Author-Action]=b60205 [Needs-Review]=fbca04
-            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7 [Terms-Agreed]=c2e0c6 [Terms-Declined]=000000 [Merge-Conflict]=d93f0b)
+            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7 [Terms-Agreed]=c2e0c6 [Terms-Declined]=000000 [Merge-Conflict]=d93f0b [Changes-Requested]=e4e669)
           have=$(jq -r '.labels[].name' <<<"$pr")
           for label in "${!colours[@]}"; do
             if printf '%s\n' "${want[@]}" | grep -qx "$label"; then
@@ -196,14 +203,17 @@ jobs:
           fi
 
           # The kind of status: a new kind is posted as a new comment (see the end).
-          if [ -n "$conflict" ]; then kind=conflict
+          if [ "$review" = CHANGES_REQUESTED ]; then kind=changes
+          elif [ -n "$conflict" ]; then kind=conflict
           elif [ "$terms" = no ]; then kind=terms
           elif [ "$total" = 0 ] || [ "$running" != 0 ] && [ "$failed" = 0 ]; then kind=running
           elif [ "$failed" != 0 ]; then kind=failed
           else kind="passed-$review"; fi
           {
             echo "<!-- ytktv-pr-assistant kind=$kind -->"
-            if [ "$total" = 0 ]; then
+            if [ "$review" = CHANGES_REQUESTED ]; then
+              echo "### ✋ Changes requested"
+            elif [ "$total" = 0 ]; then
               echo "### ⏳ Checks are starting"
             elif [ "$failed" != 0 ]; then
               echo "### ❌ $failed of $total checks failed"
@@ -214,6 +224,10 @@ jobs:
             fi
             echo
             echo "Hi @$author, I keep this comment up to date with the state of this pull request."
+            if [ "$review" = CHANGES_REQUESTED ]; then
+              echo
+              echo "**The maintainer (\`${asked_by:-maintainer}\`) asked for changes before this can be merged.** Please read [the review](${asked_url:-$SERVER/$GH_REPO/pull/$NUMBER/files}), make the changes and push them; the review is then looked at again. Auto-merge stays off until it is approved."
+            fi
             if [ "$failed" != 0 ]; then
               echo
               echo "**What failed, and what it usually means**"
@@ -248,6 +262,8 @@ jobs:
             echo "**Next**"
             if [ "$(jq -r .isDraft <<<"$pr")" = true ]; then
               echo "- This is a draft: mark it ready for review when it is done."
+            elif [ "$review" = CHANGES_REQUESTED ]; then
+              echo "- Make the changes asked for in the review and push them."
             elif [ -n "$conflict" ]; then
               echo "- Resolve the merge conflict with \`main\` (see above) and push."
             elif [ "$terms" = no ]; then
