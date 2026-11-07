@@ -33,12 +33,11 @@ permissions:
   issues: write
   statuses: write
 
-concurrency:
-  group: pr-assistant-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.head_sha }}
-  cancel-in-progress: false
-
 jobs:
   comment:
+    concurrency:
+      group: pr-assistant-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.head_sha }}
+      cancel-in-progress: false
     if: >-
       github.event_name == 'pull_request_target' ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
@@ -94,22 +93,19 @@ jobs:
           # Contribution terms (maintainer and bots excepted): agreed when the author has written
           # the sentence in a comment on this pull request or on any earlier one of theirs here.
           PHRASE="I agree to the YTKTV contribution terms"
-          agreed_in() {  # pull request number -> 0 if its author wrote the sentence there
-            gh api "repos/$GH_REPO/issues/$1/comments?per_page=100" \
-              -q ".[] | select(.user.login == \"$author\") | .body" |
-              tr -d '\r' | grep -Fqix -- "$PHRASE"
+          # The record: an issue labelled terms-ledger, one bot comment per agreement or
+          # withdrawal; the latest one for a person decides (see the terms job below).
+          ledger=$(gh issue list --state all --label terms-ledger --json number -q '.[0].number')
+          terms_state() {
+            [ -n "$ledger" ] || { echo none; return; }
+            gh api --paginate "repos/$GH_REPO/issues/$ledger/comments?per_page=100" \
+              -q ".[] | select(.user.login == \"$ME\") | .body | split(\"\n\")[0]" |
+              sed -n "s/^<!-- terms:\(agreed\|declined\):$author -->$/\1/p" | tail -n 1 | grep . || echo none
           }
+          ME=$(gh api user -q .login 2>/dev/null || echo "github-actions[bot]")
           case "$author" in
             TonyD365|TonyD365-Agent|dependabot\[bot\]|github-actions\[bot\]|app/dependabot) terms=exempt ;;
-            *)
-              terms=no
-              if agreed_in "$NUMBER"; then terms=yes
-              else
-                for earlier in $(gh pr list --state all --author "$author" --limit 30 --json number -q '.[].number'); do
-                  [ "$earlier" = "$NUMBER" ] && continue
-                  if agreed_in "$earlier"; then terms=yes; break; fi
-                done
-              fi ;;
+            *) case "$(terms_state)" in agreed) terms=yes ;; declined) terms=no; declined=1 ;; *) terms=no ;; esac ;;
           esac
           posted=$(gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \
             -q '[.[] | select(.body | startswith("<!-- ytktv-terms")) | .body | split("\n")[0]] | join(" ")')
@@ -133,13 +129,9 @@ jobs:
               echo "$PHRASE"
               echo '```'
               echo
-              echo "Agreeing once covers your later pull requests to YTKTV too. If you do not agree, the pull request cannot be merged."
+              echo "Agreeing once covers your later pull requests to YTKTV too, until you withdraw it by replying \`I do not agree to the YTKTV contribution terms\`. If you do not agree, the pull request cannot be merged."
             } > terms.md
             gh pr comment "$NUMBER" --body-file terms.md
-          fi
-          if [ "$terms" = yes ] && [[ "$posted" == *"ytktv-terms-ask"* ]] && [[ "$posted" != *"ytktv-terms-ok"* ]]; then
-            printf '%s\n' "<!-- ytktv-terms-ok -->" "✅ Thank you, @$author: your agreement to the contribution terms is recorded." > ok.md
-            gh pr comment "$NUMBER" --body-file ok.md
           fi
           if [ "$terms" = no ]; then state=failure; desc="Reply: $PHRASE"; else state=success; desc="Agreed"; [ "$terms" = exempt ] && desc="Not needed for the maintainer"; fi
           gh api -X POST "repos/$GH_REPO/statuses/$head" -f state="$state" -f context="Contribution terms" \
@@ -157,10 +149,11 @@ jobs:
           if [ "$failed" != 0 ] || [ "$terms" = no ] || [ "$review" = CHANGES_REQUESTED ]; then want+=(Needs-Author-Action); fi
           [ "$terms" = no ] && want+=(Needs-Terms-Agreement)
           [ "$terms" = yes ] && want+=(Terms-Agreed)
+          [ -n "${declined:-}" ] && want+=(Terms-Declined)
           if [ "$review" = APPROVED ]; then want+=(Maintainer-Approved); else want+=(Needs-Review); fi
           declare -A colours=([Checks-Running]=c5def5 [Checks-Passed]=0e8a16 [Checks-Failed]=d73a4a
             [Internal-Error]=e99695 [Needs-Author-Action]=b60205 [Needs-Review]=fbca04
-            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7 [Terms-Agreed]=c2e0c6)
+            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7 [Terms-Agreed]=c2e0c6 [Terms-Declined]=000000)
           have=$(jq -r '.labels[].name' <<<"$pr")
           for label in "${!colours[@]}"; do
             if printf '%s\n' "${want[@]}" | grep -qx "$label"; then
@@ -263,3 +256,62 @@ jobs:
             [ -n "$existing" ] && gh api -X DELETE "repos/$GH_REPO/issues/comments/$old_id" >/dev/null
             gh pr comment "$NUMBER" --body-file body.md
           fi
+
+  terms:
+    # Answers "I agree / I do not agree to the YTKTV contribution terms" at once: records it
+    # in the ledger issue, replies, and sets the check and labels. (The comment job above
+    # then refreshes the rest of the status.)
+    if: >-
+      github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+      github.event.comment.user.login != 'TonyD365-Agent' &&
+      github.event.comment.user.login != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          SERVER: ${{ github.server_url }}
+          NUMBER: ${{ github.event.issue.number }}
+          WHO: ${{ github.event.comment.user.login }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+          BODY: ${{ github.event.comment.body }}
+          LINK: ${{ github.event.comment.html_url }}
+        run: |
+          set -euo pipefail
+          said=$(printf '%s' "$BODY" | tr -d '\r' | sed "s/’/'/g" | tr '[:upper:]' '[:lower:]' |
+            sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/\.$//')
+          case "$said" in
+            "i agree to the ytktv contribution terms") what=agreed ;;
+            "i do not agree to the ytktv contribution terms"|"i don't agree to the ytktv contribution terms") what=declined ;;
+            *) exit 0 ;;
+          esac
+          [ "$WHO" = "$AUTHOR" ] || { echo "only the pull request's author can answer for it"; exit 0; }
+
+          # The ledger issue, made (and locked, so only the bot writes) the first time.
+          ledger=$(gh issue list --state all --label terms-ledger --json number -q '.[0].number')
+          if [ -z "$ledger" ]; then
+            gh label create terms-ledger --color ededed --description "Record of contribution terms agreements" 2>/dev/null || true
+            url=$(gh issue create --label terms-ledger --title "Contribution terms: agreements (kept by the bot)" \
+              --body "The bot records here who agreed to the [contribution terms]($SERVER/$GH_REPO/blob/main/CONTRIBUTING.md#contribution-terms), and who withdrew. The latest entry for a person counts. Please do not edit.")
+            ledger=${url##*/}
+            gh issue lock "$ledger" --reason resolved >/dev/null 2>&1 || true
+          fi
+          if [ "$what" = agreed ]; then entry="Agreed: \`$WHO\` on #$NUMBER ($LINK)"; else entry="Withdrawn / declined: \`$WHO\` on #$NUMBER ($LINK)"; fi
+          printf '%s\n%s\n' "<!-- terms:$what:$WHO -->" "$entry" > entry.md
+          gh issue comment "$ledger" --body-file entry.md >/dev/null
+
+          head=$(gh pr view "$NUMBER" --json headRefOid -q .headRefOid)
+          for label in Terms-Agreed Terms-Declined Needs-Terms-Agreement; do
+            gh label create "$label" --color ededed 2>/dev/null || true
+          done
+          if [ "$what" = agreed ]; then
+            gh api -X POST "repos/$GH_REPO/statuses/$head" -f state=success -f context="Contribution terms" -f description="Agreed" >/dev/null
+            gh pr edit "$NUMBER" --add-label Terms-Agreed --remove-label Needs-Terms-Agreement --remove-label Terms-Declined >/dev/null || true
+            printf '%s\n%s\n' "<!-- ytktv-terms-ok -->" "✅ Thank you, @$WHO: your agreement to the contribution terms is recorded. It covers your later pull requests too, until you reply \`I do not agree to the YTKTV contribution terms\`." > reply.md
+          else
+            gh api -X POST "repos/$GH_REPO/statuses/$head" -f state=failure -f context="Contribution terms" -f description="Declined" >/dev/null
+            gh pr edit "$NUMBER" --add-label Terms-Declined --add-label Needs-Terms-Agreement --remove-label Terms-Agreed >/dev/null || true
+            printf '%s\n%s\n' "<!-- ytktv-terms-declined -->" "Noted, @$WHO: you do not agree to the contribution terms, so this pull request cannot be merged. If you change your mind, reply \`I agree to the YTKTV contribution terms\`." > reply.md
+          fi
+          gh pr comment "$NUMBER" --body-file reply.md >/dev/null
+
