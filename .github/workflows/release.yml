@@ -64,6 +64,37 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      - name: Tools to build cryptography (no wheels for this platform)
+        if: matrix.name == 'macos-x86_64' || matrix.name == 'windows-arm64'
+        shell: bash
+        run: |
+          # pip builds cryptography from source here. OpenSSL is linked in statically, so the
+          # app carries no second libssl beside Python's.
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            brew install openssl@3 >/dev/null
+            echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+          else
+            vcpkg="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
+            if [ ! -x "$vcpkg/vcpkg.exe" ]; then
+              git clone --depth 1 https://github.com/microsoft/vcpkg "$RUNNER_TEMP/vcpkg"
+              "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.bat" -disableMetrics
+              vcpkg="$RUNNER_TEMP/vcpkg"
+            fi
+            "$vcpkg/vcpkg.exe" install openssl:arm64-windows-static-md
+            echo "OPENSSL_DIR=$vcpkg/installed/arm64-windows-static-md" >> "$GITHUB_ENV"
+          fi
+          echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
+          if ! command -v cargo >/dev/null; then
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              curl -fsSLo "$RUNNER_TEMP/rustup-init.exe" \
+                https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe
+              "$RUNNER_TEMP/rustup-init.exe" -y --profile minimal
+              echo "$USERPROFILE/.cargo/bin" >> "$GITHUB_PATH"
+            else
+              curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+              echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            fi
+          fi
       - name: Install YTKTV
         shell: bash
         run: |
@@ -302,6 +333,37 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Tools to build cryptography (no wheels for this platform)
+        if: matrix.name == 'macos-x86_64' || matrix.name == 'windows-arm64'
+        shell: bash
+        run: |
+          # pip builds cryptography from source here. OpenSSL is linked in statically, so the
+          # app carries no second libssl beside Python's.
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            brew install openssl@3 >/dev/null
+            echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+          else
+            vcpkg="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
+            if [ ! -x "$vcpkg/vcpkg.exe" ]; then
+              git clone --depth 1 https://github.com/microsoft/vcpkg "$RUNNER_TEMP/vcpkg"
+              "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.bat" -disableMetrics
+              vcpkg="$RUNNER_TEMP/vcpkg"
+            fi
+            "$vcpkg/vcpkg.exe" install openssl:arm64-windows-static-md
+            echo "OPENSSL_DIR=$vcpkg/installed/arm64-windows-static-md" >> "$GITHUB_ENV"
+          fi
+          echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
+          if ! command -v cargo >/dev/null; then
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              curl -fsSLo "$RUNNER_TEMP/rustup-init.exe" \
+                https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe
+              "$RUNNER_TEMP/rustup-init.exe" -y --profile minimal
+              echo "$USERPROFILE/.cargo/bin" >> "$GITHUB_PATH"
+            else
+              curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+              echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            fi
+          fi
       - name: Install YTKTV
         shell: bash
         run: |
