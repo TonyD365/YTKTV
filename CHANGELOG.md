@@ -3,6 +3,26 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.1.6
+
+# ⚠️ Security update: please update now
+
+**This release fixes several security problems. Update YTKTV and YTKTV Desk as soon as you can:** open Settings → Updates and install it, or use the install commands below.
+
+### 🔒 Security
+- The signatures between rooms and the Desk, and the certificate for the phone microphone page, now use the `cryptography` library (the latest version on every system) instead of a library with a known weakness. Rooms that are already paired keep working.
+- The phone page only talks to YTKTV itself, and the microphone link only opens an `https://` page.
+- Pasted YouTube links are read in a way that stays fast whatever text is pasted.
+
+### 🔧 Also
+- Release notes now end with how to install, and which file to download.
+- YTKTV Desk is not in winget for now (its submission waited a long time without being accepted); install it with the one-line installer.
+
+## 4.1.5
+
+### 🔒 Security update
+- A security fix for updates on macOS. Please update soon: YTKTV and YTKTV Desk update themselves (Settings → Updates).
+
 ## 4.1.4
 
 ### 🔧 Fixes
