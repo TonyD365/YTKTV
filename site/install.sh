@@ -116,7 +116,7 @@ box() {
 # Run a command with a spinner: spin "message" command args...
 spin() {
   local message="$1"; shift
-  if [ -z "$TUI" ]; then say "$message"; "$@"; return; fi
+  if [ -z "$TUI" ]; then say "$message" >&2; "$@"; return; fi
   "$@" &
   local pid=$! i=0 frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
   printf '\033[?25l' >/dev/tty
