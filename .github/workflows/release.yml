@@ -548,8 +548,10 @@ jobs:
         include:
           - id: TonyD365.YTKTV
             regex: '^YTKTV-\d[^/]*-windows-(x64|arm64)-setup\.exe$'
-          - id: TonyD365.YTKTVDesk
-            regex: '^YTKTV-Desk-\d[^/]*-windows-(x64|arm64)-setup\.exe$'
+          # YTKTV Desk is left out until its first submission (microsoft/winget-pkgs#467282)
+          # is merged; until then every update for it fails. Put it back afterwards:
+          # - id: TonyD365.YTKTVDesk
+          #   regex: '^YTKTV-Desk-\d[^/]*-windows-(x64|arm64)-setup\.exe$'
     steps:
       - uses: vedantmgoyal9/winget-releaser@v2
         with:
