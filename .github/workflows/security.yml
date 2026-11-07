@@ -1,7 +1,8 @@
 # Known vulnerabilities in the dependencies (Python and the terminal installer's npm
 # packages), and CodeQL's code scanning. On pull requests, main, and every two days.
 # On main and in the scheduled scan, a finding opens a "Security report" issue (or adds to the open
-# one), and the issue closes itself once everything is clean again.
+# one), and the issue closes itself once everything is clean again. A pull request whose
+# scan fails gets the "security" label until it passes.
 name: Security
 
 on:
@@ -131,3 +132,29 @@ jobs:
           } > body.md
           if [ -n "$open" ]; then gh issue comment "$open" --body-file body.md
           else gh issue create --title "$title" --label security --body-file body.md; fi
+
+  flag:
+    # On a pull request: the "security" label while its scan fails, taken off once it passes.
+    # (A pull request from a fork gets a read-only token, so it only shows the failed check.)
+    name: Security label
+    needs: [dependencies, codeql]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          DEPENDENCIES: ${{ needs.dependencies.result }}
+          CODEQL: ${{ needs.codeql.result }}
+        run: |
+          gh label create security --color b60205 --description "Security findings" 2>/dev/null || true
+          if [ "$DEPENDENCIES" = "failure" ] || [ "$CODEQL" = "failure" ]; then
+            gh pr edit "$NUMBER" --add-label security
+          elif [ "$DEPENDENCIES" = "success" ] && [ "$CODEQL" = "success" ]; then
+            gh pr edit "$NUMBER" --remove-label security 2>/dev/null || true
+          fi
