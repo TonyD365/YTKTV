@@ -1,5 +1,7 @@
 # Known vulnerabilities in the dependencies (Python and the terminal installer's npm
 # packages), and CodeQL's code scanning. On pull requests, main, and every Monday.
+# On main and on Mondays, a finding opens a "Security report" issue (or adds to the open
+# one), and the issue closes itself once everything is clean again.
 name: Security
 
 on:
@@ -22,6 +24,9 @@ jobs:
     name: Dependency audit
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash # with pipefail, so "| tee" keeps the audit's failure
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -34,18 +39,29 @@ jobs:
           cache: npm
           cache-dependency-path: installer/package-lock.json
       - name: Python packages
+        id: python
         run: |
           python -m pip install -e ".[dev]" pip-audit
           # Only what YTKTV installs from PyPI (YTKTV itself is not there).
           # PYSEC-2026-1325: ecdsa's timing side channel, which has no fixed version (pure
           # Python cannot be constant time). YTKTV signs room messages and its certificate
           # with it; moving those to the cryptography package removes it. Until then:
-          pip-audit --skip-editable --progress-spinner off --ignore-vuln PYSEC-2026-1325
+          pip-audit --skip-editable --progress-spinner off --ignore-vuln PYSEC-2026-1325 \
+            2>&1 | tee "$RUNNER_TEMP/python-audit.txt"
       - name: npm packages (terminal installer)
+        id: npm
+        if: always()
         working-directory: installer
         run: |
           npm ci --no-audit --no-fund
-          npm audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=high 2>&1 | tee "$RUNNER_TEMP/npm-audit.txt"
+      - name: Keep the findings
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: audit
+          path: ${{ runner.temp }}/*-audit.txt
+          if-no-files-found: ignore
 
   codeql:
     name: CodeQL (${{ matrix.language }})
@@ -66,3 +82,52 @@ jobs:
       - uses: github/codeql-action/analyze@v4
         with:
           category: /language:${{ matrix.language }}
+
+  report:
+    # A security finding on main or in the weekly scan becomes an issue, so it is not
+    # missed in the e-mail. Pull requests show it on their checks instead.
+    name: Security report
+    needs: [dependencies, codeql]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: audit
+          path: audit
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DEPENDENCIES: ${{ needs.dependencies.result }}
+          CODEQL: ${{ needs.codeql.result }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SCANNING: ${{ github.server_url }}/${{ github.repository }}/security/code-scanning
+        run: |
+          title="Security report"
+          gh label create security --color b60205 --description "Security findings" 2>/dev/null || true
+          open=$(gh issue list --state open --label security --search "\"$title\" in:title" --json number -q '.[0].number')
+          if [ "$DEPENDENCIES" = "success" ] && [ "$CODEQL" = "success" ]; then
+            [ -n "$open" ] && gh issue close "$open" --comment "All clear again: $RUN"
+            exit 0
+          fi
+          {
+            echo "The security scan found something ($(date -u '+%Y-%m-%d')). Please look at it soon."
+            echo
+            echo "- Dependency audit: **$DEPENDENCIES**"
+            echo "- CodeQL code scanning: **$CODEQL** (details: $SCANNING)"
+            for file in audit/python-audit.txt audit/npm-audit.txt; do
+              [ -s "$file" ] || continue
+              echo; echo "<details><summary>$(basename "$file" .txt)</summary>"; echo
+              echo '```'; tail -n 40 "$file"; echo '```'; echo "</details>"
+            done
+            echo
+            echo "Run: $RUN"
+            echo
+            echo "Usually: raise the package to its fixed version. With no fixed version, replace the package (as ecdsa was), or note it in security.yml with the reason."
+          } > body.md
+          if [ -n "$open" ]; then gh issue comment "$open" --body-file body.md
+          else gh issue create --title "$title" --label security --body-file body.md; fi
