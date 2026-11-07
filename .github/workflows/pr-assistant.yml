@@ -253,10 +253,13 @@ jobs:
           # One comment per pull request. A new kind of status is posted as a new
           # comment, removing the old one, so it is the latest; otherwise it is edited in place.
           existing=$(gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \
-            -q '[.[] | select(.body | startswith("<!-- ytktv-pr-assistant"))] | last | if . then "\(.id)\t\(.body | split("\n")[0])" else "" end')
-          if [ -n "$existing" ] && [ "${existing#*$'\t'}" = "$(head -n 1 body.md)" ]; then
-            gh api -X PATCH "repos/$GH_REPO/issues/comments/${existing%%$'\t'*}" -F body=@body.md >/dev/null
+            -q '[.[] | select(.body | startswith("<!-- ytktv-pr-assistant"))] | last | if . then "\(.id)\t\(.user.login)\t\(.body | split("\n")[0])" else "" end')
+          me=$(gh api user -q .login 2>/dev/null || echo "github-actions[bot]")
+          old_id=${existing%%$'\t'*}; rest=${existing#*$'\t'}; old_author=${rest%%$'\t'*}; old_kind=${rest#*$'\t'}
+          # Edited in place only when it is ours and the same kind; otherwise posted anew.
+          if [ -n "$existing" ] && [ "$old_author" = "$me" ] && [ "$old_kind" = "$(head -n 1 body.md)" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$old_id" -F body=@body.md >/dev/null
           else
-            [ -n "$existing" ] && gh api -X DELETE "repos/$GH_REPO/issues/comments/${existing%%$'\t'*}" >/dev/null
+            [ -n "$existing" ] && gh api -X DELETE "repos/$GH_REPO/issues/comments/$old_id" >/dev/null
             gh pr comment "$NUMBER" --body-file body.md
           fi
