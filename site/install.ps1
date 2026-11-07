@@ -140,8 +140,12 @@ function Run-Program {
         $gz = Join-Path $work $name
         try {
             (New-Object Net.WebClient).DownloadFile("$base/$name", $gz)
-            $sums = (New-Object Net.WebClient).DownloadString("$base/SHA256SUMS")
         } catch { return $false }
+        # Its own checksum file is attached first, before the release's SHA256SUMS exists.
+        $sums = ''
+        foreach ($file in @('ytktv-installer.sha256', 'SHA256SUMS')) {
+            try { $sums = (New-Object Net.WebClient).DownloadString("$base/$file"); break } catch { }
+        }
         $line = ($sums -split "`n") | Where-Object { $_ -match "\s\*?$([regex]::Escape($name))\s*$" } | Select-Object -First 1
         if (-not $line -or (Hash-Of $gz) -ne ($line -split '\s+')[0].ToLower()) { return $false }
         $exe = Join-Path $work 'ytktv-installer.exe'

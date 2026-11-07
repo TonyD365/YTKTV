@@ -69,13 +69,18 @@ run_program() {
     printf '\033[K' >/dev/tty; rm -rf "$work"; return 1
   fi
   printf '\033[K' >/dev/tty
-  expected=$(curl -fsSL --retry 3 "$base/SHA256SUMS" 2>/dev/null | grep " \*\?ytktv-installer-$target.gz\$" | cut -d' ' -f1 || true)
+  # Its own checksum file is attached first, before the release's SHA256SUMS exists.
+  expected=$( { curl -fsSL --retry 3 "$base/ytktv-installer.sha256" 2>/dev/null || curl -fsSL --retry 3 "$base/SHA256SUMS" 2>/dev/null; } \
+    | grep " \*\?ytktv-installer-$target.gz\$" | cut -d' ' -f1 || true)
   if command -v sha256sum >/dev/null; then actual=$(sha256sum "$work/i.gz" | cut -d' ' -f1)
   else actual=$(shasum -a 256 "$work/i.gz" | cut -d' ' -f1); fi
   if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then rm -rf "$work"; return 1; fi
   gunzip "$work/i.gz" && chmod +x "$work/i" || { rm -rf "$work"; return 1; }
   code=0
-  "$work/i" "$@" </dev/tty || code=$?
+  # The terminal's real device: the program gets no keys through the /dev/tty alias on macOS.
+  term="/dev/$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')"
+  { [ -c "$term" ] && : <"$term"; } 2>/dev/null || term=/dev/tty
+  "$work/i" "$@" <"$term" || code=$?
   rm -rf "$work"
   exit "$code"
 }

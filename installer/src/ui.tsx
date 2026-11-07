@@ -11,13 +11,18 @@ export const CYAN = "#2ee6ff";
 function ask<T>(element: (done: (value: T) => void) => ReactElement): Promise<T> {
   return new Promise((resolve) => {
     let result: T;
+    // Hold the program open while it waits for keys.
+    const keepAlive = setInterval(() => {}, 1 << 30);
     const instance = render(
       element((value) => {
         result = value;
       }),
       { exitOnCtrlC: false },
     );
-    instance.waitUntilExit().then(() => resolve(result));
+    instance.waitUntilExit().then(() => {
+      clearInterval(keepAlive);
+      resolve(result);
+    });
   });
 }
 
