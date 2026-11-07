@@ -116,9 +116,15 @@ def stage(patch: Path, dest: Path) -> dict[str, Any]:
             _safe(rel)
             target = files / rel
             target.parent.mkdir(parents=True, exist_ok=True)
+            # Nothing is written through a link the patch made (it could lead out of dest).
+            if not target.parent.resolve().is_relative_to(files.resolve()):
+                raise RuntimeError(f"bad path in patch: {rel}")
             if "link" in entry:
+                _safe_link(rel, str(entry["link"]))
                 os.symlink(entry["link"], target)
                 continue
+            if not re.fullmatch(r"[0-9a-f]{64}", str(entry.get("sha", ""))):
+                raise RuntimeError(f"bad hash in patch for {rel}")
             with archive.open(f"files/{rel}") as source, target.open("wb") as out:
                 shutil.copyfileobj(source, out)
             os.chmod(target, int(entry["mode"]))
@@ -134,6 +140,13 @@ def _safe(rel: str) -> None:
     parts = Path(rel).parts
     if not parts or Path(rel).is_absolute() or ".." in parts or ":" in rel:
         raise RuntimeError(f"bad path in patch: {rel}")
+
+
+def _safe_link(rel: str, link: str) -> None:
+    """A link in the app must point inside the app (relative, not climbing out of it)."""
+    where = os.path.normpath(os.path.join(os.path.dirname(rel), link))
+    if not link or os.path.isabs(link) or where == ".." or where.startswith(("../", "..\\")):
+        raise RuntimeError(f"bad link in patch: {rel} -> {link}")
 
 
 def _matches(path: Path, entry: dict[str, Any] | None) -> bool:
@@ -178,34 +191,77 @@ def _moves(manifest: dict[str, Any]) -> tuple[list[str], list[str]]:
     return backed + list(manifest["deleted"]), list(manifest["changed"])
 
 
-def shell_script(manifest: dict[str, Any], staged: Path, root: Path, marker: Path) -> str:
-    """The POSIX script that swaps the files (run as admin when the app is root's)."""
+def shell_script(
+    manifest: dict[str, Any], staged: Path, root: Path, marker: Path, secure: bool = False
+) -> str:
+    """The POSIX script that swaps the files.
+
+    *secure* is for running as root (an app in /Applications): the staged folder belongs to
+    the user, so the script first copies the files into a folder only root can write and
+    checks every one of them against the hashes written into this script, before it
+    touches the app. It never writes into the user's folders either (no failure marker:
+    the caller tells from its exit code), and the script itself is never saved anywhere
+    the user can change it: it is handed to root as text.
+    """
     q = shlex.quote
-    backup = staged / "backup"
     backed, placed = _moves(manifest)
-    lines = ["#!/bin/sh", "set -u", "restore() {"]
+    lines = ["#!/bin/sh", "set -u"]
+    if secure:
+        files, backup = '"$work/files"', '"$work/backup"'
+        lines += [
+            # mktemp -d makes a fresh folder, mode 700, owned by whoever runs this (root).
+            'work=$(mktemp -d "${TMPDIR:-/tmp}/ytktv-patch.XXXXXX") || exit 1',
+            "trap 'rm -rf \"$work\"' EXIT",
+            f'cp -RP {q(str(staged / "files"))} "$work/files" || exit 1',
+        ]
+        # Every file, as copied, before anything in the app changes.
+        for rel, entry in manifest["changed"].items():
+            path = f'"$work/files/"{q(rel)}'
+            if "link" in entry:
+                lines.append(
+                    f'[ -L {path} ] && [ "$(readlink {path})" = {q(entry["link"])} ] || exit 1'
+                )
+            else:
+                sha = f'"$(shasum -a 256 {path} | cut -c1-64)"'
+                lines.append(f"[ ! -L {path} ] && [ {sha} = {q(entry['sha'])} ] || exit 1")
+        fail = "fail() { restore; exit 1; }"
+    else:
+        files, backup = q(str(staged / "files")), q(str(staged / "backup"))
+        fail = f"fail() {{ restore; : > {q(str(marker))}; exit 1; }}"
+
+    def under(base: str, rel: str) -> str:
+        return f"{base}/{q(rel)}"
+
+    def parent(base: str, rel: str) -> str:
+        return f'"$(dirname {under(base, rel)})"'
+
+    lines.append("restore() {")
     for rel in placed:
         lines.append(f"  rm -rf {q(str(root / rel))}")
     for rel in backed:
-        src, dst = backup / rel, root / rel
+        src, dst = under(backup, rel), q(str(root / rel))
         lines.append(
-            f"  if [ -e {q(str(src))} ] || [ -L {q(str(src))} ]; then "
-            f"mkdir -p {q(str(dst.parent))} && mv {q(str(src))} {q(str(dst))}; fi"
+            f"  if [ -e {src} ] || [ -L {src} ]; then "
+            f"mkdir -p {q(str((root / rel).parent))} && mv {src} {dst}; fi"
         )
-    lines += ["}", f"fail() {{ restore; : > {q(str(marker))}; exit 1; }}"]
+    lines += ["}", fail]
     for rel in backed:
-        src, dst = root / rel, backup / rel
-        lines.append(f"mkdir -p {q(str(dst.parent))} && mv {q(str(src))} {q(str(dst))} || fail")
+        app_file = q(str(root / rel))
+        lines.append(
+            f"mkdir -p {parent(backup, rel)} && mv {app_file} {under(backup, rel)} || fail"
+        )
     for rel in placed:
-        src, dst = staged / "files" / rel, root / rel
-        lines.append(f"mkdir -p {q(str(dst.parent))} && mv {q(str(src))} {q(str(dst))} || fail")
+        app_file, app_dir = q(str(root / rel)), q(str((root / rel).parent))
+        lines.append(f"mkdir -p {app_dir} && mv {under(files, rel)} {app_file} || fail")
     for rel, entry in manifest["changed"].items():
         path = q(str(root / rel))
         if "link" in entry:
             lines.append(f'[ "$(readlink {path})" = {q(entry["link"])} ] || fail')
         else:
-            lines.append(f'[ "$(shasum -a 256 {path} | cut -c1-64)" = {entry["sha"]} ] || fail')
-    lines += [f"rm -rf {q(str(backup))}", "exit 0", ""]
+            lines.append(f'[ "$(shasum -a 256 {path} | cut -c1-64)" = {q(entry["sha"])} ] || fail')
+    if not secure:
+        lines.append(f"rm -rf {backup}")
+    lines += ["exit 0", ""]
     return "\n".join(lines)
 
 
@@ -294,14 +350,19 @@ def admin_prompt(root: Path, marker: Path) -> str:
 
 
 def macos_launcher(
-    apply: Path, root: Path, marker: Path, pid: int, admin: bool, reopen: bool = True
+    apply: Path | str, root: Path, marker: Path, pid: int, admin: bool, reopen: bool = True
 ) -> str:
-    """Waits for the app to quit, runs *apply* (asking for the password if needed), reopens."""
+    """Waits for the app to quit, runs the swap (asking for the password if needed), reopens.
+
+    With *admin*, *apply* is the root script's text (see shell_script(secure=True)), passed
+    to osascript as an argument, so root never runs a file the user could have changed.
+    Without, it is the path of the script to run as the user.
+    """
     q = shlex.quote
     if admin:
         run = (
-            "osascript -e 'on run argv' -e 'do shell script \"/bin/sh \" & quoted form of "
-            "(item 1 of argv) with prompt (item 2 of argv) with administrator privileges' "
+            "osascript -e 'on run argv' -e 'do shell script (item 1 of argv) "
+            "with prompt (item 2 of argv) with administrator privileges' "
             f"-e 'end run' {q(str(apply))} {q(admin_prompt(root, marker))} || : > {q(str(marker))}"
         )
     else:
