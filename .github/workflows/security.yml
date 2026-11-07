@@ -44,10 +44,7 @@ jobs:
         run: |
           python -m pip install -e ".[dev]" pip-audit
           # Only what YTKTV installs from PyPI (YTKTV itself is not there).
-          # PYSEC-2026-1325: ecdsa's timing side channel, which has no fixed version (pure
-          # Python cannot be constant time). YTKTV signs room messages and its certificate
-          # with it; moving those to the cryptography package removes it. Until then:
-          pip-audit --skip-editable --progress-spinner off --ignore-vuln PYSEC-2026-1325 \
+          pip-audit --skip-editable --progress-spinner off \
             2>&1 | tee "$RUNNER_TEMP/python-audit.txt"
       - name: npm packages (terminal installer)
         id: npm
