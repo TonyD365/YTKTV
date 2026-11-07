@@ -1,0 +1,53 @@
+# Every night: can YTKTV still search and play YouTube? (scripts/youtube_check.py)
+# YouTube changes often and yt-dlp has to catch up; this notices before the rooms do.
+# A failure opens an issue (or comments on the open one); a pass closes it.
+name: YouTube check
+
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install -e .
+      - name: Search and play
+        id: check
+        shell: bash
+        run: |
+          # Once more after a minute: a single failure is often YouTube having a moment.
+          for try in 1 2; do
+            if python scripts/youtube_check.py 2>&1 | tee report.txt; then exit 0; fi
+            [ "$try" = 1 ] && sleep 60
+          done
+          exit 1
+      - name: Report
+        if: always() && github.event_name == 'schedule'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OUTCOME: ${{ steps.check.outcome }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="YouTube check failed"
+          open=$(gh issue list --state open --search "\"$title\" in:title" --json number -q '.[0].number')
+          if [ "$OUTCOME" = "success" ]; then
+            [ -n "$open" ] && gh issue close "$open" --comment "Works again: $RUN"
+            exit 0
+          fi
+          body=$(printf 'The nightly check could not use YouTube the way a room does.\n\n```\n%s\n```\n\n%s\n\nUsually yt-dlp needs updating: when a new yt-dlp is out, raise its minimum in pyproject.toml and release a small update.' "$(tail -n 20 report.txt)" "$RUN")
+          if [ -n "$open" ]; then gh issue comment "$open" --body "$body"
+          else gh issue create --title "$title" --body "$body"; fi

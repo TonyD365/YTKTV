@@ -1,0 +1,160 @@
+# Known vulnerabilities in the dependencies (Python and the terminal installer's npm
+# packages), and CodeQL's code scanning. On pull requests, main, and every two days.
+# On main and in the scheduled scan, a finding opens a "Security report" issue (or adds to the open
+# one), and the issue closes itself once everything is clean again. A pull request whose
+# scan fails gets the "security" label until it passes.
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "41 5 */2 * *" # every two days
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependencies:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash # with pipefail, so "| tee" keeps the audit's failure
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer/package-lock.json
+      - name: Python packages
+        id: python
+        run: |
+          python -m pip install -e ".[dev]" pip-audit
+          # Only what YTKTV installs from PyPI (YTKTV itself is not there).
+          # PYSEC-2026-1325: ecdsa's timing side channel, which has no fixed version (pure
+          # Python cannot be constant time). YTKTV signs room messages and its certificate
+          # with it; moving those to the cryptography package removes it. Until then:
+          pip-audit --skip-editable --progress-spinner off --ignore-vuln PYSEC-2026-1325 \
+            2>&1 | tee "$RUNNER_TEMP/python-audit.txt"
+      - name: npm packages (terminal installer)
+        id: npm
+        if: always()
+        working-directory: installer
+        run: |
+          npm ci --no-audit --no-fund
+          npm audit --omit=dev --audit-level=high 2>&1 | tee "$RUNNER_TEMP/npm-audit.txt"
+      - name: Keep the findings
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: audit
+          path: ${{ runner.temp }}/*-audit.txt
+          if-no-files-found: ignore
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  report:
+    # A security finding on main or in the scheduled scan becomes an issue, so it is not
+    # missed in the e-mail. Pull requests show it on their checks instead.
+    name: Security report
+    needs: [dependencies, codeql]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: audit
+          path: audit
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DEPENDENCIES: ${{ needs.dependencies.result }}
+          CODEQL: ${{ needs.codeql.result }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SCANNING: ${{ github.server_url }}/${{ github.repository }}/security/code-scanning
+        run: |
+          title="Security report"
+          gh label create security --color b60205 --description "Security findings" 2>/dev/null || true
+          open=$(gh issue list --state open --label security --search "\"$title\" in:title" --json number -q '.[0].number')
+          if [ "$DEPENDENCIES" = "success" ] && [ "$CODEQL" = "success" ]; then
+            [ -n "$open" ] && gh issue close "$open" --comment "All clear again: $RUN"
+            exit 0
+          fi
+          {
+            echo "The security scan found something ($(date -u '+%Y-%m-%d')). Please look at it soon."
+            echo
+            echo "- Dependency audit: **$DEPENDENCIES**"
+            echo "- CodeQL code scanning: **$CODEQL** (details: $SCANNING)"
+            for file in audit/python-audit.txt audit/npm-audit.txt; do
+              [ -s "$file" ] || continue
+              echo; echo "<details><summary>$(basename "$file" .txt)</summary>"; echo
+              echo '```'; tail -n 40 "$file"; echo '```'; echo "</details>"
+            done
+            echo
+            echo "Run: $RUN"
+            echo
+            echo "Usually: raise the package to its fixed version. With no fixed version, replace the package (as ecdsa was), or note it in security.yml with the reason."
+          } > body.md
+          if [ -n "$open" ]; then gh issue comment "$open" --body-file body.md
+          else gh issue create --title "$title" --label security --body-file body.md; fi
+
+  flag:
+    # On a pull request: the "security" label while its scan fails, taken off once it passes.
+    # (A pull request from a fork gets a read-only token, so it only shows the failed check.)
+    name: Security label
+    needs: [dependencies, codeql]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          DEPENDENCIES: ${{ needs.dependencies.result }}
+          CODEQL: ${{ needs.codeql.result }}
+        run: |
+          gh label create security --color b60205 --description "Security findings" 2>/dev/null || true
+          if [ "$DEPENDENCIES" = "failure" ] || [ "$CODEQL" = "failure" ]; then
+            gh pr edit "$NUMBER" --add-label security
+          elif [ "$DEPENDENCIES" = "success" ] && [ "$CODEQL" = "success" ]; then
+            gh pr edit "$NUMBER" --remove-label security 2>/dev/null || true
+          fi
