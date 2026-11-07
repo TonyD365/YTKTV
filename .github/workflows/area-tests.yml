@@ -5,7 +5,9 @@
 #
 #   desk        a Desk and a room over a real network connection (tests/live)
 #   separation  the separation worker with the real model on a short song (tests/live)
-#   packaging   the whole release build, with the built apps' self-tests, publishing nothing
+#   packaging   the whole release build, with the built apps' self-tests, publishing nothing;
+#               also for every Dependabot pull request that changes pyproject.toml, since a
+#               new version may lack wheels for a platform the releases build
 name: Area tests
 
 on:
@@ -37,6 +39,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           # area: the files that give its label (keep in step with labeler.yml)
           declare -A files=(
@@ -55,6 +58,9 @@ jobs:
             else
               printf '%s\n' "$labels" | grep -qx "$area" && run=true
               printf '%s\n' "$changed" | grep -Eq "${files[$area]}" && run=true
+              if [ "$area" = packaging ] && [ "$AUTHOR" = "dependabot[bot]" ]; then
+                printf '%s\n' "$changed" | grep -qx pyproject.toml && run=true
+              fi
             fi
             echo "$area=$run" | tee -a "$GITHUB_OUTPUT"
           done
