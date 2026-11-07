@@ -5,28 +5,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
 
 from ytktv.core.models import Song
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
-_VIDEO_PATHS = ("shorts", "embed", "live", "v")
-
-
-def _video_id_in_link(word: str) -> str | None:
-    """The video id of one YouTube link, read by parsing it (no pattern over the whole text)."""
-    url = urlsplit(word if "://" in word else "https://" + word)
-    host = (url.hostname or "").removeprefix("www.").removeprefix("m.").removeprefix("music.")
-    parts = [p for p in url.path.split("/") if p]
-    if host == "youtu.be":
-        found = parts[0] if parts else ""
-    elif host == "youtube.com" and url.path == "/watch":
-        found = parse_qs(url.query).get("v", [""])[0]
-    elif host == "youtube.com" and len(parts) >= 2 and parts[0] in _VIDEO_PATHS:
-        found = parts[1]
-    else:
-        return None
-    return found if _ID_RE.match(found) else None
+# Tried only where "youtu" appears (str.find), anchored there with re.match: never a
+# search that restarts at every position, and "[^&#\s]*&" cannot overlap itself.
+_LINK_RE = re.compile(
+    r"(?:youtube\.com/(?:watch\?(?:[^&#\s]*&)*?v=|(?:shorts|embed|live|v)/)|youtu\.be/)"
+    r"([A-Za-z0-9_-]{11})"
+)
 
 
 def extract_video_id(text: str) -> str | None:
@@ -36,11 +24,12 @@ def extract_video_id(text: str) -> str | None:
         return None
     if _ID_RE.match(text):
         return text
-    for word in text.split():
-        if "youtu" in word:
-            found = _video_id_in_link(word)
-            if found:
-                return found
+    at = text.find("youtu")
+    while at >= 0:
+        match = _LINK_RE.match(text, at)
+        if match:
+            return match.group(1)
+        at = text.find("youtu", at + 5)
     return None
 
 
