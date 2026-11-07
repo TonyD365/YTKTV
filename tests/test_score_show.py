@@ -21,7 +21,7 @@ def test_rooms_scores_make_tonights_board():
     assert [(p, s) for p, _t, s, _r in best] == [(97, "Sam"), (88, "Kim"), (72, "Lee")]
 
 
-def test_lobby_shows_the_board(qtbot):
+def test_lobby_keeps_scores_private(qtbot):
     from ytktv.desk.lobby import Lobby, LobbyWindow
 
     store = DeskStore()
@@ -31,7 +31,8 @@ def test_lobby_shows_the_board(qtbot):
     lobby.window = LobbyWindow()
     qtbot.addWidget(lobby.window)
     lobby.refresh(store.rooms(), lambda _room: "free")
-    assert "95 · Blue · Moon Song" in lobby.window.columns[3].text()
+    text = " ".join(label.text() for label in lobby.window.columns)
+    assert "Moon Song" not in text and "95" not in text
 
 
 def test_great_score_bursts_confetti(qtbot):
