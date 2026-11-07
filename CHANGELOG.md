@@ -3,6 +3,28 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.1.1
+
+### 🔒 Lobby screen
+- The lobby TV now shows only the rooms: free, in use (with the time left) and today's bookings. Tonight's best scores, singers and song titles are no longer shown, so what a room sings stays private.
+
+### 🔧 Also
+- Releases attach each Windows build's files, so Windows updates can come as small patches from the next release on.
+
+## 4.1.0
+
+### Smaller updates
+
+Updates within the same major version now download only the files that changed, usually tens of MB instead of the whole installer. A new major version still comes as the full installer.
+
+- macOS and Windows, for both YTKTV and YTKTV Desk. Linux AppImages still update whole.
+- Before using a patch, the app checks it against the files you have. If anything does not match, or the patch fails, the old files are put back and the full installer is used instead.
+- On macOS you are asked for your password, as with the installer, and YTKTV reopens by itself.
+- On Windows the Apps list (and winget) shows the new version after a patch. Uninstalling now removes the whole install folder.
+- The update message shows the download size.
+
+This update from 4.0.0 is still the full installer, because 4.0.0 cannot apply patches. Patches start with the next release after 4.1.0.
+
 ## 4.0.0
 
 ### 🖥 YTKTV Desk: Server Mode
