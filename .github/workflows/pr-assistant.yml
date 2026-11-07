@@ -331,12 +331,21 @@ jobs:
           ledger=$(gh issue list --state all --label terms-ledger --json number -q '.[0].number')
           if [ -z "$ledger" ]; then
             gh label create terms-ledger --color ededed --description "Record of contribution terms agreements" 2>/dev/null || true
-            url=$(gh issue create --label terms-ledger --title "Contribution terms: agreements (kept by the bot)" \
-              --body "The bot records here who agreed to the [contribution terms]($SERVER/$GH_REPO/blob/main/CONTRIBUTING.md#contribution-terms), and who withdrew. The latest entry for a person counts. Please do not edit.")
+            printf '%s\n' \
+              "This issue is the record of who agreed to the [contribution terms]($SERVER/$GH_REPO/blob/main/CONTRIBUTING.md#contribution-terms). The bot keeps it; it is closed and locked so it stays out of the way." \
+              "" \
+              "- **To agree**, reply on your pull request: \`I agree to the YTKTV contribution terms\`" \
+              "- **To withdraw**, reply on any of your pull requests: \`I do not agree to the YTKTV contribution terms\`" \
+              "" \
+              "One entry per answer, newest last. A person's latest entry counts; people are matched by their account number, so a renamed account keeps its agreement." > ledger.md
+            url=$(gh issue create --label terms-ledger --title "Contribution terms: agreements (kept by the bot)" --body-file ledger.md)
             ledger=${url##*/}
             gh issue lock "$ledger" --reason resolved >/dev/null 2>&1 || true
+            gh issue close "$ledger" >/dev/null 2>&1 || true
           fi
-          if [ "$what" = agreed ]; then entry="Agreed: \`$WHO\` on #$NUMBER ($LINK)"; else entry="Withdrawn / declined: \`$WHO\` on #$NUMBER ($LINK)"; fi
+          when=$(date -u '+%Y-%m-%d %H:%M UTC')
+          if [ "$what" = agreed ]; then mark="✅ **Agreed**"; else mark="❌ **Withdrawn**"; fi
+          entry="$mark · \`$WHO\` (account $WHO_ID) · PR #$NUMBER · [their comment]($LINK) · $when"
           printf '%s\n%s\n' "<!-- terms:$what:id=$WHO_ID:$WHO -->" "$entry" > entry.md
           gh issue comment "$ledger" --body-file entry.md >/dev/null
 
