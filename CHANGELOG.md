@@ -3,6 +3,12 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.1.4
+
+### 🔧 Fixes
+- The terminal installer (`curl … install.sh | bash`) quit right after showing the list on macOS, without waiting for a key. It now gets the keys from the terminal and waits.
+- The terminal installer is attached to each release as soon as it is built, so the one-line installs use the new one within minutes instead of after all the installers are built.
+
 ## 4.1.3
 
 ### 🖥 A new installer in the terminal
