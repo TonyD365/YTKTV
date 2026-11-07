@@ -39,6 +39,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
+          SENDER: ${{ github.event.sender.login }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           # area: the files that give its label (keep in step with labeler.yml)
@@ -54,7 +55,9 @@ jobs:
           for area in desk separation packaging; do
             run=false
             if [ "$EVENT" != "pull_request" ]; then run=true
-            elif [ "$ACTION" = "labeled" ]; then [ "$LABEL" = "$area" ] && run=true
+            elif [ "$ACTION" = "labeled" ]; then
+              # The bot's labels come from the files, already covered; a hand-added one counts.
+              [ "$LABEL" = "$area" ] && [ "$SENDER" != TonyD365-Agent ] && run=true
             else
               printf '%s\n' "$labels" | grep -qx "$area" && run=true
               printf '%s\n' "$changed" | grep -Eq "${files[$area]}" && run=true
@@ -129,4 +132,5 @@ jobs:
     permissions:
       contents: write # asked for by the release's jobs; release-only steps do not run here
     uses: ./.github/workflows/release.yml
-    secrets: inherit
+    # No secrets: this builds a pull request's code, and the build needs none (unsigned
+    # builds; publishing steps only run for a real release).

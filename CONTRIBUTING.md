@@ -51,6 +51,8 @@ the benchmarks:
   `separation` (the real model) and `packaging` (the whole release build with the built apps'
   self-tests). A maintainer can also add a label to run them.
 - A pull request needs the maintainer's approval, and every check passing, before it is merged.
+  The bot sums the checks up in one status, **YTKTV checks**; once the maintainer approves, it
+  turns on auto-merge, so the pull request merges by itself when that status is green.
 - The bot also keeps **status labels** up to date: `Checks-Running`, `Checks-Passed`,
   `Checks-Failed`, `Internal-Error` (a check was cancelled or timed out, usually not the
   change's fault), `Needs-Author-Action`, `Needs-Terms-Agreement`, `Needs-Review` and

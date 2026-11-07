@@ -7,8 +7,13 @@
 # - contribution terms, like a CLA bot: the terms are posted as a comment, the author replies
 #   "I agree to the YTKTV contribution terms", and a "Contribution terms" check turns green
 #   (labels Needs-Terms-Agreement / Terms-Agreed). Agreeing once covers later pull requests.
-# It runs from main (pull_request_target, and workflow_run after the other workflows and
-# after reviews), never runs the pull request's code, and so works for forks too.
+# - a "YTKTV checks" status that is green only when every check passed and the terms are
+#   agreed (the one check the ruleset requires), and, once the maintainer approves, GitHub's
+#   auto-merge, so an approved pull request merges by itself when that turns green.
+# It acts as TonyD365-Agent (secret AGENT_TOKEN), so its merges start the workflows on main;
+# its own comments do not start it again. It runs from main (pull_request_target, and
+# workflow_run after the other workflows and after reviews), never runs the pull request's
+# code, and so works for forks too.
 name: PR assistant
 
 on:
@@ -36,14 +41,16 @@ jobs:
   comment:
     if: >-
       github.event_name == 'pull_request_target' ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+        github.event.comment.user.login != 'TonyD365-Agent' &&
+        github.event.comment.user.login != 'github-actions[bot]') ||
       github.event.workflow_run.event == 'pull_request' ||
       github.event.workflow_run.event == 'pull_request_review'
     runs-on: ubuntu-latest
     steps:
       - name: Write the status comment
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
           GH_REPO: ${{ github.repository }}
           NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           SHA: ${{ github.event.workflow_run.head_sha }}
@@ -165,6 +172,20 @@ jobs:
             fi
           done
 
+          # One status for the ruleset to require, and auto-merge once approved.
+          if [ "$total" = 0 ] || [ "$running" != 0 ]; then agg=pending; aggdesc="Checks are running"
+          elif [ "$failed" != 0 ]; then agg=failure; aggdesc="$failed check(s) failed"
+          elif [ "$terms" = no ]; then agg=failure; aggdesc="Contribution terms not agreed yet"
+          else agg=success; aggdesc="Every check passed"; fi
+          [ "$agg" = pending ] && [ "$terms" = no ] && aggdesc="Checks are running; terms not agreed yet"
+          gh api -X POST "repos/$GH_REPO/statuses/$head" -f state="$agg" -f context="YTKTV checks" \
+            -f description="$aggdesc" -f target_url="$SERVER/$GH_REPO/pull/$NUMBER" >/dev/null
+          if [ "$review" = APPROVED ] && [ "$(jq -r .isDraft <<<"$pr")" != true ]; then
+            gh pr merge "$NUMBER" --auto --merge >/dev/null 2>&1 || echo "auto-merge not enabled (is 'Allow auto-merge' on?)"
+          else
+            gh pr merge "$NUMBER" --disable-auto >/dev/null 2>&1 || true
+          fi
+
           # The kind of status: a new kind is posted as a new comment (see the end).
           if [ "$terms" = no ]; then kind=terms
           elif [ "$total" = 0 ] || [ "$running" != 0 ] && [ "$failed" = 0 ]; then kind=running
@@ -221,7 +242,7 @@ jobs:
               echo "- Wait for the running checks; this comment updates when they finish."
             fi
             case "$review" in
-              APPROVED) echo "- Approved by the maintainer: it is merged once every check passes." ;;
+              APPROVED) echo "- Approved by the maintainer: it merges by itself once every check passes (auto-merge is on)." ;;
               CHANGES_REQUESTED) echo "- The maintainer asked for changes: see the review." ;;
               *) echo "- It needs the maintainer's approval before it can be merged." ;;
             esac

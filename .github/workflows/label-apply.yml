@@ -21,7 +21,7 @@ jobs:
         with:
           name: pr-number
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.AGENT_TOKEN || github.token }}
       - id: pr
         # The number comes from a fork's run: accept nothing but digits.
         run: |

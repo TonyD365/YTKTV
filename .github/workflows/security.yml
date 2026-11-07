@@ -100,7 +100,7 @@ jobs:
           name: audit
           path: audit
       - env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
           GH_REPO: ${{ github.repository }}
           DEPENDENCIES: ${{ needs.dependencies.result }}
           CODEQL: ${{ needs.codeql.result }}
@@ -145,7 +145,7 @@ jobs:
     steps:
       - continue-on-error: true
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
           GH_REPO: ${{ github.repository }}
           NUMBER: ${{ github.event.pull_request.number }}
           DEPENDENCIES: ${{ needs.dependencies.result }}
