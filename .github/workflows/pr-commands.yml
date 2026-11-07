@@ -1,0 +1,138 @@
+# Commands in pull request comments, and stale pull requests.
+#
+#   /help                      what the bot can do (anyone)
+#   /retest                    re-run the failed or cancelled checks (the PR's author or a maintainer)
+#   /run <area>                run an area's heavier tests: packaging, installer, desk, separation
+#                              (maintainers only: they use the free CI minutes)
+#
+# Every day: a pull request waiting on its author (Needs-Author-Action) with no activity from
+# them for 14 days gets the Stale label and a reminder; 14 more days and it is closed, with a
+# note that it can be reopened. Any push or comment by the author removes Stale.
+#
+# Acts as TonyD365-Agent; never checks out or runs the pull request's code.
+name: PR commands
+
+on:
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "23 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  command:
+    if: >-
+      github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/') &&
+      github.event.comment.user.login != 'TonyD365-Agent'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          WHO: ${{ github.event.comment.user.login }}
+          WHO_ID: ${{ github.event.comment.user.id }}
+          AUTHOR_ID: ${{ github.event.issue.user.id }}
+          ROLE: ${{ github.event.comment.author_association }}
+          BODY: ${{ github.event.comment.body }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          set -euo pipefail
+          line=$(printf '%s' "$BODY" | head -n 1 | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+          read -r cmd arg _ <<<"$line" || true
+          case "$ROLE" in OWNER|MEMBER|COLLABORATOR) maintainer=1 ;; *) maintainer="" ;; esac
+          react() { gh api -X POST "repos/$GH_REPO/issues/comments/$COMMENT_ID/reactions" -f content="$1" >/dev/null || true; }
+          reply() { printf '%s\n' "$@" > reply.md; gh pr comment "$NUMBER" --body-file reply.md >/dev/null; }
+          case "$cmd" in
+            /help)
+              react eyes
+              reply "Commands for this pull request (write them at the start of a comment):" "" \
+                "- \`/retest\`: re-run the checks that failed or were cancelled (the author or a maintainer)." \
+                "- \`/run packaging\`, \`/run installer\`, \`/run desk\`, \`/run separation\`: run that part's heavier tests (maintainers)." \
+                "- \`/help\`: this list." "" \
+                "Other things the bot answers: \`I agree to the YTKTV contribution terms\` and \`I do not agree to the YTKTV contribution terms\`."
+              ;;
+            /retest)
+              if [ "$WHO_ID" != "$AUTHOR_ID" ] && [ -z "$maintainer" ]; then
+                react confused; reply "Sorry @$WHO, only the pull request's author or a maintainer can use \`/retest\`."; exit 0
+              fi
+              react eyes
+              head=$(gh pr view "$NUMBER" --json headRefOid -q .headRefOid)
+              n=0; waiting=0
+              for row in $(gh run list --commit "$head" --limit 100 --json databaseId,conclusion,status \
+                  -q '.[] | "\(.databaseId):\(.status):\(.conclusion)"'); do
+                IFS=: read -r id status conclusion <<<"$row"
+                case "$conclusion" in
+                  failure|cancelled|timed_out|startup_failure) gh run rerun "$id" --failed >/dev/null 2>&1 && n=$((n + 1)) ;;
+                  action_required) waiting=$((waiting + 1)) ;;
+                esac
+              done
+              msg="🔁 Re-running $n workflow run(s) with failed or cancelled checks."
+              [ "$n" = 0 ] && msg="Nothing to re-run: no check has failed or been cancelled on the latest commit."
+              [ "$waiting" != 0 ] && msg="$msg $waiting run(s) wait for a maintainer to approve them first (Approve and run workflows)."
+              reply "$msg"
+              ;;
+            /run)
+              if [ -z "$maintainer" ]; then
+                react confused; reply "Sorry @$WHO, \`/run\` is for maintainers (it uses the project's CI minutes)."; exit 0
+              fi
+              case "$arg" in packaging|installer|desk|separation) ;; *)
+                react confused; reply "Usage: \`/run packaging\`, \`/run installer\`, \`/run desk\` or \`/run separation\`."; exit 0 ;;
+              esac
+              react rocket
+              # The area workflows start on this label being added (removed first, so it is "added" again).
+              gh api -X DELETE "repos/$GH_REPO/issues/$NUMBER/labels/$arg" >/dev/null 2>&1 || true
+              gh label create "$arg" --color ededed 2>/dev/null || true
+              gh api -X POST "repos/$GH_REPO/issues/$NUMBER/labels" -f "labels[]=$arg" >/dev/null
+              reply "🚀 Starting the \`$arg\` tests for this pull request (they show among its checks)."
+              ;;
+            *) exit 0 ;;
+          esac
+
+  stale:
+    if: github.event_name != 'issue_comment'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          now=$(date -u +%s); day=86400; limit=$((14 * day))
+          gh label create Stale --color cfd3d7 --description "Waiting on the author for 14 days" 2>/dev/null || true
+          for n in $(gh pr list --state open --limit 200 --json number -q '.[].number'); do
+            pr=$(gh pr view "$n" --json author,labels,createdAt,commits)
+            author=$(jq -r .author.login <<<"$pr")
+            labels=$(jq -r '[.labels[].name] | join(",")' <<<"$pr")
+            # The author's last activity: their latest commit or comment, or the opening.
+            last_commit=$(jq -r '[.commits[].committedDate] | max // empty' <<<"$pr")
+            last_comment=$(gh api "repos/$GH_REPO/issues/$n/comments?per_page=100" \
+              -q "[.[] | select(.user.login == \"$author\") | .created_at] | max // empty")
+            last=$(printf '%s\n' "$(jq -r .createdAt <<<"$pr")" "$last_commit" "$last_comment" | grep . | sort | tail -n 1)
+            idle=$((now - $(date -u -d "$last" +%s)))
+            stale_note=$(gh api "repos/$GH_REPO/issues/$n/comments?per_page=100" \
+              -q '[.[] | select(.body | startswith("<!-- ytktv-stale -->")) | .created_at] | max // empty')
+            case ",$labels," in
+              *,Stale,*)
+                if [ -n "$stale_note" ] && [[ "$last" > "$stale_note" ]]; then
+                  gh api -X DELETE "repos/$GH_REPO/issues/$n/labels/Stale" >/dev/null 2>&1 || true
+                elif [ -n "$stale_note" ] && [ $((now - $(date -u -d "$stale_note" +%s))) -ge "$limit" ]; then
+                  printf '%s\n' "<!-- ytktv-stale-closed -->" "Closing this pull request after 28 days without a reply. Thank you for it, @$author: reopen it whenever you want to go on." > note.md
+                  gh pr comment "$n" --body-file note.md >/dev/null
+                  gh pr close "$n" >/dev/null
+                fi ;;
+              *,Needs-Author-Action,*)
+                if [ "$idle" -ge "$limit" ]; then
+                  gh api -X POST "repos/$GH_REPO/issues/$n/labels" -f "labels[]=Stale" >/dev/null
+                  printf '%s\n' "<!-- ytktv-stale -->" "👋 @$author, this pull request has been waiting for you for 14 days (see the status comment for what is needed). If nothing happens in the next 14 days it will be closed; you can reopen it at any time. A push or a comment keeps it open." > note.md
+                  gh pr comment "$n" --body-file note.md >/dev/null
+                fi ;;
+            esac
+          done
