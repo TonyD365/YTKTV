@@ -1,0 +1,126 @@
+# Heavier tests for one part of YTKTV, run when a pull request changes that part (the files
+# its label is given for, in labeler.yml) or someone adds the label by hand. The labelling
+# bot's label cannot start a workflow (GitHub does not let one workflow's token start
+# another), so this looks at the same files.
+#
+#   desk        a Desk and a room over a real network connection (tests/live)
+#   separation  the separation worker with the real model on a short song (tests/live)
+#   packaging   the whole release build, with the built apps' self-tests, publishing nothing
+name: Area tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: area-tests-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name || 'files' }}
+  cancel-in-progress: true
+
+jobs:
+  decide:
+    name: Which areas?
+    runs-on: ubuntu-latest
+    outputs:
+      desk: ${{ steps.check.outputs.desk }}
+      separation: ${{ steps.check.outputs.separation }}
+      packaging: ${{ steps.check.outputs.packaging }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+        run: |
+          # area: the files that give its label (keep in step with labeler.yml)
+          declare -A files=(
+            [desk]='^(src/ytktv/desk/|src/ytktv/rooms/|packaging/desk\.spec$|tests/live/test_desk_live\.py$)'
+            [separation]='^(src/ytktv/separation/|src/ytktv/ui/separation_setup\.py$|tests/live/test_separation_live\.py$)'
+            [packaging]='^(packaging/|\.github/workflows/release\.yml$)'
+          )
+          if [ "$EVENT" = "pull_request" ] && [ "$ACTION" != "labeled" ]; then
+            labels=$(gh pr view "$NUMBER" --json labels -q '.labels[].name')
+            changed=$(gh pr diff "$NUMBER" --name-only)
+          fi
+          for area in desk separation packaging; do
+            run=false
+            if [ "$EVENT" != "pull_request" ]; then run=true
+            elif [ "$ACTION" = "labeled" ]; then [ "$LABEL" = "$area" ] && run=true
+            else
+              printf '%s\n' "$labels" | grep -qx "$area" && run=true
+              printf '%s\n' "$changed" | grep -Eq "${files[$area]}" && run=true
+            fi
+            echo "$area=$run" | tee -a "$GITHUB_OUTPUT"
+          done
+
+  desk:
+    name: Desk and room, live (${{ matrix.os }})
+    needs: decide
+    if: needs.decide.outputs.desk == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      QT_QPA_PLATFORM: offscreen
+      YTKTV_LIVE: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install system libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libportaudio2 libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1
+      - run: python -m pip install -e ".[dev]"
+      - run: pytest tests/live/test_desk_live.py
+
+  separation:
+    name: Separation, real model
+    needs: decide
+    if: needs.decide.outputs.separation == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+      YTKTV_LIVE: "1"
+      YTKTV_MODEL_DIR: ${{ github.workspace }}/.models
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libportaudio2 libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 ffmpeg
+      - run: python -m pip install -e ".[dev,separation]"
+      - name: The separation model (cached)
+        uses: actions/cache@v5
+        with:
+          path: .models
+          key: separation-model-UVR-MDX-NET-Inst_HQ_3
+      - run: pytest tests/live/test_separation_live.py
+
+  packaging:
+    name: Packaging
+    needs: decide
+    if: needs.decide.outputs.packaging == 'true'
+    permissions:
+      contents: write # asked for by the release's jobs; release-only steps do not run here
+    uses: ./.github/workflows/release.yml
+    secrets: inherit

@@ -26,6 +26,9 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+  # area-tests.yml builds everything on pull requests labelled "packaging" (nothing is
+  # published then: the release-only steps check for a release event).
+  workflow_call:
 
 permissions:
   contents: read
