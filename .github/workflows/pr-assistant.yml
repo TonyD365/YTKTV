@@ -4,7 +4,9 @@
 #   a new one posted, so it is the latest comment; otherwise it is edited in place.
 # - status labels (Checks-Running, Checks-Passed, Checks-Failed, Internal-Error,
 #   Needs-Author-Action, Needs-Review, Maintainer-Approved, Needs-Terms-Agreement).
-# - a "Contribution terms" check: the author ticks the box in the pull request template.
+# - contribution terms, like a CLA bot: the terms are posted as a comment, the author replies
+#   "I agree to the YTKTV contribution terms", and a "Contribution terms" check turns green
+#   (labels Needs-Terms-Agreement / Terms-Agreed). Agreeing once covers later pull requests.
 # It runs from main (pull_request_target, and workflow_run after the other workflows and
 # after reviews), never runs the pull request's code, and so works for forks too.
 name: PR assistant
@@ -15,6 +17,8 @@ on:
     types: [completed]
   pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize, edited]
+  issue_comment:
+    types: [created, edited]
 
 permissions:
   contents: read
@@ -25,13 +29,14 @@ permissions:
   statuses: write
 
 concurrency:
-  group: pr-assistant-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}
+  group: pr-assistant-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
   comment:
     if: >-
       github.event_name == 'pull_request_target' ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request) ||
       github.event.workflow_run.event == 'pull_request' ||
       github.event.workflow_run.event == 'pull_request_review'
     runs-on: ubuntu-latest
@@ -40,7 +45,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          NUMBER: ${{ github.event.pull_request.number }}
+          NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           SHA: ${{ github.event.workflow_run.head_sha }}
           SERVER: ${{ github.server_url }}
         run: |
@@ -79,12 +84,57 @@ jobs:
             esac
           }
 
-          # Contribution terms: the box in the template, ticked (maintainer and bots excepted).
+          # Contribution terms (maintainer and bots excepted): agreed when the author has written
+          # the sentence in a comment on this pull request or on any earlier one of theirs here.
+          PHRASE="I agree to the YTKTV contribution terms"
+          agreed_in() {  # pull request number -> 0 if its author wrote the sentence there
+            gh api "repos/$GH_REPO/issues/$1/comments?per_page=100" \
+              -q ".[] | select(.user.login == \"$author\") | .body" |
+              tr -d '\r' | grep -Fqix -- "$PHRASE"
+          }
           case "$author" in
             TonyD365|TonyD365-Agent|dependabot\[bot\]|github-actions\[bot\]|app/dependabot) terms=exempt ;;
-            *) if jq -r .body <<<"$pr" | grep -Eiq '^\s*[-*] \[[xX]\] .*agree to the contribution terms'; then terms=yes; else terms=no; fi ;;
+            *)
+              terms=no
+              if agreed_in "$NUMBER"; then terms=yes
+              else
+                for earlier in $(gh pr list --state all --author "$author" --limit 30 --json number -q '.[].number'); do
+                  [ "$earlier" = "$NUMBER" ] && continue
+                  if agreed_in "$earlier"; then terms=yes; break; fi
+                done
+              fi ;;
           esac
-          if [ "$terms" = no ]; then state=failure; desc="Tick the box agreeing to the contribution terms"; else state=success; desc="Agreed"; [ "$terms" = exempt ] && desc="Not needed for the maintainer"; fi
+          posted=$(gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \
+            -q '[.[] | select(.body | startswith("<!-- ytktv-terms")) | .body | split("\n")[0]] | join(" ")')
+          if [ "$terms" = no ] && [[ "$posted" != *"ytktv-terms-ask"* ]]; then
+            {
+              echo "<!-- ytktv-terms-ask -->"
+              echo "### 📝 Contribution terms"
+              echo
+              echo "Thank you for your contribution, @$author! Before it can be merged, please read the terms below and reply to agree."
+              echo
+              curl -fsSL "https://raw.githubusercontent.com/$GH_REPO/main/CONTRIBUTING.md" |
+                awk '/^## Contribution terms/{on=1; next} /^## /{on=0} on' |
+                awk '/^On your first pull request/{skip=1} skip&&/^you agree that:/{skip=0; next} !skip' |
+                sed -E "s#\]\(([A-Za-z_]+(\.md)?)\)#](${SERVER}/${GH_REPO}/blob/main/\1)#g"  # links work in a comment
+              echo
+              echo "---"
+              echo
+              echo "**If you agree, reply to this pull request with a comment that says exactly:**"
+              echo
+              echo '```'
+              echo "$PHRASE"
+              echo '```'
+              echo
+              echo "Agreeing once covers your later pull requests to YTKTV too. If you do not agree, the pull request cannot be merged."
+            } > terms.md
+            gh pr comment "$NUMBER" --body-file terms.md
+          fi
+          if [ "$terms" = yes ] && [[ "$posted" == *"ytktv-terms-ask"* ]] && [[ "$posted" != *"ytktv-terms-ok"* ]]; then
+            printf '%s\n' "<!-- ytktv-terms-ok -->" "✅ Thank you, @$author: your agreement to the contribution terms is recorded." > ok.md
+            gh pr comment "$NUMBER" --body-file ok.md
+          fi
+          if [ "$terms" = no ]; then state=failure; desc="Reply: $PHRASE"; else state=success; desc="Agreed"; [ "$terms" = exempt ] && desc="Not needed for the maintainer"; fi
           gh api -X POST "repos/$GH_REPO/statuses/$head" -f state="$state" -f context="Contribution terms" \
             -f description="$desc" -f target_url="$SERVER/$GH_REPO/blob/main/CONTRIBUTING.md#contribution-terms" >/dev/null
 
@@ -99,10 +149,11 @@ jobs:
           [ "$total" != 0 ] && [ "$running" = 0 ] && [ "$failed" = 0 ] && want+=(Checks-Passed)
           if [ "$failed" != 0 ] || [ "$terms" = no ] || [ "$review" = CHANGES_REQUESTED ]; then want+=(Needs-Author-Action); fi
           [ "$terms" = no ] && want+=(Needs-Terms-Agreement)
+          [ "$terms" = yes ] && want+=(Terms-Agreed)
           if [ "$review" = APPROVED ]; then want+=(Maintainer-Approved); else want+=(Needs-Review); fi
           declare -A colours=([Checks-Running]=c5def5 [Checks-Passed]=0e8a16 [Checks-Failed]=d73a4a
             [Internal-Error]=e99695 [Needs-Author-Action]=b60205 [Needs-Review]=fbca04
-            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7)
+            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7 [Terms-Agreed]=c2e0c6)
           have=$(jq -r '.labels[].name' <<<"$pr")
           for label in "${!colours[@]}"; do
             if printf '%s\n' "${want[@]}" | grep -qx "$label"; then
@@ -147,7 +198,7 @@ jobs:
             fi
             if [ "$terms" = no ]; then
               echo
-              echo "**Contribution terms:** please read the [contribution terms]($SERVER/$GH_REPO/blob/main/CONTRIBUTING.md#contribution-terms) and tick the box \"I have read and agree to the contribution terms\" in the description above (edit the description). Nothing can be merged before that."
+              echo "**Contribution terms:** please read the terms in the comment above and, if you agree, reply with a comment that says exactly \`$PHRASE\`. Nothing can be merged before that."
             fi
             labels=$(gh pr view "$NUMBER" --json labels -q '[.labels[].name] | join(", ")')
             if [ -n "$labels" ]; then
@@ -163,7 +214,7 @@ jobs:
             if [ "$(jq -r .isDraft <<<"$pr")" = true ]; then
               echo "- This is a draft: mark it ready for review when it is done."
             elif [ "$terms" = no ]; then
-              echo "- Agree to the contribution terms (see above)."
+              echo "- Reply \`$PHRASE\` to agree to the contribution terms (see above)."
             elif [ "$failed" != 0 ]; then
               echo "- Fix the failures above and push; the checks run again by themselves."
             elif [ "$running" != 0 ]; then

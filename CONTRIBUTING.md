@@ -70,8 +70,13 @@ The layout of the code is described in the [README](README.md#development).
 
 ## Contribution terms
 
-Every pull request asks you to tick "I have read and agree to the contribution terms"; a check
-called **Contribution terms** stays red until you do. By ticking it you agree that:
+On your first pull request the bot posts these terms as a comment. Reply with a comment that
+says exactly
+
+    I agree to the YTKTV contribution terms
+
+and the check called **Contribution terms** turns green (it stays red until then). By replying
+you agree that:
 
 1. **License.** Your contribution is released under the [YTKTV License](LICENSE), like the rest
    of YTKTV: free to use, also in a business, but the software and anything based on it may not
@@ -84,4 +89,5 @@ called **Contribution terms** stays red until you do. By ticking it you agree th
 4. **No warranty.** You give it as is, like the rest of YTKTV.
 5. **Conduct.** You follow the [code of conduct](CODE_OF_CONDUCT.md).
 
-The maintainer and the project's bots are not asked.
+The maintainer and the project's bots are not asked. Once you have agreed on one pull request,
+your later ones are recorded as agreed too.

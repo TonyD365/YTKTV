@@ -2,10 +2,6 @@
 
 <!-- One or two sentences. Link the issue it solves: Fixes #123 -->
 
-## Contribution terms
-
-- [ ] I have read and agree to the contribution terms (https://github.com/TonyD365/YTKTV/blob/main/CONTRIBUTING.md#contribution-terms)
-
 ## How it was checked
 
 - [ ] `ruff check .` and `ruff format --check .`
