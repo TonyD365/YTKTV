@@ -75,12 +75,13 @@ run_program() {
   if command -v sha256sum >/dev/null; then actual=$(sha256sum "$work/i.gz" | cut -d' ' -f1)
   else actual=$(shasum -a 256 "$work/i.gz" | cut -d' ' -f1); fi
   if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then rm -rf "$work"; return 1; fi
-  gunzip "$work/i.gz" && chmod +x "$work/i" || { rm -rf "$work"; return 1; }
+  # Named so that anything macOS shows names it ("YTKTV Installer"), not a temporary file.
+  gunzip -c "$work/i.gz" > "$work/YTKTV Installer" && chmod +x "$work/YTKTV Installer" || { rm -rf "$work"; return 1; }
   code=0
   # The terminal's real device: the program gets no keys through the /dev/tty alias on macOS.
   term="/dev/$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')"
   { [ -c "$term" ] && : <"$term"; } 2>/dev/null || term=/dev/tty
-  "$work/i" "$@" <"$term" || code=$?
+  "$work/YTKTV Installer" "$@" <"$term" || code=$?
   rm -rf "$work"
   exit "$code"
 }
@@ -444,7 +445,7 @@ SUMS=""
 [ -n "$SUMS_URL" ] && SUMS=$(curl -fsSL --retry 3 "$SUMS_URL" || true)
 if command -v sha256sum >/dev/null; then sum_of() { sha256sum "$1" | cut -d' ' -f1; }
 else sum_of() { shasum -a 256 "$1" | cut -d' ' -f1; }; fi
-[ "$SUFFIX" = "macos-universal.pkg" ] && { printf '\n'; say "Installing asks for your macOS password once…"; sudo -v </dev/tty 2>/dev/null || sudo -v; }
+[ "$SUFFIX" = "macos-universal.pkg" ] && { printf '\n'; say "Your Mac password is needed to put the apps in /Applications (typed here, not shown, not stored):"; sudo -v </dev/tty 2>/dev/null || sudo -v; }
 
 # --- Install -------------------------------------------------------------------------
 for app in "${APPS[@]}"; do

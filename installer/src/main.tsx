@@ -60,6 +60,18 @@ async function chooseApps(latest: string): Promise<App[]> {
   return APPS.filter((_, i) => ticks[i]);
 }
 
+/** On macOS, asks for the password here in the terminal, saying why (sudo keeps it a while). */
+async function askPassword(app: App): Promise<void> {
+  if (Bun.spawnSync(["sudo", "-n", "true"], { stdout: "ignore", stderr: "ignore" }).exitCode === 0) return;
+  await print(
+    <Note text={`Your Mac password is needed to put ${label(app)} in /Applications (macOS's installer runs as administrator). It is typed here, not shown, and not stored.`} />,
+  );
+  const code = await Bun.spawn(["sudo", "-v", "-p", "  Mac password for %u: "], {
+    stdio: ["inherit", "inherit", "inherit"],
+  }).exited;
+  if (code !== 0) throw new Error("No password was given, so nothing was installed.");
+}
+
 async function main(): Promise<void> {
   if (args.has("--help") || args.has("-h")) return void (await Bun.write(Bun.stdout, HELP));
   if (args.has("--licenses")) return void (await Bun.write(Bun.stdout, notices));
@@ -107,7 +119,7 @@ async function main(): Promise<void> {
     const what = !have ? `install ${latest}` : have === latest ? `reinstall ${latest}` : `${have} → ${latest}`;
     return `- ${label(app)}: ${what}, download ${mb(assets[i].size)} MB, to ${sys.appPath(app)}`;
   });
-  if (sys.SYSTEM === "macOS") steps.push("- macOS asks for your password, to install into /Applications.");
+  if (sys.SYSTEM === "macOS") steps.push("- Your Mac password is asked for here in the terminal, to install into /Applications.");
   if (sys.SYSTEM === "Windows") steps.push("- Installed for you only (no administrator needed), and listed in Settings → Apps.");
   steps.push("- Running copies are closed first. Your settings, songs and records are kept.");
   if (apps.includes("YTKTV") && sys.mpvMissing()) steps.push("- mpv, which YTKTV plays songs with, is missing: you can install it at the end.");
@@ -166,6 +178,7 @@ async function main(): Promise<void> {
           if ((await sha256(file)) !== expected) throw new Error("The download is damaged (checksum mismatch). Please try again.");
         }, () => "Checksum OK");
       }
+      if (sys.SYSTEM === "macOS") await askPassword(app);
       await task(`Installing ${label(app)} ${latest}…`, () => sys.install(app, file, latest), () => `Installed ${label(app)} ${latest}`);
     }
   } finally {
