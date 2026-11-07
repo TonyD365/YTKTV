@@ -132,4 +132,5 @@ jobs:
     permissions:
       contents: write # asked for by the release's jobs; release-only steps do not run here
     uses: ./.github/workflows/release.yml
-    secrets: inherit
+    # No secrets: this builds a pull request's code, and the build needs none (unsigned
+    # builds; publishing steps only run for a real release).

@@ -87,8 +87,35 @@ jobs:
           echo "status=$?" >> "$GITHUB_OUTPUT"
           { echo; echo "## Measured again"; cat "$RUNNER_TEMP/report.md"; } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Keep the report for the comment
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-report
+          path: ${{ runner.temp }}/report.md
+          if-no-files-found: ignore
+
+      - name: Fail on regression
+        if: steps.compare.outputs.status != '0' && steps.again.outputs.status != '0'
+        run: |
+          echo "::error::A benchmark regressed by more than ${THRESHOLD}%, twice. See the job summary."
+          exit 1
+
+  comment:
+    # A job of its own, without the pull request's code: the token that writes the comment is
+    # never in a job that ran that code. (Pull requests from forks get no secrets at all, so
+    # there the read-only built-in token is used and the comment is skipped.)
+    name: Benchmark comment
+    needs: benchmark
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: benchmark-report
+          path: ${{ runner.temp }}
       - name: Comment on the pull request
-        # Pull requests from forks get a read-only token; the job summary still has the report.
         continue-on-error: true
         uses: actions/github-script@v9
         with:
@@ -107,8 +134,3 @@ jobs:
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
 
-      - name: Fail on regression
-        if: steps.compare.outputs.status != '0' && steps.again.outputs.status != '0'
-        run: |
-          echo "::error::A benchmark regressed by more than ${THRESHOLD}%, twice. See the job summary."
-          exit 1
