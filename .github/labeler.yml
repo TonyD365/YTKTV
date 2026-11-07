@@ -1,4 +1,6 @@
 # Area labels for pull requests, by the files they touch (see workflows/labeler.yml).
+# desk, separation, packaging and installer also start heavier tests for those files
+# (area-tests.yml, installer-tests.yml): keep their file lists in step.
 player:
   - changed-files:
       - any-glob-to-any-file:
@@ -9,7 +11,7 @@ mixer:
           ["src/ytktv/audio/**", "src/ytktv/ui/mixer_panel.py", "src/ytktv/ui/console_widgets.py"]
 separation:
   - changed-files:
-      - any-glob-to-any-file: ["src/ytktv/separation/**", "src/ytktv/ui/separation_setup.py"]
+      - any-glob-to-any-file: ["src/ytktv/separation/**", "src/ytktv/ui/separation_setup.py", "tests/live/test_separation_live.py"]
 phone:
   - changed-files:
       - any-glob-to-any-file: ["src/ytktv/server/**", "src/ytktv/audio/phone_mic.py"]
@@ -36,7 +38,7 @@ dependencies:
       - any-glob-to-any-file: ["pyproject.toml"]
 desk:
   - changed-files:
-      - any-glob-to-any-file: ["src/ytktv/desk/**", "src/ytktv/rooms/**", "packaging/desk.spec"]
+      - any-glob-to-any-file: ["src/ytktv/desk/**", "src/ytktv/rooms/**", "packaging/desk.spec", "tests/live/test_desk_live.py"]
 tests:
   - changed-files:
       - any-glob-to-any-file: ["tests/**"]
