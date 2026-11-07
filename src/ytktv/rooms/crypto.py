@@ -6,31 +6,40 @@ import hashlib
 import hmac
 import secrets
 
-from ecdsa import BadSignatureError, Ed25519, SigningKey, VerifyingKey
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+
+# Keys are stored as hex of their raw 32 bytes (the private key is the RFC 8032 seed), as
+# the ecdsa package wrote them before: rooms paired then keep working.
+_RAW = serialization.Encoding.Raw
 
 # Shown on both screens while pairing, so a desk pretending to be the real one is caught.
 EMOJI = "🎤🎸🎹🥁🎺🎻🎧🎵🌙⭐🔥🌈🍉🍒🍩🍕🐱🐶🦊🐼🦄🐙🐝🦋🚀🎈🎁💎👑🌵🍀🌻"
 
 
 def new_private_key() -> str:
-    return SigningKey.generate(curve=Ed25519).to_string().hex()
+    key = Ed25519PrivateKey.generate()
+    return key.private_bytes(
+        _RAW, serialization.PrivateFormat.Raw, serialization.NoEncryption()
+    ).hex()
 
 
 def public_key(private_hex: str) -> str:
-    key = SigningKey.from_string(bytes.fromhex(private_hex), curve=Ed25519)
-    return key.verifying_key.to_string().hex()
+    key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(private_hex))
+    return key.public_key().public_bytes(_RAW, serialization.PublicFormat.Raw).hex()
 
 
 def sign(private_hex: str, data: bytes) -> str:
-    key = SigningKey.from_string(bytes.fromhex(private_hex), curve=Ed25519)
-    return key.sign(data).hex()
+    return Ed25519PrivateKey.from_private_bytes(bytes.fromhex(private_hex)).sign(data).hex()
 
 
 def verify(public_hex: str, data: bytes, signature_hex: str) -> bool:
     try:
-        key = VerifyingKey.from_string(bytes.fromhex(public_hex), curve=Ed25519)
-        return bool(key.verify(bytes.fromhex(signature_hex), data))
-    except (BadSignatureError, ValueError, AssertionError):
+        key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(public_hex))
+        key.verify(bytes.fromhex(signature_hex), data)
+        return True
+    except (InvalidSignature, ValueError):
         return False
 
 

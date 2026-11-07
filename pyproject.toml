@@ -27,8 +27,7 @@ dependencies = [
     "imageio-ffmpeg>=0.8.0",
     "packaging>=26.3",
     "certifi",
-    "asn1crypto>=1.5.1",
-    "ecdsa>=0.19.2",
+    "cryptography>=46.0.0",
     # Finds the front desk on the local network even when its IP address changes.
     "zeroconf>=0.153.0",
     # Pinyin initials for the song book: "yldb" finds 月亮代表我的心.
