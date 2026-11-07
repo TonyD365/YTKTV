@@ -9,12 +9,14 @@ from typing import Any
 from ytktv.core.models import Song
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
-# Tried only where "youtu" appears (str.find), anchored there with re.match: never a
-# search that restarts at every position, and "[^&#\s]*&" cannot overlap itself.
-_LINK_RE = re.compile(
-    r"(?:youtube\.com/(?:watch\?(?:[^&#\s]*&)*?v=|(?:shorts|embed|live|v)/)|youtu\.be/)"
-    r"([A-Za-z0-9_-]{11})"
+# Fixed-length pieces only (no repetition), tried where "youtu" appears; a watch link whose
+# v is not the first parameter has its query searched with str.find over a bounded number of
+# characters. Linear whatever the text is.
+_LINK_START = re.compile(
+    r"youtube\.com/(?:watch\?(?:v=([A-Za-z0-9_-]{11}))?|(?:shorts|embed|live|v)/([A-Za-z0-9_-]{11}))"
+    r"|youtu\.be/([A-Za-z0-9_-]{11})"
 )
+_QUERY_LIMIT = 300  # characters of a watch link's query looked at for "&v="
 
 
 def extract_video_id(text: str) -> str | None:
@@ -26,9 +28,17 @@ def extract_video_id(text: str) -> str | None:
         return text
     at = text.find("youtu")
     while at >= 0:
-        match = _LINK_RE.match(text, at)
+        match = _LINK_START.match(text, at)
         if match:
-            return match.group(1)
+            found = match.group(1) or match.group(2) or match.group(3)
+            if found:
+                return found
+            # watch?...&v=ID
+            query = text[match.end() : match.end() + _QUERY_LIMIT].split("#", 1)[0]
+            query = query.split(None, 1)[0] if query.strip() else ""
+            v = query.find("&v=")
+            if v >= 0 and _ID_RE.match(query[v + 3 : v + 14]):
+                return query[v + 3 : v + 14]
         at = text.find("youtu", at + 5)
     return None
 
