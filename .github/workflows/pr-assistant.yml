@@ -104,6 +104,9 @@ jobs:
           # Contribution terms (maintainer and bots excepted): agreed when the author has written
           # the sentence in a comment on this pull request or on any earlier one of theirs here.
           PHRASE="I agree to the YTKTV contribution terms"
+          # By the account's number, which stays when a login is renamed (entries from before
+          # numbers were recorded are matched by login).
+          author_id=$(gh api "repos/$GH_REPO/pulls/$NUMBER" -q .user.id)
           # The record: an issue labelled terms-ledger, one bot comment per agreement or
           # withdrawal; the latest one for a person decides (see the terms job below).
           ledger=$(gh issue list --state all --label terms-ledger --json number -q '.[0].number')
@@ -111,7 +114,8 @@ jobs:
             [ -n "$ledger" ] || { echo none; return; }
             gh api --paginate "repos/$GH_REPO/issues/$ledger/comments?per_page=100" \
               -q ".[] | select(.user.login == \"$ME\") | .body | split(\"\n\")[0]" |
-              sed -n "s/^<!-- terms:\(agreed\|declined\):$author -->$/\1/p" | tail -n 1 | grep . || echo none
+              sed -n -e "s/^<!-- terms:\(agreed\|declined\):id=$author_id:.* -->$/\1/p" \
+                     -e "s/^<!-- terms:\(agreed\|declined\):$author -->$/\1/p" | tail -n 1 | grep . || echo none
           }
           ME=$(gh api user -q .login 2>/dev/null || echo "github-actions[bot]")
           case "$author" in
@@ -292,7 +296,8 @@ jobs:
           SERVER: ${{ github.server_url }}
           NUMBER: ${{ github.event.issue.number }}
           WHO: ${{ github.event.comment.user.login }}
-          AUTHOR: ${{ github.event.issue.user.login }}
+          WHO_ID: ${{ github.event.comment.user.id }}
+          AUTHOR_ID: ${{ github.event.issue.user.id }}
           BODY: ${{ github.event.comment.body }}
           LINK: ${{ github.event.comment.html_url }}
         run: |
@@ -304,7 +309,7 @@ jobs:
             "i do not agree to the ytktv contribution terms"|"i don't agree to the ytktv contribution terms") what=declined ;;
             *) exit 0 ;;
           esac
-          [ "$WHO" = "$AUTHOR" ] || { echo "only the pull request's author can answer for it"; exit 0; }
+          [ "$WHO_ID" = "$AUTHOR_ID" ] || { echo "only the pull request's author can answer for it"; exit 0; }
 
           # The ledger issue, made (and locked, so only the bot writes) the first time.
           ledger=$(gh issue list --state all --label terms-ledger --json number -q '.[0].number')
@@ -316,7 +321,7 @@ jobs:
             gh issue lock "$ledger" --reason resolved >/dev/null 2>&1 || true
           fi
           if [ "$what" = agreed ]; then entry="Agreed: \`$WHO\` on #$NUMBER ($LINK)"; else entry="Withdrawn / declined: \`$WHO\` on #$NUMBER ($LINK)"; fi
-          printf '%s\n%s\n' "<!-- terms:$what:$WHO -->" "$entry" > entry.md
+          printf '%s\n%s\n' "<!-- terms:$what:id=$WHO_ID:$WHO -->" "$entry" > entry.md
           gh issue comment "$ledger" --body-file entry.md >/dev/null
 
           head=$(gh pr view "$NUMBER" --json headRefOid -q .headRefOid)
