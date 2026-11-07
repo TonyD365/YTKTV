@@ -142,9 +142,10 @@ def test_the_macos_launcher_asks_for_the_password_only_when_needed(tmp_path):
     apply, root, marker = tmp_path / "apply.sh", tmp_path / "YTKTV.app", tmp_path / "m"
     plain = patching.macos_launcher(apply, root, marker, 123, admin=False)
     assert "osascript" not in plain and "kill -0 123" in plain and "open " in plain
-    assert "administrator privileges" in patching.macos_launcher(
-        apply, root, marker, 123, admin=True
-    )
+    marker = tmp_path / "patch-failed-4.1.1"
+    admin = patching.macos_launcher(apply, root, marker, 123, admin=True)
+    assert "administrator privileges" in admin and "with prompt" in admin
+    assert "YTKTV is installing its update to 4.1.1" in admin
 
 
 def test_app_root():

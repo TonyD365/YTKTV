@@ -283,6 +283,16 @@ def powershell_script(
     return "\n".join(lines)
 
 
+def admin_prompt(root: Path, marker: Path) -> str:
+    """What the macOS password dialog says: which app, and why it needs the password."""
+    app = root.stem
+    version = marker.name.removeprefix("patch-failed-")
+    return (
+        f"{app} is installing its update to {version}. It needs your password to replace "
+        f"the changed files of {root.name} in {root.parent}. Nothing else is touched."
+    )
+
+
 def macos_launcher(
     apply: Path, root: Path, marker: Path, pid: int, admin: bool, reopen: bool = True
 ) -> str:
@@ -291,8 +301,8 @@ def macos_launcher(
     if admin:
         run = (
             "osascript -e 'on run argv' -e 'do shell script \"/bin/sh \" & quoted form of "
-            "(item 1 of argv) with administrator privileges' -e 'end run' "
-            f"{q(str(apply))} || : > {q(str(marker))}"
+            "(item 1 of argv) with prompt (item 2 of argv) with administrator privileges' "
+            f"-e 'end run' {q(str(apply))} {q(admin_prompt(root, marker))} || : > {q(str(marker))}"
         )
     else:
         run = f"/bin/sh {q(str(apply))}"
