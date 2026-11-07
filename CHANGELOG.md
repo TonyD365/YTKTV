@@ -3,6 +3,16 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.1.7
+
+### 🔑 Clearer password requests on macOS
+- **Installing with the one-line command** now asks for your Mac password right in the terminal, saying why (to put the app in /Applications), instead of a macOS window that only said "a script started by i".
+- **Updating inside the app:** when an update needs your password, YTKTV and YTKTV Desk now say so first, and macOS's password window names the app ("a script started by YTKTV"). This applies from the next update on, since the update is run by the version you have.
+
+### 🔧 Also
+- The project's automation (pull request checks, labels, release steps) now works under one account, with an approved pull request merging itself once every check passes.
+- Release builds fail fast instead of waiting up to 40 minutes when a self-test of the built apps stalls.
+
 ## 4.1.6
 
 **🔒 Security update: install as soon as possible.** This release fixes several security problems in YTKTV and YTKTV Desk: open Settings → Updates and install it.
