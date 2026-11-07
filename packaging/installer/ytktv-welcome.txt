@@ -1,0 +1,10 @@
+Welcome to YTKTV
+
+YTKTV turns a computer into a karaoke (KTV) machine: sing any YouTube video or your own song files, with AI vocal removal, lyrics, scoring, a four-microphone mixer and phones as remotes.
+
+Before you start
+- YTKTV plays songs through mpv. If mpv is not on this computer, YTKTV offers to install it the first time it opens.
+- Vocal removal and AI lyrics run faster with a graphics card (GPU), but also work without one.
+- Connect a second display or TV to show the MV full screen; the main screen keeps the song list.
+
+YTKTV is free to use and must not be sold. Read the license on the next page.

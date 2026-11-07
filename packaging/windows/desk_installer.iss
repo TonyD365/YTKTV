@@ -33,6 +33,9 @@ UninstallDisplayIcon={app}\YTKTV Desk.exe
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+LicenseFile=..\..\LICENSE
+InfoBeforeFile=..\installer\desk-welcome.txt
+InfoAfterFile=..\installer\desk-done.txt
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
