@@ -10,13 +10,16 @@ from ytktv.core.models import Song
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 _URL_RE = re.compile(
-    r"(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/)|youtu\.be/)([A-Za-z0-9_-]{11})"
+    # [^&#\s]*& steps over one query parameter at a time: no backtracking blow-up.
+    r"(?:youtube\.com/(?:watch\?(?:[^&#\s]*&)*v=|shorts/|embed/|live/)|youtu\.be/)([A-Za-z0-9_-]{11})"
 )
 
 
 def extract_video_id(text: str) -> str | None:
     """Return the video id if *text* is a YouTube URL or a bare id."""
     text = text.strip()
+    if len(text) > 2000:  # no link is this long; keeps the search cheap whatever is pasted
+        return None
     if _ID_RE.match(text):
         return text
     match = _URL_RE.search(text)

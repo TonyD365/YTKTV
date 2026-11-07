@@ -324,6 +324,7 @@ def demo_gif(app: QApplication, seconds: float = 4.0, fps: int = 12) -> None:
 
 def phone(chrome: str) -> None:
     """The phone page in headless Chrome, at a phone's width, with made-up songs."""
+    from fastapi import HTTPException
     from fastapi.responses import HTMLResponse
     from PIL import Image
 
@@ -371,6 +372,8 @@ def phone(chrome: str) -> None:
 
     @web.get("/shot/{tab}", response_class=HTMLResponse)
     def shot(tab: str) -> str:
+        if not tab.isalpha():  # page names only: nothing else goes into the HTML
+            raise HTTPException(404)
         click = (
             f"<script>setTimeout(() => document.querySelector('nav button[data-tab={tab}]')"
             ".click(), 300);</script>"
@@ -379,6 +382,8 @@ def phone(chrome: str) -> None:
 
     @web.get("/frame/{tab}", response_class=HTMLResponse)
     def frame(tab: str) -> str:
+        if not tab.isalpha():
+            raise HTTPException(404)
         # Headless Chrome will not make a window narrower than 500 px: frame a phone's width.
         return (
             "<html><body style='margin:0;background:#000'><iframe src='/shot/"

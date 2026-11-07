@@ -18,7 +18,8 @@ export interface Release {
 
 /** The release file of *app* that ends in *suffix* (YTKTV must not match YTKTV-Desk). */
 export function assetFor(release: Release, app: App, suffix: string): Asset | undefined {
-  const pattern = new RegExp(`^${app}-\\d[^/]*-${suffix.replace(/\./g, "\\.")}$`);
+  const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^${escape(app)}-\\d[^/]*-${escape(suffix)}$`);
   return release.assets.find((asset) => pattern.test(asset.name));
 }
 
