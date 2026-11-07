@@ -1,10 +1,33 @@
 Welcome to YTKTV
 
-YTKTV turns a computer into a karaoke (KTV) machine: sing any YouTube video or your own song files, with AI vocal removal, lyrics, scoring, a four-microphone mixer and phones as remotes.
+YTKTV turns a computer into a karaoke (KTV) machine for a home or a karaoke room.
 
-Before you start
-- YTKTV plays songs through mpv. If mpv is not on this computer, YTKTV offers to install it the first time it opens.
-- Vocal removal and AI lyrics run faster with a graphics card (GPU), but also work without one.
-- Connect a second display or TV to show the MV full screen; the main screen keeps the song list.
+What it does
+- Sing any YouTube video, or your own song files, with no ads.
+- Removes the vocals with AI, so you sing over the band; switch between original and instrumental any time.
+- Lyrics on the screen, timed to the song; with a graphics card they are written from the song itself.
+- Scores every song, with confetti for a great one.
+- Four microphones with a mixer: echo, reverb, EQ, voice effects and feedback protection.
+- Phones as remotes: scan the QR code to choose songs, see the queue and control playback.
+- Party games, mood scenes for the lights, favourites and history.
+- Works with YTKTV Desk, the front desk app for karaoke venues.
 
-YTKTV is free to use and must not be sold. Read the license on the next page.
+What you need
+- macOS 15 or later, Windows 10 (1809) or 11, or a 64-bit Linux (also Raspberry Pi 4/5).
+- About 1.5 GB of free disk space, and more for the songs it keeps for later.
+- mpv to play the songs. If it is missing, this installer (or YTKTV, when it first opens) offers to install it.
+- A graphics card (GPU) is optional: vocal removal and AI lyrics are faster with one.
+- A second display or TV is optional: the MV goes full screen there and the main screen keeps the song list.
+
+Where it goes
+- macOS: /Applications/YTKTV.app. Windows: your Programs folder. Linux: ~/Applications/YTKTV.AppImage.
+- Settings and the song cache stay in your user folder, so updating or reinstalling keeps them.
+
+Updates
+- YTKTV checks for updates by itself. Small updates download only the files that changed.
+
+Privacy
+- No account and no tracking. YTKTV talks to YouTube for songs, to GitHub for updates, and to the
+  phones and the Desk on your own network.
+
+YTKTV is free to use and must not be sold. Read the license next.

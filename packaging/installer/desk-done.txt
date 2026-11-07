@@ -1,8 +1,10 @@
 YTKTV Desk is installed.
 
-- Open YTKTV Desk from Applications (macOS) or the Start menu (Windows).
-- To add a room, open YTKTV on the room's computer and enter the pairing code shown by the Desk.
-- YTKTV Desk updates itself. Small updates download only the files that changed.
+Getting started
+- Open YTKTV Desk from Applications (macOS), the Start menu (Windows), or run the AppImage (Linux).
+- Add the rooms: open YTKTV on each room's computer and enter the pairing code the Desk shows.
+- Set the prices, products and packages in the Desk's settings.
+- Optional: staff terminals, a lobby TV, and Server Mode for a computer with a graphics card.
 
 Help and source code: https://github.com/TonyD365/YTKTV
 Report a problem: https://github.com/TonyD365/YTKTV/issues
