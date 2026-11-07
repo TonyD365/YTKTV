@@ -243,6 +243,16 @@ irm https://tonyd365.github.io/YTKTV/install.ps1 | iex
 - 中文界面
 - 签名的安装包，不再需要 `xattr` 和 SmartScreen 确认
 
+## 安全：欢迎找漏洞
+
+**我们欢迎大家研究 YTKTV 和 YTKTV Desk 的安全问题。** 如果你找到办法进入不该进的包厢、管理终端、手机页面或更新流程，请告诉我们。
+
+- **私下报告**：在仓库的 Security 页面点 [Report a vulnerability](https://github.com/TonyD365/YTKTV/security/advisories/new)，不要发公开 issue。写清楚是什么问题、怎么复现、哪个版本和系统。中英文都可以。
+- **之后会怎样**：一周内回复；私下修复，发布更新（YTKTV 会自动更新）；然后发布安全公告，严重的会申请 CVE 编号。
+- **致谢**：安全公告里会写上你的名字，除非你不希望署名。
+
+哪些在范围内、哪些是有意的设计（比如家里局域网中手机页面不设密码），见 [SECURITY.md](SECURITY.md)。
+
 ## 许可证与声明
 
 YTKTV 按 [YTKTV License](LICENSE) 发布：可以免费使用、复制、修改和分享，也可以商用（比如开 KTV）；不能出售软件本身、修改版或分支版本。以许可证原文为准。1.3.3 及更早的版本仍按 MIT 许可证提供。
