@@ -245,7 +245,8 @@
         <p data-i18n="inst.mac" data-html><b>macOS</b>: open <b>Terminal</b> (⌘ Space, type Terminal), paste, press Enter, then type your Mac's password:</p>
         <pre><code>curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash</code></pre>
         <p data-i18n="inst.linux" data-html><b>Linux</b> (also Raspberry Pi): the same line in a terminal; it puts the app in <code>~/Applications</code>.</p>
-        <p class="small" data-i18n="inst.desk" data-html>YTKTV Desk: <code>winget install TonyD365.YTKTVDesk</code>, or add <code>-s -- --desk</code> after <code>bash</code>.</p>
+        <p class="small" data-i18n="inst.desk" data-html>YTKTV Desk: add <code>-s -- --desk</code> after <code>bash</code>; on Windows, run <code>irm https://tonyd365.github.io/YTKTV/install.ps1 | iex</code> in PowerShell and tick YTKTV Desk.</p>
+        <p class="small" data-i18n="inst.deskwinget">Why not winget? YTKTV Desk was submitted to winget but has waited a long time without being accepted, so its winget package is withdrawn for now. YTKTV itself is in winget as usual.</p>
         <p class="small" data-i18n="dl.note" data-html>Downloaded the installer in a browser instead? It is not signed: on macOS run <code>xattr -d com.apple.quarantine ~/Downloads/YTKTV-*.pkg</code> before opening it; on Windows choose <b>More info → Run anyway</b>. On first start YTKTV offers to install mpv, the free video player it uses.</p>
       </div>
     </div>
@@ -314,7 +315,8 @@ const ZH = {
   "inst.win": "<b>Windows 10 / 11</b>：右键点「开始」→ <b>终端</b>，粘贴后按回车：",
   "inst.mac": "<b>macOS</b>：打开<b>终端</b>（⌘ 空格，输入「终端」），粘贴后按回车，再输入开机密码：",
   "inst.linux": "<b>Linux</b>（包括树莓派）：在终端里粘贴同一行，程序会放到 <code>~/Applications</code>。",
-  "inst.desk": "管理终端 YTKTV Desk：<code>winget install TonyD365.YTKTVDesk</code>，或者在 <code>bash</code> 后面加上 <code>-s -- --desk</code>。",
+  "inst.desk": "管理终端 YTKTV Desk：在 <code>bash</code> 后面加上 <code>-s -- --desk</code>；Windows 上在 PowerShell 里运行 <code>irm https://tonyd365.github.io/YTKTV/install.ps1 | iex</code>，勾选 YTKTV Desk。",
+  "inst.deskwinget": "为什么不用 winget？YTKTV Desk 已经提交给 winget，但等了很久一直没有被收录，所以暂时撤下了它的 winget 安装方式。YTKTV 本体照常可以用 winget 安装。",
   "dl.note": "如果是用浏览器下载的安装包：它没有签名，macOS 上打开前先在终端执行 <code>xattr -d com.apple.quarantine ~/Downloads/YTKTV-*.pkg</code>；Windows 上点 <b>更多信息 → 仍要运行</b>。第一次启动时会提示安装视频播放器 mpv。",
   "road.title": "接下来要做的", "road.sub": "实时来自 GitHub 上带 <code>roadmap</code> 标签的 issue。点 👍 投票，或者参与讨论。",
   "road.loading": "加载中…", "road.planned": "计划中", "road.done": "已完成",

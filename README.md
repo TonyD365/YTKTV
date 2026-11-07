@@ -267,7 +267,12 @@ version, checks it and installs it. Later updates come by themselves from inside
    winget install TonyD365.YTKTV
    ```
 
-   For the staff terminal: `winget install TonyD365.YTKTVDesk`.
+   For the staff terminal: run `irm https://tonyd365.github.io/YTKTV/install.ps1 | iex` in
+   PowerShell and tick YTKTV Desk.
+
+   > **YTKTV Desk is not in winget for now.** It was submitted, but has waited a long time
+   > without being accepted, so its winget package is withdrawn for now. YTKTV itself is in
+   > winget as usual.
 3. Open **YTKTV** from the Start menu.
 
 winget comes with Windows 10 (1809 and later) and Windows 11. To update by hand:

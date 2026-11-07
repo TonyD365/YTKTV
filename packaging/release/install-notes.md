@@ -6,7 +6,7 @@
 **One line** (checks the download, then installs; pick YTKTV, YTKTV Desk or both):
 
 - macOS / Linux: `curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash`
-- Windows (PowerShell): `irm https://tonyd365.github.io/YTKTV/install.ps1 | iex`, or `winget install TonyD365.YTKTV`
+- Windows (PowerShell): `irm https://tonyd365.github.io/YTKTV/install.ps1 | iex`, or `winget install TonyD365.YTKTV` (YTKTV Desk is not in winget for now: it waited a long time without being accepted, so it is withdrawn there)
 
 Already installed? YTKTV and YTKTV Desk update themselves (Settings → Updates).
 
