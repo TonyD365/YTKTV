@@ -231,10 +231,11 @@ SERVER_MODE_SETTING = "server_mode"  # "1": this computer only runs the server a
 
 def certificate_hash(certificate_file: Path) -> str:
     """SHA-256 of the TLS certificate, as a terminal sees it in the handshake."""
-    from asn1crypto import pem
+    from cryptography import x509
+    from cryptography.hazmat.primitives.serialization import Encoding
 
-    _kind, _headers, der = pem.unarmor(certificate_file.read_bytes())
-    return hashlib.sha256(der).hexdigest()
+    certificate = x509.load_pem_x509_certificate(certificate_file.read_bytes())
+    return hashlib.sha256(certificate.public_bytes(Encoding.DER)).hexdigest()
 
 
 def proof(nonce: str, cert_hash: str) -> bytes:
