@@ -453,6 +453,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer/package-lock.json
       - name: Build
         working-directory: installer
         run: |
