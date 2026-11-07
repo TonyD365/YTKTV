@@ -153,7 +153,7 @@ jobs:
         run: |
           gh label create security --color b60205 --description "Security findings" 2>/dev/null || true
           if [ "$DEPENDENCIES" = "failure" ] || [ "$CODEQL" = "failure" ]; then
-            gh pr edit "$NUMBER" --add-label security
+            gh api -X POST "repos/$GH_REPO/issues/$NUMBER/labels" -f "labels[]=security" >/dev/null || true
           elif [ "$DEPENDENCIES" = "success" ] && [ "$CODEQL" = "success" ]; then
-            gh pr edit "$NUMBER" --remove-label security 2>/dev/null || true
+            gh api -X DELETE "repos/$GH_REPO/issues/$NUMBER/labels/security" >/dev/null 2>&1 || true
           fi
