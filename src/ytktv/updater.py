@@ -383,12 +383,16 @@ def apply_patch(staged: Path, system: str, root: Path | None = None) -> None:
              "-WindowStyle", "Hidden", "-File", str(script)]
         )  # fmt: skip
     elif system == "Darwin":
-        apply = staged / "apply.sh"
-        apply.write_text(patching.shell_script(manifest, staged, root, marker))
-        launcher = staged / "launch.sh"
         admin = patching.needs_admin(manifest, root)
-        launcher.write_text(patching.macos_launcher(apply, root, marker, os.getpid(), admin))
-        children.launch_to_outlive(["/bin/sh", str(launcher)])
+        if admin:
+            # Root gets the script as text and checks the files in a folder of its own:
+            # nothing it runs or trusts is a file in the user's cache folder.
+            apply: Path | str = patching.shell_script(manifest, staged, root, marker, secure=True)
+        else:
+            apply = staged / "apply.sh"
+            apply.write_text(patching.shell_script(manifest, staged, root, marker))
+        launcher = patching.macos_launcher(apply, root, marker, os.getpid(), admin)
+        children.launch_to_outlive(["/bin/sh", "-c", launcher])
     else:
         raise RuntimeError(f"patches are not used on {system}")
     log.info("update %s handed to the patch script", manifest["to"])

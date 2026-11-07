@@ -248,3 +248,61 @@ def test_the_release_checks_each_patch_by_applying_it(tmp_path, capsys):
     (tmp_path / "new" / "app.exe").write_bytes(b"a different new program")
     assert script.verify(old, tmp_path / "new", archive) == 1
     assert (old / "app.exe").read_bytes() == b"old program"
+
+
+@pytest.mark.skipif(WINDOWS, reason="the root script is for macOS")
+def test_the_root_script_checks_its_own_copy_before_touching_the_app(tmp_path):
+    old, archive, _ = make(tmp_path)
+    staged, marker = tmp_path / "staged", tmp_path / "patch-failed-4.0.2"
+    manifest = patching.stage(archive, staged)
+    text = patching.shell_script(manifest, staged, old, marker, secure=True)
+    assert str(staged / "apply.sh") not in text  # handed over as text, never a file
+
+    # Someone running as the user swaps a staged file after the script was made.
+    before = patching.scan(old)
+    (staged / "files" / "app.exe").write_bytes(b"evil")
+    done = subprocess.run(["/bin/sh", "-c", text], check=False, timeout=60)
+    assert done.returncode != 0 and patching.scan(old) == before
+    assert not marker.exists()  # root never writes into the user's folders
+
+    # Untouched, it turns the old build into the new one, and leaves no copy behind.
+    manifest = patching.stage(archive, staged)
+    text = patching.shell_script(manifest, staged, old, marker, secure=True)
+    assert subprocess.run(["/bin/sh", "-c", text], check=False, timeout=60).returncode == 0
+    assert patching.scan(old) == patching.scan(tmp_path / "new")
+    assert not (staged / "backup").exists()
+
+
+@pytest.mark.skipif(WINDOWS, reason="the macOS launcher is a POSIX script")
+def test_the_admin_launcher_passes_the_script_as_text(tmp_path):
+    script = "#!/bin/sh\necho swap\n"
+    root, marker = tmp_path / "YTKTV.app", tmp_path / "patch-failed-4.1.5"
+    launcher = patching.macos_launcher(script, root, marker, 123, admin=True)
+    assert "do shell script (item 1 of argv)" in launcher and "echo swap" in launcher
+    assert '"/bin/sh "' not in launcher
+
+
+def _patch_with(tmp_path: Path, changed: dict, files: dict[str, bytes]) -> Path:
+    archive = tmp_path / "crafted.zip"
+    with zipfile.ZipFile(archive, "w") as out:
+        out.writestr(patching.MANIFEST, json.dumps({"changed": changed, "deleted": {}, "same": {}}))
+        for name, data in files.items():
+            out.writestr(f"files/{name}", data)
+    return archive
+
+
+@pytest.mark.skipif(WINDOWS, reason="symlinks")
+def test_stage_refuses_links_out_of_the_app(tmp_path):
+    for link in ("/etc", "../../outside", "a/../../.."):
+        archive = _patch_with(tmp_path, {"x": {"link": link}}, {})
+        with pytest.raises(RuntimeError, match="bad link"):
+            patching.stage(archive, tmp_path / "staged")
+    # A link inside the app is fine (frameworks use them).
+    archive = _patch_with(tmp_path, {"Versions/Current": {"link": "A"}}, {})
+    patching.stage(archive, tmp_path / "staged")
+
+
+def test_stage_refuses_a_hash_that_is_not_one(tmp_path):
+    archive = _patch_with(tmp_path, {"a": {"sha": "x; rm -rf /", "mode": 420}}, {"a": b"a"})
+    with pytest.raises(RuntimeError, match="bad hash"):
+        patching.stage(archive, tmp_path / "staged")
