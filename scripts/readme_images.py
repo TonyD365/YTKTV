@@ -370,24 +370,29 @@ def phone(chrome: str) -> None:
     web = server_app.create_app(controller, Source())
     page = (Path(server_app.__file__).parent / "static" / "index.html").read_text(encoding="utf-8")
 
+    # Only these page names go into the HTML, taken from this table, never from the request.
+    tabs = {name: name for name in ("search", "queue", "remote", "lists", "games")}
+
     @web.get("/shot/{tab}", response_class=HTMLResponse)
     def shot(tab: str) -> str:
-        if not tab.isalpha():  # page names only: nothing else goes into the HTML
+        name = tabs.get(tab)
+        if name is None:
             raise HTTPException(404)
         click = (
-            f"<script>setTimeout(() => document.querySelector('nav button[data-tab={tab}]')"
+            f"<script>setTimeout(() => document.querySelector('nav button[data-tab={name}]')"
             ".click(), 300);</script>"
         )
         return page.replace("</body>", click + "</body>")
 
     @web.get("/frame/{tab}", response_class=HTMLResponse)
     def frame(tab: str) -> str:
-        if not tab.isalpha():
+        name = tabs.get(tab)
+        if name is None:
             raise HTTPException(404)
         # Headless Chrome will not make a window narrower than 500 px: frame a phone's width.
         return (
             "<html><body style='margin:0;background:#000'><iframe src='/shot/"
-            + tab
+            + name
             + "' width='390' height='844' style='border:0;display:block'></iframe></body></html>"
         )
 
