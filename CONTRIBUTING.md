@@ -51,6 +51,11 @@ the benchmarks:
   `separation` (the real model) and `packaging` (the whole release build with the built apps'
   self-tests). A maintainer can also add a label to run them.
 - A pull request needs the maintainer's approval, and every check passing, before it is merged.
+- The bot also keeps **status labels** up to date: `Checks-Running`, `Checks-Passed`,
+  `Checks-Failed`, `Internal-Error` (a check was cancelled or timed out, usually not the
+  change's fault), `Needs-Author-Action`, `Needs-Terms-Agreement`, `Needs-Review` and
+  `Maintainer-Approved`. When the status changes it posts a new comment, so the newest status
+  is always the latest comment.
 
 A few conventions:
 
@@ -63,7 +68,26 @@ A few conventions:
 
 The layout of the code is described in the [README](README.md#development).
 
-## License
+## Contribution terms
 
-By contributing you agree that your work is released under the [YTKTV License](LICENSE):
-free to use, also in a business, but the software and anything based on it may not be sold.
+On your first pull request the bot posts these terms as a comment. Reply with a comment that
+says exactly
+
+    I agree to the YTKTV contribution terms
+
+and the check called **Contribution terms** turns green (it stays red until then). By replying
+you agree that:
+
+1. **License.** Your contribution is released under the [YTKTV License](LICENSE), like the rest
+   of YTKTV: free to use, also in a business, but the software and anything based on it may not
+   be sold.
+2. **It is yours to give.** You wrote it, or you have the right to contribute it under that
+   license. Code or assets from elsewhere are marked, with their source and license, and that
+   license allows this.
+3. **It may be changed or declined.** The maintainer may edit, rearrange or decline a
+   contribution, and you are credited in the project's history (git), not paid.
+4. **No warranty.** You give it as is, like the rest of YTKTV.
+5. **Conduct.** You follow the [code of conduct](CODE_OF_CONDUCT.md).
+
+The maintainer and the project's bots are not asked. Once you have agreed on one pull request,
+your later ones are recorded as agreed too.

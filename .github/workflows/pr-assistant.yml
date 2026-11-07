@@ -1,15 +1,24 @@
-# A status comment on every pull request, kept up to date (like winget-pkgs' policy bot):
-# which checks passed or failed, what each failure usually means, the labels and what they
-# start, and what happens next. It runs from main after the other workflows finish
-# (workflow_run), never runs the pull request's code, and so works for forks too.
+# Like winget-pkgs' policy bot, on every pull request:
+# - a status comment: which checks passed or failed, what a failure usually means, the
+#   labels, and what happens next. When the status changes, the old comment is removed and
+#   a new one posted, so it is the latest comment; otherwise it is edited in place.
+# - status labels (Checks-Running, Checks-Passed, Checks-Failed, Internal-Error,
+#   Needs-Author-Action, Needs-Review, Maintainer-Approved, Needs-Terms-Agreement).
+# - contribution terms, like a CLA bot: the terms are posted as a comment, the author replies
+#   "I agree to the YTKTV contribution terms", and a "Contribution terms" check turns green
+#   (labels Needs-Terms-Agreement / Terms-Agreed). Agreeing once covers later pull requests.
+# It runs from main (pull_request_target, and workflow_run after the other workflows and
+# after reviews), never runs the pull request's code, and so works for forks too.
 name: PR assistant
 
 on:
   workflow_run:
-    workflows: [CI, Security, Installer tests, Area tests, Benchmark, Apply pull request labels]
+    workflows: [CI, Security, Installer tests, Area tests, Benchmark, Apply pull request labels, Review noted]
     types: [completed]
   pull_request_target:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize, edited]
+  issue_comment:
+    types: [created, edited]
 
 permissions:
   contents: read
@@ -17,21 +26,26 @@ permissions:
   checks: read
   pull-requests: write
   issues: write
+  statuses: write
 
 concurrency:
-  group: pr-assistant-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}
+  group: pr-assistant-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
   comment:
-    if: github.event_name == 'pull_request_target' || github.event.workflow_run.event == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request) ||
+      github.event.workflow_run.event == 'pull_request' ||
+      github.event.workflow_run.event == 'pull_request_review'
     runs-on: ubuntu-latest
     steps:
       - name: Write the status comment
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          NUMBER: ${{ github.event.pull_request.number }}
+          NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           SHA: ${{ github.event.workflow_run.head_sha }}
           SERVER: ${{ github.server_url }}
         run: |
@@ -42,7 +56,7 @@ jobs:
               -q ".[] | select(.headRefOid == \"$SHA\") | .number" | head -n 1)
           fi
           [ -n "$NUMBER" ] || { echo "no open pull request for $SHA"; exit 0; }
-          pr=$(gh pr view "$NUMBER" --json headRefOid,author,labels,isDraft,reviewDecision,state)
+          pr=$(gh pr view "$NUMBER" --json headRefOid,author,labels,isDraft,reviewDecision,state,body)
           [ "$(jq -r .state <<<"$pr")" = OPEN ] || exit 0
           head=$(jq -r .headRefOid <<<"$pr")
           author=$(jq -r .author.login <<<"$pr")
@@ -61,7 +75,7 @@ jobs:
               Tests*) echo "A test failed: open the log, then run \`pytest\` locally (\`QT_QPA_PLATFORM=offscreen\`)." ;;
               *"Compare with base"*) echo "Something got more than 25% slower than on main (see the job summary). Make it faster, or explain why in the PR." ;;
               *"Terminal installer"*) echo "The Ink installer (installer/) did not build or its tests failed: \`cd installer && npm ci && bun build.ts && bun test\`." ;;
-              Install*) echo "A real install failed. If it says the latest release has no files yet, a release is still being built: re-run later." ;;
+              "Real installs"*|Install*) echo "A real install failed. If it says the latest release has no files yet, a release is still being built: re-run later." ;;
               *"Dependency audit"*) echo "A dependency has a known vulnerability: raise it to the fixed version (the log names it)." ;;
               CodeQL*) echo "Code scanning found a possible security problem in the changed code: see the annotation on the PR's Files tab." ;;
               *live*|Separation*) echo "A live area test failed (\`YTKTV_LIVE=1 pytest tests/live\` runs it locally)." ;;
@@ -70,8 +84,94 @@ jobs:
             esac
           }
 
+          # Contribution terms (maintainer and bots excepted): agreed when the author has written
+          # the sentence in a comment on this pull request or on any earlier one of theirs here.
+          PHRASE="I agree to the YTKTV contribution terms"
+          agreed_in() {  # pull request number -> 0 if its author wrote the sentence there
+            gh api "repos/$GH_REPO/issues/$1/comments?per_page=100" \
+              -q ".[] | select(.user.login == \"$author\") | .body" |
+              tr -d '\r' | grep -Fqix -- "$PHRASE"
+          }
+          case "$author" in
+            TonyD365|TonyD365-Agent|dependabot\[bot\]|github-actions\[bot\]|app/dependabot) terms=exempt ;;
+            *)
+              terms=no
+              if agreed_in "$NUMBER"; then terms=yes
+              else
+                for earlier in $(gh pr list --state all --author "$author" --limit 30 --json number -q '.[].number'); do
+                  [ "$earlier" = "$NUMBER" ] && continue
+                  if agreed_in "$earlier"; then terms=yes; break; fi
+                done
+              fi ;;
+          esac
+          posted=$(gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \
+            -q '[.[] | select(.body | startswith("<!-- ytktv-terms")) | .body | split("\n")[0]] | join(" ")')
+          if [ "$terms" = no ] && [[ "$posted" != *"ytktv-terms-ask"* ]]; then
+            {
+              echo "<!-- ytktv-terms-ask -->"
+              echo "### 📝 Contribution terms"
+              echo
+              echo "Thank you for your contribution, @$author! Before it can be merged, please read the terms below and reply to agree."
+              echo
+              curl -fsSL "https://raw.githubusercontent.com/$GH_REPO/main/CONTRIBUTING.md" |
+                awk '/^## Contribution terms/{on=1; next} /^## /{on=0} on' |
+                awk '/^On your first pull request/{skip=1} skip&&/^you agree that:/{skip=0; next} !skip' |
+                sed -E "s#\]\(([A-Za-z_]+(\.md)?)\)#](${SERVER}/${GH_REPO}/blob/main/\1)#g"  # links work in a comment
+              echo
+              echo "---"
+              echo
+              echo "**If you agree, reply to this pull request with a comment that says exactly:**"
+              echo
+              echo '```'
+              echo "$PHRASE"
+              echo '```'
+              echo
+              echo "Agreeing once covers your later pull requests to YTKTV too. If you do not agree, the pull request cannot be merged."
+            } > terms.md
+            gh pr comment "$NUMBER" --body-file terms.md
+          fi
+          if [ "$terms" = yes ] && [[ "$posted" == *"ytktv-terms-ask"* ]] && [[ "$posted" != *"ytktv-terms-ok"* ]]; then
+            printf '%s\n' "<!-- ytktv-terms-ok -->" "✅ Thank you, @$author: your agreement to the contribution terms is recorded." > ok.md
+            gh pr comment "$NUMBER" --body-file ok.md
+          fi
+          if [ "$terms" = no ]; then state=failure; desc="Reply: $PHRASE"; else state=success; desc="Agreed"; [ "$terms" = exempt ] && desc="Not needed for the maintainer"; fi
+          gh api -X POST "repos/$GH_REPO/statuses/$head" -f state="$state" -f context="Contribution terms" \
+            -f description="$desc" -f target_url="$SERVER/$GH_REPO/blob/main/CONTRIBUTING.md#contribution-terms" >/dev/null
+
+          internal=$(awk -F'\t' '$3=="cancelled"||$3=="timed_out"||$3=="startup_failure"||$3=="stale"' checks.tsv | wc -l | tr -d ' ')
+          review=$(jq -r .reviewDecision <<<"$pr")
+
+          # Status labels: exactly the ones that fit now.
+          want=()
+          if [ "$total" = 0 ] || [ "$running" != 0 ]; then want+=(Checks-Running); fi
+          [ "$failed" != 0 ] && want+=(Checks-Failed)
+          [ "$internal" != 0 ] && want+=(Internal-Error)
+          [ "$total" != 0 ] && [ "$running" = 0 ] && [ "$failed" = 0 ] && want+=(Checks-Passed)
+          if [ "$failed" != 0 ] || [ "$terms" = no ] || [ "$review" = CHANGES_REQUESTED ]; then want+=(Needs-Author-Action); fi
+          [ "$terms" = no ] && want+=(Needs-Terms-Agreement)
+          [ "$terms" = yes ] && want+=(Terms-Agreed)
+          if [ "$review" = APPROVED ]; then want+=(Maintainer-Approved); else want+=(Needs-Review); fi
+          declare -A colours=([Checks-Running]=c5def5 [Checks-Passed]=0e8a16 [Checks-Failed]=d73a4a
+            [Internal-Error]=e99695 [Needs-Author-Action]=b60205 [Needs-Review]=fbca04
+            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7 [Terms-Agreed]=c2e0c6)
+          have=$(jq -r '.labels[].name' <<<"$pr")
+          for label in "${!colours[@]}"; do
+            if printf '%s\n' "${want[@]}" | grep -qx "$label"; then
+              printf '%s\n' "$have" | grep -qx "$label" && continue
+              gh label create "$label" --color "${colours[$label]}" 2>/dev/null || true
+              gh pr edit "$NUMBER" --add-label "$label" >/dev/null || true
+            elif printf '%s\n' "$have" | grep -qx "$label"; then
+              gh pr edit "$NUMBER" --remove-label "$label" >/dev/null || true
+            fi
+          done
+
+          # The kind of status: a new kind is posted as a new comment (see the end).
+          if [ "$terms" = no ]; then kind=terms
+          elif [ "$total" = 0 ] || [ "$running" != 0 ] && [ "$failed" = 0 ]; then kind=running
+          elif [ "$failed" != 0 ]; then kind=failed
+          else kind="passed-$review"; fi
           {
-            echo "<!-- ytktv-pr-assistant -->"
+            echo "<!-- ytktv-pr-assistant kind=$kind -->"
             if [ "$total" = 0 ]; then
               echo "### ⏳ Checks are starting"
             elif [ "$failed" != 0 ]; then
@@ -92,7 +192,15 @@ jobs:
                   echo "- [$name]($url): $(hint "$name")"
                 done
             fi
-            labels=$(jq -r '[.labels[].name] | join(", ")' <<<"$pr")
+            if [ "$internal" != 0 ]; then
+              echo
+              echo "**Internal error:** $internal check(s) were cancelled or timed out, which is usually GitHub, not this change. A maintainer can re-run them."
+            fi
+            if [ "$terms" = no ]; then
+              echo
+              echo "**Contribution terms:** please read the terms in the comment above and, if you agree, reply with a comment that says exactly \`$PHRASE\`. Nothing can be merged before that."
+            fi
+            labels=$(gh pr view "$NUMBER" --json labels -q '[.labels[].name] | join(", ")')
             if [ -n "$labels" ]; then
               echo
               echo "**Labels:** $labels"
@@ -105,12 +213,14 @@ jobs:
             echo "**Next**"
             if [ "$(jq -r .isDraft <<<"$pr")" = true ]; then
               echo "- This is a draft: mark it ready for review when it is done."
+            elif [ "$terms" = no ]; then
+              echo "- Reply \`$PHRASE\` to agree to the contribution terms (see above)."
             elif [ "$failed" != 0 ]; then
               echo "- Fix the failures above and push; the checks run again by themselves."
             elif [ "$running" != 0 ]; then
               echo "- Wait for the running checks; this comment updates when they finish."
             fi
-            case "$(jq -r .reviewDecision <<<"$pr")" in
+            case "$review" in
               APPROVED) echo "- Approved by the maintainer: it is merged once every check passes." ;;
               CHANGES_REQUESTED) echo "- The maintainer asked for changes: see the review." ;;
               *) echo "- It needs the maintainer's approval before it can be merged." ;;
@@ -119,11 +229,13 @@ jobs:
             echo "<sub>[How the checks work](${SERVER}/${GH_REPO}/blob/main/CONTRIBUTING.md#before-you-open-a-pull-request) · updated $(date -u '+%Y-%m-%d %H:%M UTC') for ${head:0:7}</sub>"
           } > body.md
 
-          # One comment per pull request, edited in place.
+          # One comment per pull request. A new kind of status is posted as a new
+          # comment, removing the old one, so it is the latest; otherwise it is edited in place.
           existing=$(gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \
-            -q '[.[] | select(.body | startswith("<!-- ytktv-pr-assistant -->"))][0].id // empty')
-          if [ -n "$existing" ]; then
-            gh api -X PATCH "repos/$GH_REPO/issues/comments/$existing" -F body=@body.md >/dev/null
+            -q '[.[] | select(.body | startswith("<!-- ytktv-pr-assistant"))] | last | if . then "\(.id)\t\(.body | split("\n")[0])" else "" end')
+          if [ -n "$existing" ] && [ "${existing#*$'\t'}" = "$(head -n 1 body.md)" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/${existing%%$'\t'*}" -F body=@body.md >/dev/null
           else
+            [ -n "$existing" ] && gh api -X DELETE "repos/$GH_REPO/issues/comments/${existing%%$'\t'*}" >/dev/null
             gh pr comment "$NUMBER" --body-file body.md
           fi
