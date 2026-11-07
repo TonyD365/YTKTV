@@ -4,6 +4,8 @@
 #   a new one posted, so it is the latest comment; otherwise it is edited in place.
 # - status labels (Checks-Running, Checks-Passed, Checks-Failed, Internal-Error,
 #   Needs-Author-Action, Needs-Review, Maintainer-Approved, Needs-Terms-Agreement).
+# - merge conflicts: label Merge-Conflict (and Needs-Author-Action) with how to fix it;
+#   checked on every update, and for all open pull requests after each push to main.
 # - contribution terms, like a CLA bot: the terms are posted as a comment, the author replies
 #   "I agree to the YTKTV contribution terms", and a "Contribution terms" check turns green
 #   (labels Needs-Terms-Agreement / Terms-Agreed). Agreeing once covers later pull requests.
@@ -24,6 +26,8 @@ on:
     types: [opened, reopened, ready_for_review, synchronize, edited]
   issue_comment:
     types: [created, edited]
+  push:
+    branches: [main] # a merge can leave other pull requests in conflict
 
 permissions:
   contents: read
@@ -62,7 +66,14 @@ jobs:
               -q ".[] | select(.headRefOid == \"$SHA\") | .number" | head -n 1)
           fi
           [ -n "$NUMBER" ] || { echo "no open pull request for $SHA"; exit 0; }
-          pr=$(gh pr view "$NUMBER" --json headRefOid,author,labels,isDraft,reviewDecision,state,body)
+          pr=$(gh pr view "$NUMBER" --json headRefOid,author,labels,isDraft,reviewDecision,state,body,mergeable)
+          # GitHub works out "mergeable" lazily: ask again while it says UNKNOWN.
+          for _ in 1 2 3 4 5; do
+            [ "$(jq -r .mergeable <<<"$pr")" != UNKNOWN ] && break
+            sleep 4
+            pr=$(gh pr view "$NUMBER" --json headRefOid,author,labels,isDraft,reviewDecision,state,body,mergeable)
+          done
+          conflict=""; [ "$(jq -r .mergeable <<<"$pr")" = CONFLICTING ] && conflict=1
           [ "$(jq -r .state <<<"$pr")" = OPEN ] || exit 0
           head=$(jq -r .headRefOid <<<"$pr")
           author=$(jq -r .author.login <<<"$pr")
@@ -146,14 +157,15 @@ jobs:
           [ "$failed" != 0 ] && want+=(Checks-Failed)
           [ "$internal" != 0 ] && want+=(Internal-Error)
           [ "$total" != 0 ] && [ "$running" = 0 ] && [ "$failed" = 0 ] && want+=(Checks-Passed)
-          if [ "$failed" != 0 ] || [ "$terms" = no ] || [ "$review" = CHANGES_REQUESTED ]; then want+=(Needs-Author-Action); fi
+          if [ "$failed" != 0 ] || [ "$terms" = no ] || [ "$review" = CHANGES_REQUESTED ] || [ -n "$conflict" ]; then want+=(Needs-Author-Action); fi
+          [ -n "$conflict" ] && want+=(Merge-Conflict)
           [ "$terms" = no ] && want+=(Needs-Terms-Agreement)
           [ "$terms" = yes ] && want+=(Terms-Agreed)
           [ -n "${declined:-}" ] && want+=(Terms-Declined)
           if [ "$review" = APPROVED ]; then want+=(Maintainer-Approved); else want+=(Needs-Review); fi
           declare -A colours=([Checks-Running]=c5def5 [Checks-Passed]=0e8a16 [Checks-Failed]=d73a4a
             [Internal-Error]=e99695 [Needs-Author-Action]=b60205 [Needs-Review]=fbca04
-            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7 [Terms-Agreed]=c2e0c6 [Terms-Declined]=000000)
+            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7 [Terms-Agreed]=c2e0c6 [Terms-Declined]=000000 [Merge-Conflict]=d93f0b)
           have=$(jq -r '.labels[].name' <<<"$pr")
           for label in "${!colours[@]}"; do
             if printf '%s\n' "${want[@]}" | grep -qx "$label"; then
@@ -180,7 +192,8 @@ jobs:
           fi
 
           # The kind of status: a new kind is posted as a new comment (see the end).
-          if [ "$terms" = no ]; then kind=terms
+          if [ -n "$conflict" ]; then kind=conflict
+          elif [ "$terms" = no ]; then kind=terms
           elif [ "$total" = 0 ] || [ "$running" != 0 ] && [ "$failed" = 0 ]; then kind=running
           elif [ "$failed" != 0 ]; then kind=failed
           else kind="passed-$review"; fi
@@ -206,6 +219,10 @@ jobs:
                   echo "- [$name]($url): $(hint "$name")"
                 done
             fi
+            if [ -n "$conflict" ]; then
+              echo
+              echo "**Merge conflict:** this pull request and \`main\` change the same lines, so it cannot be merged (auto-merge waits). Bring \`main\` into your branch, fix the conflicting files, and push: \`git fetch origin && git merge origin/main\`, or use **Resolve conflicts** on this page. [How to resolve a merge conflict]($SERVER/docs/pull-requests/collaborating-with-pull-requests/addressing-merge-conflicts/resolving-a-merge-conflict-on-github)"
+            fi
             if [ "$internal" != 0 ]; then
               echo
               echo "**Internal error:** $internal check(s) were cancelled or timed out, which is usually GitHub, not this change. A maintainer can re-run them."
@@ -227,6 +244,8 @@ jobs:
             echo "**Next**"
             if [ "$(jq -r .isDraft <<<"$pr")" = true ]; then
               echo "- This is a draft: mark it ready for review when it is done."
+            elif [ -n "$conflict" ]; then
+              echo "- Resolve the merge conflict with \`main\` (see above) and push."
             elif [ "$terms" = no ]; then
               echo "- Reply \`$PHRASE\` to agree to the contribution terms (see above)."
             elif [ "$failed" != 0 ]; then
@@ -314,4 +333,33 @@ jobs:
             printf '%s\n%s\n' "<!-- ytktv-terms-declined -->" "Noted, @$WHO: you do not agree to the contribution terms, so this pull request cannot be merged. If you change your mind, reply \`I agree to the YTKTV contribution terms\`." > reply.md
           fi
           gh pr comment "$NUMBER" --body-file reply.md >/dev/null
+
+  conflicts:
+    # After a push to main: label every open pull request that is now in conflict (or no
+    # longer), since nothing else runs for them then. The comment job above explains it.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          sleep 20  # let GitHub work out mergeability against the new main
+          gh label create Merge-Conflict --color d93f0b --description "Conflicts with main; resolve and push" 2>/dev/null || true
+          for n in $(gh pr list --state open --json number -q '.[].number'); do
+            state=UNKNOWN
+            for _ in 1 2 3 4 5; do
+              state=$(gh pr view "$n" --json mergeable -q .mergeable)
+              [ "$state" != UNKNOWN ] && break
+              sleep 5
+            done
+            labelled=$(gh pr view "$n" --json labels -q '[.labels[].name] | index("Merge-Conflict") != null')
+            if [ "$state" = CONFLICTING ] && [ "$labelled" = false ]; then
+              gh pr edit "$n" --add-label Merge-Conflict --add-label Needs-Author-Action >/dev/null
+              printf '%s\n' "<!-- ytktv-conflict -->" "⚠️ The latest changes to \`main\` conflict with this pull request, so it cannot be merged until that is resolved: bring \`main\` into your branch, fix the conflicting files, and push (or use **Resolve conflicts** on this page)." > note.md
+              gh pr comment "$n" --body-file note.md >/dev/null
+            elif [ "$state" = MERGEABLE ] && [ "$labelled" = true ]; then
+              gh pr edit "$n" --remove-label Merge-Conflict >/dev/null
+            fi
+          done
 

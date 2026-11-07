@@ -55,7 +55,8 @@ the benchmarks:
   turns on auto-merge, so the pull request merges by itself when that status is green.
 - The bot also keeps **status labels** up to date: `Checks-Running`, `Checks-Passed`,
   `Checks-Failed`, `Internal-Error` (a check was cancelled or timed out, usually not the
-  change's fault), `Needs-Author-Action`, `Needs-Terms-Agreement`, `Needs-Review` and
+  change's fault), `Merge-Conflict` (bring `main` into your branch, resolve, push; nothing is
+  merged until then), `Needs-Author-Action`, `Needs-Terms-Agreement`, `Needs-Review` and
   `Maintainer-Approved`. When the status changes it posts a new comment, so the newest status
   is always the latest comment.
 
