@@ -117,6 +117,8 @@ class UpdateManager(QObject):
         box.setWindowTitle("Update ready")
         box.setText(f"YTKTV {self._info.version} has been downloaded.")
         detail = "Install it now? YTKTV will close and reopen after the update."
+        if updater.password_needed(self._installer):
+            detail += "\n\n" + updater.PASSWORD_NOTE.format(app="YTKTV")
         if interrupting:
             detail += "\n\nThe song that is playing will stop and the queue will be lost."
         box.setInformativeText(detail)

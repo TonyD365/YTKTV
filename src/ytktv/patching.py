@@ -349,29 +349,41 @@ def admin_prompt(root: Path, marker: Path) -> str:
     )
 
 
-def macos_launcher(
-    apply: Path | str, root: Path, marker: Path, pid: int, admin: bool, reopen: bool = True
-) -> str:
-    """Waits for the app to quit, runs the swap (asking for the password if needed), reopens.
-
-    With *admin*, *apply* is the root script's text (see shell_script(secure=True)), passed
-    to osascript as an argument, so root never runs a file the user could have changed.
-    Without, it is the path of the script to run as the user.
-    """
+def macos_launcher(apply: Path, root: Path, pid: int, reopen: bool = True) -> str:
+    """For an app the user owns: wait for it to quit, run *apply* as the user, reopen it."""
     q = shlex.quote
-    if admin:
-        run = (
-            "osascript -e 'on run argv' -e 'do shell script (item 1 of argv) "
-            "with prompt (item 2 of argv) with administrator privileges' "
-            f"-e 'end run' {q(str(apply))} {q(admin_prompt(root, marker))} || : > {q(str(marker))}"
-        )
-    else:
-        run = f"/bin/sh {q(str(apply))}"
     lines = [
         "#!/bin/sh",
         f"while kill -0 {int(pid)} 2>/dev/null; do sleep 0.5; done",
-        run,
+        f"/bin/sh {q(str(apply))}",
     ]
     if reopen:
         lines.append(f"open {q(str(root))}")
     return "\n".join(lines) + "\n"
+
+
+# Started by the app itself, so macOS's password window names it ("a script started by
+# YTKTV"). It asks at once; the root script then waits for the app to quit before it swaps.
+# Afterwards, as the user: a failure marker if it did not work, and the app reopened.
+_ADMIN_APPLESCRIPT = (
+    "on run argv",
+    "set failed to false",
+    "try",
+    "do shell script (item 1 of argv) with prompt (item 2 of argv) with administrator privileges",
+    "on error",
+    "set failed to true",
+    "end try",
+    'if failed then do shell script ": > " & quoted form of (item 3 of argv)',
+    'do shell script "open " & quoted form of (item 4 of argv)',
+    "end run",
+)
+
+
+def macos_admin_command(script: str, root: Path, marker: Path, pid: int) -> list[str]:
+    """The osascript command for an app in /Applications: *script* (shell_script(secure=True))
+    runs as root once the app with *pid* has quit; it is passed as text, never as a file."""
+    wait = f"while kill -0 {int(pid)} 2>/dev/null; do sleep 0.5; done\n"
+    command = ["osascript"]
+    for line in _ADMIN_APPLESCRIPT:
+        command += ["-e", line]
+    return [*command, wait + script, admin_prompt(root, marker), str(marker), str(root)]

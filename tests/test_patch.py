@@ -138,14 +138,21 @@ def test_a_bad_file_puts_the_old_build_back(tmp_path):
 
 
 @pytest.mark.skipif(WINDOWS, reason="the macOS launcher is a POSIX script")
-def test_the_macos_launcher_asks_for_the_password_only_when_needed(tmp_path):
-    apply, root, marker = tmp_path / "apply.sh", tmp_path / "YTKTV.app", tmp_path / "m"
-    plain = patching.macos_launcher(apply, root, marker, 123, admin=False)
-    assert "osascript" not in plain and "kill -0 123" in plain and "open " in plain
-    marker = tmp_path / "patch-failed-4.1.1"
-    admin = patching.macos_launcher(apply, root, marker, 123, admin=True)
-    assert "administrator privileges" in admin and "with prompt" in admin
-    assert "YTKTV is installing its update to 4.1.1" in admin
+def test_the_user_launcher_waits_runs_and_reopens(tmp_path):
+    launcher = patching.macos_launcher(tmp_path / "apply.sh", tmp_path / "YTKTV.app", 123)
+    assert "osascript" not in launcher and "kill -0 123" in launcher and "open " in launcher
+
+
+def test_the_admin_command_is_started_by_the_app_and_passes_text(tmp_path):
+    root, marker = tmp_path / "YTKTV.app", tmp_path / "patch-failed-4.1.7"
+    command = patching.macos_admin_command("echo swap\n", root, marker, 123)
+    assert command[0] == "osascript"  # a child of the app: the password window names YTKTV
+    script, prompt, failed, app = command[-4:]
+    assert script.startswith("while kill -0 123") and script.endswith("echo swap\n")
+    assert "YTKTV is installing its update to 4.1.7" in prompt
+    assert failed == str(marker) and app == str(root)
+    joined = " ".join(command[:-4])
+    assert "administrator privileges" in joined and "on error" in joined
 
 
 def test_app_root():
@@ -271,15 +278,6 @@ def test_the_root_script_checks_its_own_copy_before_touching_the_app(tmp_path):
     assert subprocess.run(["/bin/sh", "-c", text], check=False, timeout=60).returncode == 0
     assert patching.scan(old) == patching.scan(tmp_path / "new")
     assert not (staged / "backup").exists()
-
-
-@pytest.mark.skipif(WINDOWS, reason="the macOS launcher is a POSIX script")
-def test_the_admin_launcher_passes_the_script_as_text(tmp_path):
-    script = "#!/bin/sh\necho swap\n"
-    root, marker = tmp_path / "YTKTV.app", tmp_path / "patch-failed-4.1.5"
-    launcher = patching.macos_launcher(script, root, marker, 123, admin=True)
-    assert "do shell script (item 1 of argv)" in launcher and "echo swap" in launcher
-    assert '"/bin/sh "' not in launcher
 
 
 def _patch_with(tmp_path: Path, changed: dict, files: dict[str, bytes]) -> Path:

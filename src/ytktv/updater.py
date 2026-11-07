@@ -339,6 +339,24 @@ def clean_old_downloads(dest_dir: Path, current: str = __version__) -> int:
     return freed
 
 
+def password_needed(installer: Path, root: Path | None = None) -> bool:
+    """Whether installing this staged patch asks for the Mac password (an app in /Applications)."""
+    if platform.system() != "Darwin" or not installer.is_dir():
+        return False
+    try:
+        manifest = json.loads((installer / patching.MANIFEST).read_text())
+        return patching.needs_admin(manifest, root or patching.app_root())
+    except (OSError, ValueError, KeyError):
+        return False
+
+
+PASSWORD_NOTE = (
+    "macOS will then ask for your Mac password, in a window that says “a script started "
+    "by {app}”: that is this update, which needs it to replace the app's files in "
+    "Applications. Nothing else is changed."
+)
+
+
 def install_update(installer: Path) -> None:
     """Hand over to the platform installer. The caller must quit the app right after.
 
@@ -383,16 +401,19 @@ def apply_patch(staged: Path, system: str, root: Path | None = None) -> None:
              "-WindowStyle", "Hidden", "-File", str(script)]
         )  # fmt: skip
     elif system == "Darwin":
-        admin = patching.needs_admin(manifest, root)
-        if admin:
+        if patching.needs_admin(manifest, root):
             # Root gets the script as text and checks the files in a folder of its own:
-            # nothing it runs or trusts is a file in the user's cache folder.
-            apply: Path | str = patching.shell_script(manifest, staged, root, marker, secure=True)
+            # nothing it runs or trusts is a file in the user's cache folder. osascript is
+            # started by the app, so the password window says it is YTKTV asking.
+            root_script = patching.shell_script(manifest, staged, root, marker, secure=True)
+            children.launch_to_outlive(
+                patching.macos_admin_command(root_script, root, marker, os.getpid())
+            )
         else:
             apply = staged / "apply.sh"
             apply.write_text(patching.shell_script(manifest, staged, root, marker))
-        launcher = patching.macos_launcher(apply, root, marker, os.getpid(), admin)
-        children.launch_to_outlive(["/bin/sh", "-c", launcher])
+            launcher = patching.macos_launcher(apply, root, os.getpid())
+            children.launch_to_outlive(["/bin/sh", "-c", launcher])
     else:
         raise RuntimeError(f"patches are not used on {system}")
     log.info("update %s handed to the patch script", manifest["to"])
