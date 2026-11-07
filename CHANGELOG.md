@@ -3,6 +3,14 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.1.2
+
+### 🔑 Clearer password request on macOS
+- When an update needs your password on macOS, the dialog now says which app is updating, to which version, and why: to replace the changed files of the app in /Applications, and nothing else.
+
+### 🔧 Also
+- First release with Windows patches: updating YTKTV or YTKTV Desk on Windows from 4.1.1 downloads only the changed files.
+
 ## 4.1.1
 
 ### 🔒 Lobby screen
