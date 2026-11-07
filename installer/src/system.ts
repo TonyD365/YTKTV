@@ -102,6 +102,12 @@ export function freeSpace(): number {
 
 /** Installs the downloaded file. Throws with a message for the user when it fails. */
 export async function install(app: App, file: string, version: string): Promise<void> {
+  if (SYSTEM === "macOS" && run(["sudo", "-n", "true"]).ok) {
+    // sudo works without a password here (already given in this terminal, or a CI machine).
+    const result = Bun.spawn(["sudo", "-n", "/usr/sbin/installer", "-pkg", file, "-target", "/"], { stdout: "pipe", stderr: "pipe" });
+    if ((await result.exited) !== 0) throw new Error(`The installer failed: ${(await new Response(result.stderr).text()).trim()}`);
+    return;
+  }
   if (SYSTEM === "macOS") {
     const prompt =
       `The YTKTV installer is installing ${label(app)} ${version}. ` +

@@ -1,0 +1,138 @@
+# Installs YTKTV for real, through each way of installing it, when a pull request changes
+# the installers (the files the "installer" label is given for, in labeler.yml) or someone
+# adds the "installer" label by hand. The label from the labelling bot cannot start a
+# workflow itself (GitHub does not let one workflow's token start another), so this
+# looks at the same files.
+#
+# Each system installs the latest release twice: YTKTV through the terminal installer
+# program built from this pull request (installer/), YTKTV Desk through the one-line
+# script (site/install.sh or site/install.ps1), then checks the installed versions.
+name: Installer tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  decide:
+    name: Changes the installers?
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+        run: |
+          run=false
+          if [ "$EVENT" != "pull_request" ]; then
+            run=true
+          elif [ "$ACTION" = "labeled" ]; then
+            [ "$LABEL" = "installer" ] && run=true
+          else
+            gh pr view "$NUMBER" --json labels -q '.labels[].name' | grep -qx installer && run=true
+            gh pr diff "$NUMBER" --name-only | grep -Eq \
+              '^(installer/|site/install\.(sh|ps1)$|packaging/installer/|packaging/windows/[^/]*\.iss$|packaging/macos/build_universal_pkg\.sh$|packaging/macos/scripts/|\.github/workflows/installer-tests\.yml$)' \
+              && run=true
+          fi
+          echo "run=$run" | tee -a "$GITHUB_OUTPUT"
+
+  install:
+    name: Install (${{ matrix.os }})
+    needs: decide
+    if: needs.decide.outputs.run == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, target: darwin-arm64 }
+          - { os: ubuntu-latest, target: linux-x64 }
+          - { os: windows-latest, target: windows-x64 }
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the installer program
+        working-directory: installer
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          PATH="$PWD/node_modules/.bin:$PATH"
+          bun build.ts ${{ matrix.target }}
+          bun test
+      - name: The latest release
+        id: latest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "version=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName | sed 's/^v//')" | tee -a "$GITHUB_OUTPUT"
+
+      - name: YTKTV through the installer program
+        shell: bash
+        run: |
+          program=installer/dist/ytktv-installer-${{ matrix.target }}
+          [ -f "$program.exe" ] && program="$program.exe"
+          "$program" --room --yes
+      - name: YTKTV Desk through the one-line script (macOS, Linux)
+        if: runner.os != 'Windows'
+        run: bash site/install.sh --desk --yes
+      - name: YTKTV Desk through the one-line script (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '& ./site/install.ps1 -Desk -Yes'
+
+      - name: Check what is installed (macOS)
+        if: runner.os == 'macOS'
+        env:
+          WANT: ${{ steps.latest.outputs.version }}
+        run: |
+          for app in "YTKTV" "YTKTV Desk"; do
+            have=$(defaults read "/Applications/$app.app/Contents/Info.plist" CFBundleShortVersionString)
+            echo "$app: $have"; [ "$have" = "$WANT" ]
+          done
+      - name: Check what is installed (Linux)
+        if: runner.os == 'Linux'
+        env:
+          WANT: ${{ steps.latest.outputs.version }}
+        run: |
+          for app in YTKTV YTKTV-Desk; do
+            file="$HOME/Applications/$app.AppImage"
+            test -x "$file"
+            have=$(cat "$file.version"); echo "$app: $have"; [ "$have" = "$WANT" ]
+          done
+      - name: Check what is installed (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WANT: ${{ steps.latest.outputs.version }}
+        run: |
+          $keys = @{ 'YTKTV' = '{6B0C5B0E-6C1B-4D0B-9E0F-59A7C0E6B2A1}_is1'; 'YTKTV Desk' = '{C2E7A1D4-3F6B-4E58-9A21-7D0B5E4C8F13}_is1' }
+          foreach ($app in $keys.Keys) {
+            $key = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$($keys[$app])"
+            $have = (Get-ItemProperty $key).DisplayVersion
+            Write-Host "${app}: $have"
+            if ($have -ne $env:WANT) { throw "$app is $have, not $env:WANT" }
+            $exe = Join-Path (Get-ItemProperty $key).InstallLocation "$app.exe"
+            if (-not (Test-Path $exe)) { throw "no $exe" }
+          }
+
+      - name: Up to date is left alone
+        shell: bash
+        run: |
+          program=installer/dist/ytktv-installer-${{ matrix.target }}
+          [ -f "$program.exe" ] && program="$program.exe"
+          "$program" --room --desk --yes | tee out.txt
+          grep -q "Nothing to do" out.txt

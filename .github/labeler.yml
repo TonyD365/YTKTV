@@ -40,3 +40,8 @@ desk:
 tests:
   - changed-files:
       - any-glob-to-any-file: ["tests/**"]
+# Keep in step with the files installer-tests.yml looks at.
+installer:
+  - changed-files:
+      - any-glob-to-any-file:
+          ["installer/**", "site/install.sh", "site/install.ps1", "packaging/installer/**", "packaging/windows/*.iss", "packaging/macos/build_universal_pkg.sh", "packaging/macos/scripts/**", ".github/workflows/installer-tests.yml"]
