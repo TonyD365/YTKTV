@@ -9,18 +9,38 @@ from typing import Any
 from ytktv.core.models import Song
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
-_URL_RE = re.compile(
-    r"(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/)|youtu\.be/)([A-Za-z0-9_-]{11})"
+# Fixed-length pieces only (no repetition), tried where "youtu" appears; a watch link whose
+# v is not the first parameter has its query searched with str.find over a bounded number of
+# characters. Linear whatever the text is.
+_LINK_START = re.compile(
+    r"youtube\.com/(?:watch\?(?:v=([A-Za-z0-9_-]{11}))?|(?:shorts|embed|live|v)/([A-Za-z0-9_-]{11}))"
+    r"|youtu\.be/([A-Za-z0-9_-]{11})"
 )
+_QUERY_LIMIT = 300  # characters of a watch link's query looked at for "&v="
 
 
 def extract_video_id(text: str) -> str | None:
-    """Return the video id if *text* is a YouTube URL or a bare id."""
+    """Return the video id if *text* is a YouTube URL (or holds one) or a bare id."""
     text = text.strip()
+    if len(text) > 2000:  # no link is this long
+        return None
     if _ID_RE.match(text):
         return text
-    match = _URL_RE.search(text)
-    return match.group(1) if match else None
+    at = text.find("youtu")
+    while at >= 0:
+        match = _LINK_START.match(text, at)
+        if match:
+            found = match.group(1) or match.group(2) or match.group(3)
+            if found:
+                return found
+            # watch?...&v=ID
+            query = text[match.end() : match.end() + _QUERY_LIMIT].split("#", 1)[0]
+            query = query.split(None, 1)[0] if query.strip() else ""
+            v = query.find("&v=")
+            if v >= 0 and _ID_RE.match(query[v + 3 : v + 14]):
+                return query[v + 3 : v + 14]
+        at = text.find("youtu", at + 5)
+    return None
 
 
 _PLAYLIST_RE = re.compile(r"[?&]list=([A-Za-z0-9_-]{10,})")

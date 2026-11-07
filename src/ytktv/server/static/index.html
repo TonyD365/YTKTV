@@ -298,6 +298,9 @@ function el(tag, attrs, ...children) {
 }
 
 async function api(path, method = "GET", body) {
+  // Only this server's own API, never a URL made from data.
+  // (The characters encodeURIComponent leaves as they are, and no ".." path segment.)
+  if (!/^\/api\/[A-Za-z0-9_\-\/%.!~*'()]*(\?[^#]*)?$/.test(path) || path.split("?")[0].split("/").includes("..")) throw new Error("bad request");
   const res = await fetch(path, {
     method, headers: body ? {"Content-Type": "application/json"} : {},
     body: body ? JSON.stringify(body) : undefined,
@@ -471,8 +474,12 @@ function render() {
   document.querySelectorAll("[data-scene]").forEach((b) => b.classList.toggle("on", b.dataset.scene === (state.scene || "")));
   $("scoring").classList.toggle("on", state.scoring);
   $("scoring").textContent = state.scoring ? "Scoring: On" : "Scoring: Off";
-  $("mic-link").hidden = !state.phone_mic_url;
-  if (state.phone_mic_url) $("mic-link").href = state.phone_mic_url;
+  // Only an https:// link to the microphone page (never javascript: or another scheme).
+  let micUrl = null;
+  try { micUrl = state.phone_mic_url ? new URL(state.phone_mic_url) : null; } catch (e) { micUrl = null; }
+  const micOk = micUrl !== null && micUrl.protocol === "https:";
+  $("mic-link").hidden = !micOk;
+  if (micOk) $("mic-link").href = micUrl.href;
   const reactions = $("reactions");
   if (!reactions.children.length && state.reactions) {
     for (const emoji of state.reactions) {
@@ -543,8 +550,8 @@ function renderQueue() {
     const extra = document.createDocumentFragment();
     extra.append(yours, who, tag);
     q.append(songCard(item.song, [
-      el("button", {class: "mini" + (i === 0 ? " ghost" : ""), onclick: () => api(`/api/queue/${item.id}/top`, "POST")}, "Top"),
-      el("button", {class: "mini danger", onclick: () => api(`/api/queue/${item.id}`, "DELETE")}, "Remove"),
+      el("button", {class: "mini" + (i === 0 ? " ghost" : ""), onclick: () => api(`/api/queue/${enc(item.id)}/top`, "POST")}, "Top"),
+      el("button", {class: "mini danger", onclick: () => api(`/api/queue/${enc(item.id)}`, "DELETE")}, "Remove"),
     ], extra));
   });
 }
@@ -833,7 +840,7 @@ async function loadListSongs() {
   for (const song of songs) {
     box.append(songCard(song, [
       el("button", {class: "mini pink", onclick: () => add(song, false)}, "Select"),
-      el("button", {class: "mini danger", onclick: () => api(`/api/playlists/${enc(openList)}/songs/${song.video_id}`, "DELETE")}, "Remove"),
+      el("button", {class: "mini danger", onclick: () => api(`/api/playlists/${enc(openList)}/songs/${enc(song.video_id)}`, "DELETE")}, "Remove"),
     ]));
   }
 }
