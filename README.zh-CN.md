@@ -122,6 +122,12 @@
 
 Windows 10（1809 及以后）和 Windows 11 都自带 winget。手动更新：`winget upgrade TonyD365.YTKTV`；卸载：`winget uninstall TonyD365.YTKTV`。
 
+不用 winget 也可以：打开 **PowerShell**，粘贴下面这一行。可以勾选装 YTKTV、YTKTV Desk 或两个都装，显示许可证，校验后安装最新版：
+
+```powershell
+irm https://tonyd365.github.io/YTKTV/install.ps1 | iex
+```
+
 #### macOS（Apple 芯片和 Intel）
 
 1. 打开 **终端**（按 ⌘ 空格，输入 `终端` 或 `Terminal`，回车）。
