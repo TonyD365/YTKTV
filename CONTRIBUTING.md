@@ -39,6 +39,19 @@ pytest
 CI runs the same checks on macOS, Windows and Linux, and compares the benchmarks with `main`;
 a slowdown of more than 25% fails the pull request.
 
+### The checks on a pull request
+
+A bot keeps one comment on each pull request up to date: which checks passed or failed, what a
+failure usually means, and what happens next. Besides the tests on three systems, the lint and
+the benchmarks:
+
+- **Security** audits the Python and npm dependencies and runs CodeQL on the changed code.
+- **Labels** are added from the files you change. Some start heavier tests for that part:
+  `installer` (real installs on macOS, Linux and Windows), `desk` (a live Desk and room),
+  `separation` (the real model) and `packaging` (the whole release build with the built apps'
+  self-tests). A maintainer can also add a label to run them.
+- A pull request needs the maintainer's approval, and every check passing, before it is merged.
+
 A few conventions:
 
 - Everything a user or a contributor reads is in English: the interface, comments, commit
