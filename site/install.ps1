@@ -171,7 +171,9 @@ function Install-YTKTV {
     # --- What to install -------------------------------------------------------------
     $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'x64' }
     Say 'Looking up the latest release...'
-    try { $release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest" }
+    $headers = @{}
+    if ($env:GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $env:GITHUB_TOKEN" }  # CI machines share addresses
+    try { $release = Invoke-RestMethod -Headers $headers "https://api.github.com/repos/$Repo/releases/latest" }
     catch { Fail 'Could not reach GitHub. Check the internet connection and try again.' }
     $script:Tag = $release.tag_name
 

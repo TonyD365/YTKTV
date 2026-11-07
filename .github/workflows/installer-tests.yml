@@ -56,6 +56,10 @@ jobs:
     if: needs.decide.outputs.run == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      # The installers ask GitHub's API for the latest release; shared CI addresses hit its
+      # limit for anonymous calls.
+      GITHUB_TOKEN: ${{ github.token }}
     strategy:
       fail-fast: false
       matrix:

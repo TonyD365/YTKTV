@@ -229,7 +229,8 @@ esac
 
 WORK=$(mktemp -d)
 spin "Looking up the latest release…" \
-  curl -fsSL --retry 3 -o "$WORK/release.json" "https://api.github.com/repos/$REPO/releases/latest" \
+  curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
+    -o "$WORK/release.json" "https://api.github.com/repos/$REPO/releases/latest" \
   || fail "Could not reach GitHub. Check the internet connection and try again."
 RELEASE=$(cat "$WORK/release.json")
 TAG=$(printf '%s' "$RELEASE" | grep -o '"tag_name": *"[^"]*"' | head -n 1 | cut -d'"' -f4)

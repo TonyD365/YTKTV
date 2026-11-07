@@ -47,7 +47,11 @@ export async function fetchText(url: string, tries = 3): Promise<string> {
   let last: unknown;
   for (let i = 0; i < tries; i++) {
     try {
-      const response = await fetch(url, { headers: { "User-Agent": "ytktv-installer" } });
+      const headers: Record<string, string> = { "User-Agent": "ytktv-installer" };
+      // A token raises GitHub's limit for anonymous API calls (CI machines share addresses).
+      const token = process.env.GITHUB_TOKEN;
+      if (token && url.startsWith("https://api.github.com/")) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(url, { headers });
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
       return await response.text();
     } catch (error) {
