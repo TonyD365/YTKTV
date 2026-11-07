@@ -3,6 +3,31 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.1.3
+
+### 🖥 A new installer in the terminal
+The one-line installs now open an interactive installer, drawn like a modern command-line app:
+
+```bash
+curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash        # macOS, Linux
+```
+```powershell
+irm https://tonyd365.github.io/YTKTV/install.ps1 | iex               # Windows
+```
+
+- Tick **YTKTV, YTKTV Desk or both**. It shows what is already installed ("4.1.2 → 4.1.3", or up to date).
+- What each app does and needs, what is about to happen, and the license to read and accept.
+- Checks the disk space and closes a running copy first.
+- A progress bar with speed and time left; if the network drops it tries again and goes on where it stopped. Every download is checked against the release's checksums.
+- Offers to install mpv, and to open the app at the end.
+- `--room`, `--desk` and `--yes` (PowerShell: `-Room`, `-Desk`, `-Yes`) skip the questions.
+
+### 📄 Installer pages
+- The macOS and Windows installers show a welcome page (what the app does, what it needs, where it goes, privacy), the license to accept, and a finish page with how to start.
+
+### 🔧 Also
+- Fixed: the one-line install with `--yes` always said the download was damaged.
+
 ## 4.1.2
 
 ### 🔑 Clearer password request on macOS
