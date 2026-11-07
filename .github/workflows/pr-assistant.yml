@@ -75,7 +75,7 @@ jobs:
               Tests*) echo "A test failed: open the log, then run \`pytest\` locally (\`QT_QPA_PLATFORM=offscreen\`)." ;;
               *"Compare with base"*) echo "Something got more than 25% slower than on main (see the job summary). Make it faster, or explain why in the PR." ;;
               *"Terminal installer"*) echo "The Ink installer (installer/) did not build or its tests failed: \`cd installer && npm ci && bun build.ts && bun test\`." ;;
-              Install*) echo "A real install failed. If it says the latest release has no files yet, a release is still being built: re-run later." ;;
+              "Real installs"*|Install*) echo "A real install failed. If it says the latest release has no files yet, a release is still being built: re-run later." ;;
               *"Dependency audit"*) echo "A dependency has a known vulnerability: raise it to the fixed version (the log names it)." ;;
               CodeQL*) echo "Code scanning found a possible security problem in the changed code: see the annotation on the PR's Files tab." ;;
               *live*|Separation*) echo "A live area test failed (\`YTKTV_LIVE=1 pytest tests/live\` runs it locally)." ;;

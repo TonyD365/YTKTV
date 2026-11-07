@@ -51,7 +51,9 @@ jobs:
           echo "run=$run" | tee -a "$GITHUB_OUTPUT"
 
   install:
-    name: Install (${{ matrix.os }})
+    # No matrix value in the name: a skipped job then reads plainly (GitHub adds the system
+    # in brackets when it runs).
+    name: Real installs (only when the installers change)
     needs: decide
     if: needs.decide.outputs.run == 'true'
     runs-on: ${{ matrix.os }}
