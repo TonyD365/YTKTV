@@ -5,9 +5,7 @@ has the installers and the full notes.
 
 ## 4.1.6
 
-# ⚠️ Security update: please update now
-
-**This release fixes several security problems. Update YTKTV and YTKTV Desk as soon as you can:** open Settings → Updates and install it, or use the install commands below.
+**🔒 Security update: install as soon as possible.** This release fixes several security problems in YTKTV and YTKTV Desk: open Settings → Updates and install it.
 
 ### 🔒 Security
 - The signatures between rooms and the Desk, and the certificate for the phone microphone page, now use the `cryptography` library (the latest version on every system) instead of a library with a known weakness. Rooms that are already paired keep working.
