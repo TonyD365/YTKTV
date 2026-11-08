@@ -29,9 +29,19 @@ jobs:
         run: |
           # Once more after a minute: a single failure is often YouTube having a moment.
           for try in 1 2; do
-            if python scripts/youtube_check.py 2>&1 | tee report.txt; then exit 0; fi
+            set +e
+            python scripts/youtube_check.py 2>&1 | tee report.txt
+            code=${PIPESTATUS[0]}
+            set -e
+            [ "$code" = 0 ] && exit 0
             [ "$try" = 1 ] && sleep 60
           done
+          if [ "$code" = 2 ]; then
+            # Search works; YouTube only asked GitHub's machine to sign in. Rooms are not
+            # affected, so this is a warning, not a failure (and no issue).
+            echo "::warning::YouTube asked GitHub's machine to confirm it is not a bot; search works, playback could not be checked from here."
+            exit 0
+          fi
           exit 1
       - name: Report
         if: always() && github.event_name == 'schedule'
