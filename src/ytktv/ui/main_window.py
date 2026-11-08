@@ -365,6 +365,16 @@ class MainWindow(QMainWindow):
             "Score each song: the microphones are compared with the original singer's melody"
         )
         self.score_button.clicked.connect(controller.set_scoring)
+        self.guide_button = QPushButton("Guide")
+        self.guide_button.setFixedSize(58, 44)
+        self.guide_button.setCheckable(True)
+        self.guide_button.setChecked(controller.settings.pitch_guide)
+        self.guide_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.guide_button.setToolTip(
+            "Pitch guide: while scoring, the original singer's melody on the MV screen, "
+            "with what you sing drawn on top"
+        )
+        self.guide_button.clicked.connect(controller.set_pitch_guide)
         self.lyrics_button = QPushButton("Lyrics")
         self.lyrics_button.setFixedSize(58, 44)
         self.lyrics_button.setCheckable(True)
@@ -383,6 +393,7 @@ class MainWindow(QMainWindow):
             self.pause_button,
             button("⏭", controller.skip, "Skip to the next song", round=True),
             self.score_button,
+            self.guide_button,
             self.lyrics_later,
             self.lyrics_button,
             self.lyrics_earlier,
@@ -863,6 +874,8 @@ class MainWindow(QMainWindow):
         self.tempo_readout.setText(f"{round(state['speed'] * 100)}%")
         self.lights_button.setChecked(state["lights"])
         self.score_button.setChecked(state["scoring"])
+        self.guide_button.setChecked(state["pitch_guide"])
+        self.guide_button.setEnabled(state["scoring"])  # the guide shows the scored melody
         self.lyrics_button.setChecked(state["show_lyrics"])
         if state["show_lyrics"] and state["current"] and not state["lyrics"]:
             tip = "No lyrics for this song: its video has no subtitles or captions"

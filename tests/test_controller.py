@@ -456,3 +456,20 @@ def test_lyrics_timing_is_nudged_per_song_and_remembered(ktv):
     controller.nudge_lyrics(-4)
     assert controller.settings.lyrics_offsets == {}  # back in time: nothing to remember
     assert toasts[-1] == "Lyrics back in time with the subtitles"
+
+
+def test_the_pitch_guide_can_be_hidden_while_scoring(ktv):
+    from types import SimpleNamespace
+
+    controller, _, _ = ktv
+    melody = SimpleNamespace(hop=0.01, notes=[60.0, 62.0])
+    controller._keeper = SimpleNamespace(melody=melody, transpose=0)  # type: ignore[assignment]
+    events: list[str] = []
+    controller.bus.subscribe(lambda topic, _payload: events.append(topic))
+    assert controller.melody() is not None
+    controller.set_pitch_guide(False)
+    assert controller.melody() is None and "melody" in events
+    assert controller.state()["pitch_guide"] is False
+    controller.set_pitch_guide(True)
+    assert controller.melody() == {"hop": 0.01, "notes": [60.0, 62.0], "transpose": 0}
+    controller._keeper = None

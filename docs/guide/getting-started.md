@@ -50,7 +50,7 @@ You can run the setup again at any time from **Settings → Setup**.
    ones after it are prepared while the previous one plays.
 3. Choose **Original** or **Instrumental** in the control bar. *Instrumental* needs the vocal
    separation; until it is ready, the song waits ("Preparing instrumental").
-4. Turn on **Lyrics** and **Score** in the control bar if you like.
+4. Turn on **Lyrics** and **Score** in the control bar if you like. While scoring, **Guide** shows the original singer's melody on the MV screen with your voice drawn on top; turn it off to keep the screen clean (the score still counts).
 
 Guests can queue songs from their phones by scanning the QR code in the top right corner of
 the console or on the TV while nothing plays. See [Phones](phones.md).
@@ -87,7 +87,7 @@ for the other, gold when both sing. The parts come from the marks many duet lyri
 | Group | Buttons |
 |---|---|
 | Vocals | Original, Instrumental, More (Vocal Cut, Left Only, Right Only for old split-track videos) |
-| Playback | Replay, Play/Pause, Skip, Score, Lyrics, and the arrows that move the lyrics 0.1 s earlier or later |
+| Playback | Replay, Play/Pause, Skip, Score, Guide (the pitch guide), Lyrics, and the arrows that move the lyrics 0.1 s earlier or later |
 | Key, Tempo | Key down/up (±6 semitones), slower/faster |
 | Guide, Music, Mic | How much of the original singer stays in Instrumental mode; music volume; microphone volume |
 | Crowd | Applause, Cheer, Air Horn, Drum Roll, Lights |
