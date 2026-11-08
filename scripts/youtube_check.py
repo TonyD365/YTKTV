@@ -20,12 +20,15 @@ QUERY = "karaoke instrumental"
 def main() -> int:
     youtube = YouTube()
     failures: list[str] = []
+    blocked = False  # YouTube's "confirm you're not a bot" for this machine's address
 
     def step(name: str, run):  # type: ignore[no-untyped-def]
         started = time.monotonic()
         try:
             result = run()
         except Exception as error:  # noqa: BLE001 - report every kind of failure
+            nonlocal blocked
+            blocked = blocked or "not a bot" in str(error)
             failures.append(f"{name}: {type(error).__name__}: {error}")
             print(f"FAIL {name}: {error}")
             return None
@@ -47,6 +50,13 @@ def main() -> int:
             step("download", lambda: _first_bytes(url, source.headers))
 
     if failures:
+        # Search worked but YouTube wants a sign-in from this (cloud) address: it blocks
+        # data centres like GitHub's at times, not home or venue connections. Not a YTKTV
+        # problem, so it is reported as "blocked" (exit 2), not as a failure.
+        playing = ("look up", "stream", "download")
+        if blocked and all(f.startswith(playing) for f in failures):
+            print("\n".join(["", "YouTube asked this machine to sign in (bot check):", *failures]))
+            return 2
         print("\n".join(["", "YouTube check failed:", *failures]))
         return 1
     print("\nYouTube works.")
