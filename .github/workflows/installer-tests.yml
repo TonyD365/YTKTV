@@ -18,7 +18,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: installer-tests-${{ github.event.pull_request.number || github.ref }}
+  # A label event (the bot labels every pull request) gets a group of its own, so it never
+  # cancels the run for the pull request's files that is under way.
+  group: installer-tests-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name || 'files' }}
   cancel-in-progress: true
 
 jobs:
@@ -38,13 +40,22 @@ jobs:
           LABEL: ${{ github.event.label.name }}
           SENDER: ${{ github.event.sender.login }}
         run: |
+          # The bot adds an area's label for "/run <area>" (pr-commands.yml); otherwise its
+          # labels come from the files, which already start the tests.
+          asked_to_run() {
+            gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \
+              -q "[.[] | select((.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\") and (.body | ascii_downcase | startswith(\"/run $1\"))) | .created_at] | max // empty" |
+              { read -r at || exit 1; [ $(( $(date -u +%s) - $(date -u -d "$at" +%s) )) -lt 600 ]; }
+          }
           run=false
           if [ "$EVENT" != "pull_request" ]; then
             run=true
           elif [ "$ACTION" = "labeled" ]; then
             # A label the bot added from the files is already covered by the run for those
             # files; only a label added by hand starts one.
-            [ "$LABEL" = "installer" ] && [ "$SENDER" != TonyD365-Agent ] && run=true
+            if [ "$LABEL" = "installer" ]; then
+              if [ "$SENDER" != TonyD365-Agent ] || asked_to_run installer; then run=true; fi
+            fi
           else
             gh pr view "$NUMBER" --json labels -q '.labels[].name' | grep -qx installer && run=true
             gh pr diff "$NUMBER" --name-only | grep -Eq \
