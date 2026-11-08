@@ -3,6 +3,22 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.2.0
+
+**Update YTKTV Desk and every room's YTKTV to 4.2.0 together.** The Desk and the rooms now name the room in every message the Desk signs; a room on 4.2.0 ignores an "unpair" from an older Desk. Everything else between them keeps working while you update.
+
+### 🔒 Security hardening
+- **Phone remote:** it only answers when opened by the computer's address (the QR code), `localhost` or its `.local` name, and refuses changes sent by other websites. A web page opened on a phone in the room can no longer skip songs, edit the queue or send service calls in the background.
+- **Desk and rooms:** a room only accepts messages the Desk signed for that room, so nobody on the network can pass one room's "unpair" on to another and take it off the Desk.
+- **One-line installers** (macOS, Linux, Windows) refuse to install when the release's checksums cannot be fetched, instead of installing without checking. On macOS the cached password is forgotten right after installing.
+
+### 🐛 Fixes
+- The terminal installer no longer freezes on "Open it now?" after asking for the Mac password.
+
+### 🔧 Also
+- Pull request automation: reviews on pull requests from forks are picked up within 10 minutes, new `/update` and `/remind` commands, and a thank-you when a contribution is merged.
+- The project's build steps use pinned versions of every GitHub Action.
+
 ## 4.1.7
 
 ### 🔑 Clearer password requests on macOS
