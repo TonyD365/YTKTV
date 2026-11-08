@@ -406,3 +406,41 @@ jobs:
             fi
           done
 
+
+  welcome:
+    # A first pull request to YTKTV gets a welcome: how to check it locally, the rules, and
+    # what the bot does. Once per person (GitHub says when it is their first).
+    if: >-
+      github.event_name == 'pull_request_target' && github.event.action == 'opened' &&
+      (github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' ||
+       github.event.pull_request.author_association == 'FIRST_TIMER' ||
+       github.event.pull_request.author_association == 'NONE')
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          SERVER: ${{ github.server_url }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          base="$SERVER/$GH_REPO/blob/main"
+          printf '%s\n' \
+            "<!-- ytktv-welcome -->" \
+            "### 🎤 Welcome, @$AUTHOR, and thank you for your first pull request to YTKTV!" \
+            "" \
+            "A few things that help it go in quickly:" \
+            "" \
+            "- **Check it locally** before pushing (the same as CI, all without opening a window):" \
+            '  ```bash' \
+            '  pip install -e ".[dev]"' \
+            '  ruff check . && ruff format --check .' \
+            '  mypy src' \
+            '  QT_QPA_PLATFORM=offscreen pytest' \
+            '  ```' \
+            "- **The rules:** English in the code, comments and commits; tests need no network, sound card or window; one topic per pull request. See [CONTRIBUTING.md]($base/CONTRIBUTING.md) and the [code of conduct]($base/CODE_OF_CONDUCT.md)." \
+            "- **Contribution terms:** I will post them in a moment; reply to agree, once, and it counts for your later pull requests too." \
+            "- **The checks** run after a maintainer approves running them for a first-time contributor. My status comment below says what passed, what failed and what usually fixes it. Comment \`/help\` for the commands, e.g. \`/retest\`." \
+            "- **Questions** are welcome right here, in English or Chinese." \
+            > welcome.md
+          gh pr comment "$NUMBER" --body-file welcome.md >/dev/null
