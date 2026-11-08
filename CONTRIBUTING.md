@@ -60,7 +60,7 @@ a slowdown of more than 25% fails the pull request.
 - `/help` lists them.
 
 A pull request that waits on its author (`Needs-Author-Action`) with no push or comment from
-them for 14 days gets the `Stale` label and a reminder, and is closed after 14 more days. It
+them for 30 days gets the `Stale` label and a reminder, and is closed after 30 more days. It
 can always be reopened.
 
 A bot keeps one comment on each pull request up to date: which checks passed or failed, what a

@@ -15,7 +15,7 @@
 # because they use the free CI minutes or change what others see.
 #
 # Every day: a pull request waiting on its author (Needs-Author-Action) with no activity from
-# them for 14 days gets the Stale label and a reminder; 14 more days and it is closed, with a
+# them for 30 days gets the Stale label and a reminder; 30 more days and it is closed, with a
 # note that it can be reopened. Any push or comment by the author removes Stale.
 #
 # Acts as TonyD365-Agent; never checks out or runs the pull request's code.
@@ -234,8 +234,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          now=$(date -u +%s); day=86400; limit=$((14 * day))
-          gh label create Stale --color cfd3d7 --description "Waiting on the author for 14 days" 2>/dev/null || true
+          now=$(date -u +%s); day=86400; limit=$((30 * day))
+          gh label create Stale --color cfd3d7 --description "Waiting on the author for 30 days" 2>/dev/null || true
           for n in $(gh pr list --state open --limit 200 --json number -q '.[].number'); do
             pr=$(gh pr view "$n" --json author,labels,createdAt,commits)
             author=$(jq -r .author.login <<<"$pr")
@@ -253,14 +253,14 @@ jobs:
                 if [ -n "$stale_note" ] && [[ "$last" > "$stale_note" ]]; then
                   gh api -X DELETE "repos/$GH_REPO/issues/$n/labels/Stale" >/dev/null 2>&1 || true
                 elif [ -n "$stale_note" ] && [ $((now - $(date -u -d "$stale_note" +%s))) -ge "$limit" ]; then
-                  printf '%s\n' "<!-- ytktv-stale-closed -->" "Closing this pull request after 28 days without a reply. Thank you for it, @$author: reopen it whenever you want to go on." > note.md
+                  printf '%s\n' "<!-- ytktv-stale-closed -->" "Closing this pull request after 60 days without a reply. Thank you for it, @$author: reopen it whenever you want to go on." > note.md
                   gh pr comment "$n" --body-file note.md >/dev/null
                   gh pr close "$n" >/dev/null
                 fi ;;
               *,Needs-Author-Action,*)
                 if [ "$idle" -ge "$limit" ]; then
                   gh api -X POST "repos/$GH_REPO/issues/$n/labels" -f "labels[]=Stale" >/dev/null
-                  printf '%s\n' "<!-- ytktv-stale -->" "👋 @$author, this pull request has been waiting for you for 14 days (see the status comment for what is needed). If nothing happens in the next 14 days it will be closed; you can reopen it at any time. A push or a comment keeps it open." > note.md
+                  printf '%s\n' "<!-- ytktv-stale -->" "👋 @$author, this pull request has been waiting for you for 30 days (see the status comment for what is needed). If nothing happens in the next 30 days it will be closed; you can reopen it at any time. A push or a comment keeps it open." > note.md
                   gh pr comment "$n" --body-file note.md >/dev/null
                 fi ;;
             esac
