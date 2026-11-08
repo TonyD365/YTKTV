@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from tests.helpers import FakeSource, make_song, wait_for
 from ytktv.core.models import PlayStatus
@@ -218,3 +219,17 @@ def test_phone_page_gets_our_icons(client):
     assert svg.status_code == 200 and svg.headers["content-type"].startswith("image/svg+xml")
     assert http.get("/icons/nope.svg").status_code == 404
     assert '"🎤": "mic"' in http.get("/icons.js").text
+
+
+def test_other_sites_cannot_drive_the_remote(client):
+    http, _ = client
+    # DNS rebinding: an outside name pointed at this computer.
+    assert http.get("/api/state", headers={"host": "evil.example"}).status_code == 403
+    for host in ("192.168.1.20:8000", "localhost:8000", "ktv.local", "[::1]:8000"):
+        assert http.get("/", headers={"host": host}).status_code == 200
+    # A page elsewhere posting here; the remote's own page has the same origin.
+    evil = {"origin": "https://evil.example"}
+    assert http.post("/api/player/skip", headers=evil).status_code == 403
+    assert http.post("/api/player/skip", headers={"origin": "http://testserver"}).status_code != 403
+    with pytest.raises(WebSocketDisconnect), http.websocket_connect("/ws", headers=evil) as ws:
+        ws.receive_json()

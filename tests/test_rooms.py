@@ -89,7 +89,7 @@ def test_rooms_and_the_desk_prove_who_they_are():
 def test_room_messages_must_be_signed_and_fresh():
     store = DeskStore()
     session = RoomSession("r", "k", store.public_key)
-    body = json.dumps({"type": "unbind", "seq": 1}, sort_keys=True)
+    body = json.dumps({"type": "unbind", "seq": 1, "room": "r"}, sort_keys=True)
     good = json.dumps({"body": body, "sig": store.sign(f"{session.nonce}|{body}".encode())})
     assert session.open(good)["type"] == "unbind"
     with pytest.raises(DeskImpostor):
@@ -789,3 +789,17 @@ def test_guessing_pairing_codes_is_stopped():
 
     with pytest.raises(KeyError):
         store.pair(code, "late")
+
+
+def test_a_signed_unbind_for_another_room_is_refused():
+    store = DeskStore()
+    session = RoomSession("r", "k", store.public_key)
+
+    def signed(message):
+        body = json.dumps(message, sort_keys=True)
+        return json.dumps({"body": body, "sig": store.sign(f"{session.nonce}|{body}".encode())})
+
+    for message in ({"type": "unbind", "seq": 1, "room": "other"}, {"type": "unbind", "seq": 1}):
+        with pytest.raises(DeskImpostor):
+            session.open(signed(message))
+    assert session.open(signed({"type": "unbind", "seq": 1, "room": "r"}))["type"] == "unbind"

@@ -29,6 +29,10 @@ class RoomSession:
         if not crypto.verify(self.desk_key, data, str(envelope.get("sig", ""))):
             raise DeskImpostor("bad signature")
         message: dict[str, Any] = json.loads(body)
+        # Signed for another room (or, for an unbind, for no room in particular): not ours.
+        room = message.get("room")
+        if (room is not None or message.get("type") == "unbind") and room != self.room_id:
+            raise DeskImpostor("message for another room")
         if int(message.get("seq", 0)) <= self.seq:
             raise DeskImpostor("replayed message")
         self.seq = int(message["seq"])
