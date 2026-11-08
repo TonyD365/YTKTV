@@ -1,7 +1,7 @@
 // The YTKTV installer: pick YTKTV, YTKTV Desk or both, read and accept the license, then
 // it checks the disk, closes running copies, downloads (with resume), verifies, installs,
 // offers mpv, and can open the apps. Run by site/install.sh and site/install.ps1.
-import { mkdtempSync, rmSync } from "node:fs";
+import { closeSync, mkdtempSync, openSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Text } from "ink";
@@ -66,10 +66,28 @@ async function askPassword(app: App): Promise<void> {
   await print(
     <Note text={`Your Mac password is needed to put ${label(app)} in /Applications (macOS's installer runs as administrator). It is typed here, not shown, and not stored.`} />,
   );
-  const code = await Bun.spawn(["sudo", "-v", "-p", "  Mac password for %u: "], {
-    stdio: ["inherit", "inherit", "inherit"],
-  }).exited;
+  const code = await runInTerminal(["sudo", "-v", "-p", "  Mac password for %u: "]);
   if (code !== 0) throw new Error("No password was given, so nothing was installed.");
+}
+
+/**
+ * Runs *command* in the terminal (sudo's password prompt, brew). It gets its own handle on the
+ * terminal: sharing ours lets it switch the terminal handle to blocking reads, and after that
+ * the installer froze on the next key press in a menu.
+ */
+async function runInTerminal(command: string[]): Promise<number> {
+  let tty: number | undefined;
+  try {
+    tty = openSync("/dev/tty", "r+");
+  } catch {
+    tty = undefined;
+  }
+  try {
+    const io = tty ?? "inherit";
+    return await Bun.spawn(command, { stdio: [io, io, io] }).exited;
+  } finally {
+    if (tty !== undefined) closeSync(tty);
+  }
 }
 
 async function main(): Promise<void> {
@@ -199,7 +217,7 @@ async function main(): Promise<void> {
           ]);
       if (go === 0) {
         await print(<Text color={CYAN}>$ {command.join(" ")}</Text>);
-        const code = await Bun.spawn(command, { stdio: ["inherit", "inherit", "inherit"] }).exited;
+        const code = await runInTerminal(command);
         await print(code === 0 ? <Done text="Installed mpv" /> : <Note text="mpv was not installed. YTKTV offers it when it first opens." />);
       } else if (YES) {
         await print(<Note text={`YTKTV needs mpv to play songs. Install it with: ${command.join(" ")}`} />);
