@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/images/social-preview.png" alt="YTKTV: turn any computer into a KTV machine" width="820">
-</p>
+
 
 <p align="center">
   <a href="https://github.com/TonyD365/YTKTV/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/TonyD365/YTKTV?color=ff2d95"></a>
