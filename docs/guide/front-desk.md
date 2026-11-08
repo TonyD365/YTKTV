@@ -115,6 +115,24 @@ and coupons**.
   bill shows it, and a use is counted when the room closes.
 - **Members' birthday discount**: an extra percent off for a member on their birthday.
 
+### Time prices
+
+Also under **Settings → Packages and coupons**, **Time prices** change the room's hourly price by
+weekday and hour, optionally only for some room types:
+
+- **Percent on the hourly rate**: −30 for a 30% happy hour, 20 for a weekend surcharge.
+- **Fixed hourly rate**: e.g. ¥60/h on weekdays 14:00–18:00.
+- **Fixed price for the window**: a late-night package, e.g. 00:00–06:00 for ¥150. A stay that
+  touches the window pays the package price once for it, however much of the window it uses;
+  time outside the window is charged by the hour as usual.
+
+An end time earlier than the start runs past midnight (22:00–02:00), and the days you tick are
+the days the window starts on. Where rules overlap, the first in the list wins. The billed time
+(after rounding to hours or blocks) is laid on the clock from when the room opened, split by
+rule, and each part gets its own line on the bill, e.g. *Room · 2h 10m at ¥60/h · Happy hour*.
+Discounts, service charge and tax then apply to the whole bill as before. With no time prices,
+bills are exactly as before.
+
 ## Receipts
 
 Any 58 mm or 80 mm receipt printer that is installed on the Desk computer works, through its
