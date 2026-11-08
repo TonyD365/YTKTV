@@ -17,7 +17,7 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pr-number
           run-id: ${{ github.event.workflow_run.id }}
@@ -28,6 +28,6 @@ jobs:
           number=$(head -c 12 pr-number | tr -d '\n')
           [[ "$number" =~ ^[0-9]+$ ]] || { echo "Not a pull request number"; exit 1; }
           echo "number=$number" >> "$GITHUB_OUTPUT"
-      - uses: actions/labeler@v7
+      - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7
         with:
           pr-number: ${{ steps.pr.outputs.number }}

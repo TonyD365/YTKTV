@@ -56,10 +56,10 @@ jobs:
     env:
       YTKTV_SEPARATION_MODE: ${{ matrix.separation }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # the version comes from the git tag
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
           cache: pip
@@ -289,7 +289,7 @@ jobs:
             fi
           done
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: installer-${{ matrix.name }}
           path: |
@@ -314,7 +314,7 @@ jobs:
           PYTHON: python
         run: |
           packaging/make_patches.sh windows YTKTV ${{ matrix.arch }}
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: runner.os == 'Windows' && github.event_name == 'release'
         with:
           name: installer-patch-${{ matrix.name }}
@@ -337,10 +337,10 @@ jobs:
           - { name: windows-arm64, os: windows-11-arm, arch: arm64 }
           - { name: linux-aarch64, os: ubuntu-24.04-arm }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # the version comes from the git tag
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
           cache: pip
@@ -416,7 +416,7 @@ jobs:
           $version = python -c "import ytktv; print(ytktv.__version__)"; Check
           choco install innosetup --no-progress -y; Check
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "/DArch=${{ matrix.arch }}" packaging\windows\desk_installer.iss; Check
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           # Not "installer-macos-*": the universal YTKTV package must not pick these up.
           name: installer-desk-${{ matrix.name }}
@@ -442,7 +442,7 @@ jobs:
           PYTHON: python
         run: |
           packaging/make_patches.sh windows YTKTV-Desk ${{ matrix.arch }}
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: runner.os == 'Windows' && github.event_name == 'release'
         with:
           name: installer-patch-desk-${{ matrix.name }}
@@ -455,8 +455,8 @@ jobs:
     needs: [build, desk]
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: parts
           pattern: installer-macos-*
@@ -477,7 +477,7 @@ jobs:
           intel="$(ls parts/*-macos-x86_64.pkg)"
           version="$(basename "$arm" | sed -E 's/^YTKTV-(.*)-macos-arm64\.pkg$/\1/')"
           packaging/macos/build_universal_pkg.sh "$arm" "$intel" "$version" dist
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: desk-parts
           pattern: installer-desk-macos-*
@@ -505,14 +505,14 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
         run: packaging/make_patches.sh macos
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: github.event_name == 'release'
         with:
           name: installer-patch-macos
           path: dist/patches/*.zip
           if-no-files-found: ignore
           retention-days: 7
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: installer-macos-universal
           path: dist/*.pkg
@@ -528,8 +528,8 @@ jobs:
       contents: write
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
@@ -557,7 +557,7 @@ jobs:
           shasum -a 256 *.gz > ytktv-installer.sha256
           cat ytktv-installer.sha256
           gh release upload "$TAG" *.gz ytktv-installer.sha256 --clobber
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: installer-cli
           path: installer/dist/*.gz
@@ -572,7 +572,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: installers
           pattern: installer-*
@@ -591,7 +591,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$TAG" installers/* --clobber
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           sparse-checkout: packaging/release
       - name: Install instructions at the end of the notes
@@ -626,7 +626,7 @@ jobs:
           # - id: TonyD365.YTKTVDesk
           #   regex: '^YTKTV-Desk-\d[^/]*-windows-(x64|arm64)-setup\.exe$'
     steps:
-      - uses: vedantmgoyal9/winget-releaser@v2
+      - uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
         with:
           identifier: ${{ matrix.id }}
           installers-regex: ${{ matrix.regex }}
