@@ -1,0 +1,45 @@
+# Keeps the GitHub wiki a copy of the user guide (docs/guide): after the guide changes on
+# main (which only happens through reviewed pull requests), scripts/sync_wiki.py rewrites the
+# wiki pages and TonyD365-Agent pushes them. Runs from main only.
+name: Wiki
+
+on:
+  push:
+    branches: [main]
+    paths: [docs/guide/**, scripts/sync_wiki.py]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: ${{ github.repository }}.wiki
+          token: ${{ secrets.AGENT_TOKEN }}
+          path: wiki
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.13"
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python scripts/sync_wiki.py wiki
+          cd wiki
+          git add -A
+          if git diff --cached --quiet; then echo "The wiki is up to date."; exit 0; fi
+          git config user.name TonyD365-Agent
+          git config user.email "$(gh api user -q .id)+TonyD365-Agent@users.noreply.github.com"
+          git commit -qm "Copy the user guide from docs/guide (${SHA:0:7})"
+          git push -q
