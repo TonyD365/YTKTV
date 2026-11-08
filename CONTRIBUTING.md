@@ -53,7 +53,7 @@ a slowdown of more than 25% fails the pull request.
 
 - `/retest` re-runs the checks that failed or were cancelled; `/benchmark` measures the speed
   again; `/ready` marks a draft ready for review; `/close` and `/reopen`; `/update` merges `main`
-  into your branch (you or a maintainer).
+  into your branch (you or a maintainer; on a fork, a maintainer).
 - `/remind 3d` (or `12h`, up to `30d`, optionally with a note) has the bot remind you there then.
 - `/run packaging`, `/run installer`, `/run desk`, `/run separation` run that part's heavier
   tests; `/label` and `/unlabel` add or remove labels (maintainers: the owner and collaborators).
