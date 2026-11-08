@@ -13,8 +13,10 @@ when a TV is searched for or connected to, so the pieces can be tested without e
 from __future__ import annotations
 
 import contextlib
+import hmac
 import logging
 import re
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -29,7 +31,6 @@ log = logging.getLogger(__name__)
 
 PLAYLIST = "stream.m3u8"
 CONTENT_TYPE = "application/x-mpegURL"
-URL_PATH = "/cast/" + PLAYLIST
 # Only ffmpeg's own file names are ever served, never a path someone made up.
 _SERVED = re.compile(r"^(stream\.m3u8|seg\d{1,9}\.ts)$")
 
@@ -141,11 +142,20 @@ class CastStream:
         self._thread: threading.Thread | None = None
         self._running = threading.Event()
         self.folder: Path | None = None
+        # A new random secret in the stream's address for every cast: the TV cannot send a
+        # password, so the address itself is one, and someone else on the Wi-Fi who knows
+        # the computer's address still cannot watch. Gone when the cast stops.
+        self.token = ""
         self.on_ended: Callable[[], None] = lambda: None  # ffmpeg stopped by itself
 
     @property
     def frame_size(self) -> int:
         return self.width * self.height * 3
+
+    @property
+    def path(self) -> str:
+        """The playlist's path on the local server, secret included; "" when not casting."""
+        return f"/cast/{self.token}/{PLAYLIST}" if self.token else ""
 
     @property
     def running(self) -> bool:
@@ -155,6 +165,7 @@ class CastStream:
         if self.running:
             return
         self.folder = Path(tempfile.mkdtemp(prefix="ytktv-cast-"))
+        self.token = secrets.token_urlsafe(24)
         command = ffmpeg_command(self.ffmpeg, self.width, self.height, self.fps, self.folder)
         self._process = self._popen(
             command,
@@ -201,7 +212,7 @@ class CastStream:
         """Wait until the playlist exists, so the TV does not ask for it too early."""
         deadline = time.monotonic() + timeout
         while self.running and time.monotonic() < deadline:
-            if self.file(PLAYLIST) is not None:
+            if self.file(self.token, PLAYLIST) is not None:
                 return True
             sleep(0.1)
         return False
@@ -210,6 +221,7 @@ class CastStream:
         self._running.clear()
         thread, process, folder = self._thread, self._process, self.folder
         self._thread, self._process, self.folder = None, None, None
+        self.token = ""
         if process is not None:
             with contextlib.suppress(OSError, ValueError):
                 process.stdin.close()
@@ -225,10 +237,13 @@ class CastStream:
         if folder is not None:
             shutil.rmtree(folder, ignore_errors=True)
 
-    def file(self, name: str) -> Path | None:
-        """The stream file *name*, or None when it is not one (or not casting)."""
-        folder = self.folder
-        if folder is None or not _SERVED.match(name):
+    def file(self, token: str, name: str) -> Path | None:
+        """The stream file *name*, or None when it is not one, the secret is wrong, or
+        nothing is being cast."""
+        folder, secret = self.folder, self.token
+        if folder is None or not secret or not hmac.compare_digest(token, secret):
+            return None
+        if not _SERVED.match(name):
             return None
         path = folder / name
         return path if path.is_file() else None
@@ -272,7 +287,7 @@ class Caster:
 
     @property
     def url(self) -> str:
-        return self.server_url + URL_PATH
+        return self.server_url + self.stream.path
 
     def _set(self, state: str, text: str) -> None:
         self.state = state

@@ -272,10 +272,10 @@ def create_app(
             headers={"Cache-Control": "no-cache"},
         )
 
-    @app.get("/cast/{name}", include_in_schema=False)
-    def cast_file(name: str) -> Response:
+    @app.get("/cast/{token}/{name}", include_in_schema=False)
+    def cast_file(token: str, name: str) -> Response:
         """The live MV stream a Chromecast plays (read-only; see ytktv.cast)."""
-        path = cast.file(name) if cast is not None else None
+        path = cast.file(token, name) if cast is not None else None
         try:
             body = path.read_bytes() if path is not None else None
         except OSError:  # ffmpeg removed an old piece just now

@@ -94,11 +94,12 @@ def test_stream_feeds_frames_and_cleans_up() -> None:
     assert stream.running and stream.wait_ready(timeout=1)
     stream.push(b"\x01" * stream.frame_size)
     stream.push(b"short")  # ignored: wrong size
-    folder = stream.folder
-    assert folder is not None and stream.file("seg0.ts") == folder / "seg0.ts"
+    folder, token = stream.folder, stream.token
+    assert folder is not None and stream.file(token, "seg0.ts") == folder / "seg0.ts"
+    assert stream.file("wrong", "seg0.ts") is None
     stream.stop()
     assert started[0].frames > 0 and started[0].closed.is_set()
-    assert not folder.exists() and stream.file(cast.PLAYLIST) is None
+    assert not folder.exists() and stream.file(token, cast.PLAYLIST) is None
 
 
 def test_stream_serves_only_its_own_files() -> None:
@@ -106,7 +107,7 @@ def test_stream_serves_only_its_own_files() -> None:
     stream.start()
     try:
         for name in ("../secret", "stream.m3u8/..", "seg1.mp4", "x.ts", "seg9.ts"):
-            assert stream.file(name) is None
+            assert stream.file(stream.token, name) is None
     finally:
         stream.stop()
 
@@ -120,8 +121,12 @@ def test_caster_start_stop() -> None:
     )
     caster.start(DEVICE)
     assert caster.state == cast.CASTING and stream.running
-    assert target.played == [("http://192.168.1.2:8000/cast/stream.m3u8", cast.CONTENT_TYPE)]
+    token = stream.token
+    assert len(token) >= 32
+    url = f"http://192.168.1.2:8000/cast/{token}/stream.m3u8"
+    assert target.played == [(url, cast.CONTENT_TYPE)]
     caster.stop()
+    assert stream.token == "" and stream.file(token, "stream.m3u8") is None
     assert caster.state == cast.IDLE and not stream.running and target.stopped == 1
     assert changes == [cast.CONNECTING, cast.CASTING, cast.IDLE]
 
@@ -155,16 +160,19 @@ def test_server_serves_the_stream(tmp_path: Path) -> None:
     stream, _ = make_stream()
     controller, _player, _resolver = make_controller(tmp_path)
     client = TestClient(create_app(controller, object(), cast=stream))  # type: ignore[arg-type]
-    assert client.get("/cast/stream.m3u8").status_code == 404  # not casting
+    assert client.get("/cast/x/stream.m3u8").status_code == 404  # not casting
     stream.start()
     try:
+        base = f"/cast/{stream.token}"
         # The Chromecast asks by IP address, which the host check lets through.
-        reply = client.get("/cast/stream.m3u8", headers={"host": "192.168.1.2:8000"})
+        reply = client.get(f"{base}/stream.m3u8", headers={"host": "192.168.1.2:8000"})
         assert reply.status_code == 200 and reply.text.startswith("#EXTM3U")
         assert reply.headers["access-control-allow-origin"] == "*"
-        assert client.get("/cast/seg0.ts").headers["content-type"] == "video/mp2t"
-        assert client.get("/cast/..%2Fsecret").status_code == 404
-        assert client.get("/cast/stream.m3u8", headers={"host": "evil.com"}).status_code == 403
+        assert client.get(f"{base}/seg0.ts").headers["content-type"] == "video/mp2t"
+        assert client.get(f"{base}/..%2Fsecret").status_code == 404
+        # Someone else on the Wi-Fi without the secret sees nothing.
+        assert client.get("/cast/wrong/stream.m3u8").status_code == 404
+        assert client.get(f"{base}/stream.m3u8", headers={"host": "evil.com"}).status_code == 403
     finally:
         stream.stop()
 
