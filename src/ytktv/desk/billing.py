@@ -5,8 +5,10 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from html import escape
 
+from ytktv.desk.pricing import price_stay, rules_from_json
 from ytktv.desk.store import DeskStore, Room
 
 DEFAULT_RATE = "20"
@@ -150,11 +152,12 @@ def bill(store: DeskStore, room_id: str, now: float | None = None) -> Bill:
         result.lines.append((f"Package · {package.name}{includes}", round(package.price, 2)))
         minutes = max(0.0, minutes - package.minutes)
     if minutes or package is None:
-        hours = f"{int(minutes // 60)}h {int(minutes % 60):02d}m"
         label = "Extra time" if package is not None else "Room"
-        result.lines.append(
-            (f"{label} · {hours} at {result.currency}{rate:g}/h", round(rate * minutes / 60, 2))
-        )
+        # Time after a package's own hours is priced by the clock from where it ends.
+        start = room.opened_at + (package.minutes * 60 if package is not None else 0)
+        rules = rules_from_json(store.setting("price_rules", "[]"))
+        for part in price_stay(datetime.fromtimestamp(start), minutes, rate, rules, room.room_type):
+            result.lines.append((part.text(result.currency, label), part.amount))
     for order in store.orders(room_id):
         if order.status != "cancelled":
             result.lines.append((f"{order.name} × {order.qty}", round(order.price * order.qty, 2)))

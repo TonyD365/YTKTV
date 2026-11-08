@@ -1,12 +1,12 @@
 """Settings → Packages and Coupons: bundles sold at one price, codes that take money off,
-and the members' birthday discount."""
+time-of-day room prices and the members' birthday discount."""
 
 from __future__ import annotations
 
 import time
 from datetime import datetime, timedelta
 
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, Qt, QTime
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -24,10 +24,19 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
+    QTimeEdit,
     QVBoxLayout,
     QWidget,
 )
 
+from ytktv.desk.pricing import (
+    DAY_NAMES,
+    KINDS,
+    WEEKDAYS,
+    PriceRule,
+    rules_from_json,
+    rules_to_json,
+)
 from ytktv.desk.store import Coupon, DeskStore, Package
 
 MAX_PRICE = 99_999_999
@@ -135,6 +144,76 @@ class CouponDialog(QDialog):
         )
 
 
+class PriceRuleDialog(QDialog):
+    def __init__(self, rule: PriceRule, parent: QWidget | None = None) -> None:
+        from ytktv.desk.window import ROOM_TYPES
+
+        super().__init__(parent)
+        self.setWindowTitle("Time price")
+        form = QFormLayout(self)
+        self.name = QLineEdit(rule.name)
+        self.name.setPlaceholderText("e.g. Happy hour")
+        days = QHBoxLayout()
+        self.days: list[QCheckBox] = []
+        for index, day in enumerate(DAY_NAMES):
+            box = QCheckBox(day)
+            box.setChecked(index in rule.days)
+            self.days.append(box)
+            days.addWidget(box)
+        self.start = QTimeEdit(QTime(rule.start // 60, rule.start % 60))
+        self.end = QTimeEdit(QTime(rule.end // 60, rule.end % 60))
+        for edit in (self.start, self.end):
+            edit.setDisplayFormat("HH:mm")
+        hours = QHBoxLayout()
+        hours.addWidget(self.start)
+        hours.addWidget(QLabel("to"))
+        hours.addWidget(self.end)
+        hours.addWidget(QLabel("(an earlier end runs past midnight)"))
+        self.kind = QComboBox()
+        for kind, text in KINDS.items():
+            self.kind.addItem(text, kind)
+        self.kind.setCurrentIndex(max(0, list(KINDS).index(rule.kind)))
+        self.value = QDoubleSpinBox()
+        self.value.setRange(-100, MAX_PRICE)
+        self.value.setValue(rule.value)
+        self.value.setToolTip("Percent: −30 is 30% off, 20 is a 20% surcharge.")
+        types = QHBoxLayout()
+        self.types: list[QCheckBox] = []
+        for room_type in ROOM_TYPES:
+            box = QCheckBox(room_type)
+            box.setChecked(room_type in rule.room_types)
+            self.types.append(box)
+            types.addWidget(box)
+        self.active = QCheckBox("In use")
+        self.active.setChecked(rule.active)
+        form.addRow("Name", self.name)
+        form.addRow("Days", days)
+        form.addRow("Hours", hours)
+        form.addRow("Price", self.kind)
+        form.addRow("Value", self.value)
+        form.addRow("Room types (none = all)", types)
+        form.addRow("", self.active)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        form.addRow(buttons)
+
+    def rule(self) -> PriceRule:
+        start, end = self.start.time(), self.end.time()
+        return PriceRule(
+            self.name.text().strip() or "Time price",
+            tuple(i for i, box in enumerate(self.days) if box.isChecked()),
+            start.hour() * 60 + start.minute(),
+            end.hour() * 60 + end.minute(),
+            str(self.kind.currentData()),
+            self.value.value(),
+            tuple(box.text() for box in self.types if box.isChecked()),
+            self.active.isChecked(),
+        )
+
+
 class DealsSettings(QFrame):
     """Packages, coupons and the birthday discount."""
 
@@ -150,6 +229,7 @@ class DealsSettings(QFrame):
         note = QLabel(
             "A package sells room time and items at one price; pick it when you open a room."
             " Time beyond it is charged by the hour. Coupons are typed in at the till."
+            " Time prices change the hourly rate by weekday and hour; the first match wins."
         )
         note.setObjectName("muted")
         note.setWordWrap(True)
@@ -157,10 +237,12 @@ class DealsSettings(QFrame):
         lists = QHBoxLayout()
         self.package_list = QListWidget()
         self.coupon_list = QListWidget()
+        self.rule_list = QListWidget()
         for title, widget, add, edit, remove in (
             ("Packages", self.package_list, self.add_package, self.edit_package,
              self.remove_package),
             ("Coupons", self.coupon_list, self.add_coupon, self.edit_coupon, self.remove_coupon),
+            ("Time prices", self.rule_list, self.add_rule, self.edit_rule, self.remove_rule),
         ):  # fmt: skip
             box = QVBoxLayout()
             box.addWidget(QLabel(title))
@@ -209,6 +291,42 @@ class DealsSettings(QFrame):
             item = QListWidgetItem(f"{coupon.code} · {coupon.label(currency)} · {uses}{until}{off}")
             item.setData(Qt.ItemDataRole.UserRole, coupon)
             self.coupon_list.addItem(item)
+
+        self.rule_list.clear()
+        for rule in self.rules():
+            off = "" if rule.active else "  (off)"
+            self.rule_list.addItem(rule.label(currency) + off)
+
+    def rules(self) -> list[PriceRule]:
+        return rules_from_json(self.store.setting("price_rules", "[]"))
+
+    def save_rules(self, rules: list[PriceRule]) -> None:
+        self.store.set_setting("price_rules", rules_to_json(rules))
+        self.load()
+
+    def add_rule(self, rule: PriceRule | None = None) -> None:
+        if rule is None:
+            dialog = PriceRuleDialog(
+                PriceRule("", WEEKDAYS, 14 * 60, 18 * 60, "percent", -30), self
+            )
+            if not dialog.exec():
+                return
+            rule = dialog.rule()
+        self.save_rules([*self.rules(), rule])
+
+    def edit_rule(self) -> None:
+        row, rules = self.rule_list.currentRow(), self.rules()
+        if 0 <= row < len(rules):
+            dialog = PriceRuleDialog(rules[row], self)
+            if dialog.exec():
+                rules[row] = dialog.rule()
+                self.save_rules(rules)
+
+    def remove_rule(self) -> None:
+        row, rules = self.rule_list.currentRow(), self.rules()
+        if 0 <= row < len(rules):
+            del rules[row]
+            self.save_rules(rules)
 
     def _picked(self, widget: QListWidget) -> object:
         item = widget.currentItem()
