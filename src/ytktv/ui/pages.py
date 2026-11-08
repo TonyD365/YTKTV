@@ -947,6 +947,7 @@ class SettingsPage(Page):
         open_displays = QPushButton("Open Display Settings")
         open_displays.clicked.connect(open_display_settings)
         wireless.addWidget(open_displays, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.tv_card = wireless  # app.py adds Cast to Chromecast here
 
         # Vocals
         vocals = card("Vocal Separation", admin=True)
