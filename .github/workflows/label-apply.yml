@@ -17,16 +17,27 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
+      # Into a folder of its own: the artifact comes from the pull request's run, so nothing
+      # in it may land where the labeler looks for its config (that is read from main).
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pr-number
+          path: ${{ runner.temp }}/pr
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.AGENT_TOKEN || github.token }}
+          github-token: ${{ github.token }}
       - id: pr
-        # The number comes from a fork's run: accept nothing but digits.
+        # The number comes from a fork's run: accept nothing but digits, and only the pull
+        # request that run was for (same head commit), not any other.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          FILE: ${{ runner.temp }}/pr/pr-number
+          SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          number=$(head -c 12 pr-number | tr -d '\n')
+          number=$(head -c 12 "$FILE" | tr -d '\n')
           [[ "$number" =~ ^[0-9]+$ ]] || { echo "Not a pull request number"; exit 1; }
+          head=$(gh api "repos/$GH_REPO/pulls/$number" -q .head.sha)
+          [ "$head" = "$SHA" ] || { echo "Pull request $number is not the one that run was for"; exit 1; }
           echo "number=$number" >> "$GITHUB_OUTPUT"
       - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7
         with:

@@ -1,0 +1,71 @@
+# Drafts the changelog for the next release (Actions -> Changelog draft -> Run workflow, with
+# the version, e.g. 4.3.0): the pull requests merged since the latest release, one line each,
+# grouped by kind, in a new section at the top of CHANGELOG.md. TonyD365-Agent opens it as a
+# pull request, to be rewritten for users (what changed for them, not how) and reviewed.
+#
+# Runs from main only; reads titles through the API and passes them on in files and env
+# values, never in the script itself.
+name: Changelog draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version, e.g. 4.3.0
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          token: ${{ secrets.AGENT_TOKEN }}
+          fetch-depth: 0
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Version must look like 4.3.0"; exit 1; }
+          grep -q "^## $VERSION\$" CHANGELOG.md && { echo "::error::CHANGELOG.md already has $VERSION"; exit 1; }
+          last=$(gh release view --json tagName,publishedAt -q .publishedAt)
+          tag=$(gh release view --json tagName -q .tagName)
+          # Merged since the latest release; not the changelog's own pull requests or bots'.
+          gh pr list --state merged --base main --limit 200 \
+            --search "merged:>$last" --json number,title,author,labels,headRefName \
+            -q '.[] | select(.author.is_bot | not) | select(.headRefName | startswith("docs/changelog") | not)
+                | [ (if (.headRefName | test("^(fix|hotfix)/")) or (.title | test("(?i)\\bfix"))
+                     then "fix"
+                     elif (.headRefName | test("^(ci|build|chore)/")) or ([.labels[].name] | index("ci"))
+                     then "also" else "new" end),
+                    "\(.title) (#\(.number))" ] | @tsv' > prs.tsv
+          [ -s prs.tsv ] || { echo "::error::No pull requests merged since $tag"; exit 1; }
+          section() { awk -F'\t' -v k="$1" '$1 == k { print "- " $2 }' prs.tsv; }
+          {
+            echo "## $VERSION"
+            echo
+            echo "<!-- Draft from the pull requests merged since $tag: rewrite each line for users. -->"
+            for kind in "new|### ✨ New" "fix|### 🐛 Fixes" "also|### 🔧 Also"; do
+              lines=$(section "${kind%%|*}")
+              [ -n "$lines" ] && printf '\n%s\n%s\n' "${kind#*|}" "$lines"
+            done
+            echo
+          } > section.md
+          # Put it above the latest release's section.
+          awk 'FNR == NR { s = s $0 "\n"; next } !done && /^## / { printf "%s\n", s; done = 1 } { print }' \
+            section.md CHANGELOG.md > CHANGELOG.new && mv CHANGELOG.new CHANGELOG.md
+          branch="docs/changelog-$VERSION"
+          git config user.name TonyD365-Agent
+          git config user.email "$(gh api user -q .id)+TonyD365-Agent@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -qam "Changelog: $VERSION (draft)"
+          git push -q origin "$branch"
+          printf '%s\n' "Draft of the changelog for $VERSION, from the pull requests merged since $tag." "" \
+            "Before approving: rewrite the lines for users (what changed for them), merge or drop small ones, and add a bold note at the top for a security update or anything users must do." > body.md
+          gh pr create --base main --head "$branch" --title "Changelog: $VERSION" --body-file body.md
