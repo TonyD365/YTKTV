@@ -308,7 +308,7 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
           PYTHON: python
@@ -436,7 +436,7 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
           PYTHON: python
@@ -501,7 +501,7 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
         run: packaging/make_patches.sh macos
@@ -550,7 +550,7 @@ jobs:
         if: github.event_name == 'release'
         working-directory: installer/dist
         env:
-          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
@@ -587,7 +587,7 @@ jobs:
           cat SHA256SUMS
       - name: Upload to the release
         env:
-          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$TAG" installers/* --clobber
@@ -596,7 +596,7 @@ jobs:
           sparse-checkout: packaging/release
       - name: Install instructions at the end of the notes
         env:
-          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
