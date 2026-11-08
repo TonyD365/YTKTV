@@ -9,6 +9,7 @@
 # - contribution terms, like a CLA bot: the terms are posted as a comment, the author replies
 #   "I agree to the YTKTV contribution terms", and a "Contribution terms" check turns green
 #   (labels Needs-Terms-Agreement / Terms-Agreed). Agreeing once covers later pull requests.
+# - a thank-you comment when a contributor's pull request is merged.
 # - a "YTKTV checks" status that is green only when every check passed and the terms are
 #   agreed (the one check the ruleset requires), and, once the maintainer approves, GitHub's
 #   auto-merge, so an approved pull request merges by itself when that turns green.
@@ -23,7 +24,7 @@ on:
     workflows: [CI, Security, Installer tests, Area tests, Benchmark, Apply pull request labels, Review noted]
     types: [completed]
   pull_request_target:
-    types: [opened, reopened, ready_for_review, synchronize, edited]
+    types: [opened, reopened, ready_for_review, synchronize, edited, closed]
   issue_comment:
     types: [created, edited]
   push:
@@ -479,3 +480,30 @@ jobs:
             "- **Questions** are welcome right here, in English or Chinese." \
             > welcome.md
           gh pr comment "$NUMBER" --body-file welcome.md >/dev/null
+
+  thanks:
+    # A contributor's pull request was merged (usually by auto-merge after approval): say thanks.
+    if: >-
+      github.event_name == 'pull_request_target' && github.event.action == 'closed' &&
+      github.event.pull_request.merged &&
+      github.event.pull_request.user.type != 'Bot' &&
+      github.event.pull_request.user.login != 'TonyD365-Agent' &&
+      github.event.pull_request.author_association != 'OWNER'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            "<!-- ytktv-thanks -->" \
+            "### 🎉 Merged! Thank you for your contribution, @$AUTHOR!" \
+            "" \
+            "Your change is now on \`main\` and will ship in the next YTKTV release." \
+            "Ideas, bug reports and more pull requests are always welcome. 🎤" \
+            > thanks.md
+          gh pr comment "$NUMBER" --body-file thanks.md >/dev/null
