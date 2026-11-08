@@ -3,6 +3,14 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 5.0.0
+
+<!-- Draft from the pull requests merged since v4.2.0: rewrite each line for users. -->
+
+### 🔧 Also
+- Release token scope, safer label step, changelog draft workflow (#201)
+
+
 ## 4.2.0
 
 **Update YTKTV Desk and every room's YTKTV to 4.2.0 together.** The Desk and the rooms now name the room in every message the Desk signs; a room on 4.2.0 ignores an "unpair" from an older Desk. Everything else between them keeps working while you update.
