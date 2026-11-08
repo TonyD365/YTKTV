@@ -70,6 +70,7 @@ class RemoteKeys(QObject):
             "Key down": lambda: c.set_pitch(c.pitch - 1),
             "Lyrics on / off": lambda: c.set_show_lyrics(not c.settings.show_lyrics),
             "Scoring on / off": lambda: c.set_scoring(not c.settings.scoring),
+            "Pitch guide on / off": lambda: c.set_pitch_guide(not c.settings.pitch_guide),
         }
         self.by_key = {key: actions[name] for keys, name in KEYS for key in keys}
 

@@ -685,9 +685,10 @@ class KTVController:
         self.bus.emit("melody", None)  # the MV screen fetches it with melody()
 
     def melody(self) -> dict[str, Any] | None:
-        """The tune the current song is scored against, for drawing; None when not scoring."""
+        """The tune the current song is scored against, for drawing; None when not scoring
+        or when the pitch guide is turned off."""
         keeper = self._keeper
-        if keeper is None:
+        if keeper is None or not self.settings.pitch_guide:
             return None
         return {
             "hop": keeper.melody.hop,
@@ -787,6 +788,13 @@ class KTVController:
             if scene.sound:
                 self.play_sfx(scene.sound)
             self.toast(scene.message or scene.title)
+        self._emit_state()
+
+    def set_pitch_guide(self, enabled: bool) -> None:
+        """Show or hide the melody lane on the MV screen; scoring is not affected."""
+        self.settings.pitch_guide = bool(enabled)
+        self._save_soon()
+        self.bus.emit("melody", {})
         self._emit_state()
 
     def set_lights(self, enabled: bool) -> None:
@@ -1507,6 +1515,7 @@ class KTVController:
             "idle_mv": settings.idle_mv,
             "idle_playing": self.idle_playing,
             "scoring": settings.scoring,
+            "pitch_guide": settings.pitch_guide,
             "scoring_active": self._keeper is not None,
             "last_score": self.last_score,
             "scoreboard": self.scoreboard.top(10),
