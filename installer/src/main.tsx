@@ -190,17 +190,21 @@ async function main(): Promise<void> {
       const asset = assets[i];
       const file = join(work, asset.name);
       await progress(asset.name, (update) => download(asset.browser_download_url, file, asset.size, update));
+      // Without a checksum to compare with, nothing is installed.
       const expected = sums.get(asset.name);
-      if (expected) {
-        await task("Checking the download…", async () => {
-          if ((await sha256(file)) !== expected) throw new Error("The download is damaged (checksum mismatch). Please try again.");
-        }, () => "Checksum OK");
+      if (!expected) {
+        throw new Error(`Could not get the checksum for ${asset.name} (SHA256SUMS), so it was not installed. Please try again in a few minutes.`);
       }
+      await task("Checking the download…", async () => {
+        if ((await sha256(file)) !== expected) throw new Error("The download is damaged (checksum mismatch). Please try again.");
+      }, () => "Checksum OK");
       if (sys.SYSTEM === "macOS") await askPassword(app);
       await task(`Installing ${label(app)} ${latest}…`, () => sys.install(app, file, latest), () => `Installed ${label(app)} ${latest}`);
     }
   } finally {
     rmSync(work, { recursive: true, force: true });
+    // Done with root: forget the password now rather than leaving sudo open for minutes.
+    if (sys.SYSTEM === "macOS") Bun.spawnSync(["sudo", "-k"], { stdout: "ignore", stderr: "ignore" });
   }
 
   // mpv, for YTKTV (the Desk does not play songs).

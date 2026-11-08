@@ -21,6 +21,9 @@
 # for your password once). Downloaded this way, macOS does not quarantine it, so there is
 # no "damaged" warning and no xattr step.
 # Linux: puts the AppImage in ~/Applications and makes it runnable.
+# All in one { } block: bash reads it whole before running any of it, so a download cut
+# off part-way through runs nothing instead of half the script.
+{
 set -euo pipefail
 
 REPO="TonyD365/YTKTV"
@@ -454,13 +457,12 @@ for app in "${APPS[@]}"; do
   say "${LABEL}: downloading ${NAME}"
   download "$URL" "$WORK/$NAME" "$(size_of "$app")" || fail "The download failed 5 times. Check the internet connection and try again."
   ok "Downloaded"
-  # Check the download against the release's SHA256SUMS, when it has one.
+  # Check the download against the release's SHA256SUMS; without one, nothing is installed.
   EXPECTED=$(printf '%s\n' "$SUMS" | grep " \*\?$NAME\$" | cut -d' ' -f1 || true)
-  if [ -n "$EXPECTED" ]; then
-    spin "Checking the download…" sum_of "$WORK/$NAME" >"$WORK/actual"
-    [ "$(cat "$WORK/actual")" = "$EXPECTED" ] || fail "The download is damaged (checksum mismatch). Please try again."
-    ok "Checksum OK"
-  fi
+  [ -n "$EXPECTED" ] || fail "Could not get the checksum for ${NAME} (SHA256SUMS), so it was not installed. Please try again in a few minutes."
+  spin "Checking the download…" sum_of "$WORK/$NAME" >"$WORK/actual"
+  [ "$(cat "$WORK/actual")" = "$EXPECTED" ] || fail "The download is damaged (checksum mismatch). Please try again."
+  ok "Checksum OK"
   case "$SUFFIX" in
     *.pkg)
       spin "Installing ${LABEL}…" sudo installer -pkg "$WORK/$NAME" -target / >/dev/null \
@@ -475,6 +477,8 @@ for app in "${APPS[@]}"; do
   esac
   ok "Installed ${LABEL} ${LATEST}"
 done
+# Done with root: forget the password now rather than leaving sudo open for minutes.
+[ "$SUFFIX" = "macos-universal.pkg" ] && sudo -k
 
 # --- mpv (YTKTV plays songs through it; the Desk does not need it) --------------------
 mpv_found() {
@@ -536,3 +540,4 @@ elif [ "$SUFFIX" != "macos-universal.pkg" ]; then
   for app in "${APPS[@]}"; do printf '\n  Run it with: %s%s%s' "$B" "$(app_path "$app")" "$R"; done
 fi
 printf '\n\n'
+}
