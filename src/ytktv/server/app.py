@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import ipaddress
 import json
 import logging
 import random
@@ -178,6 +179,32 @@ class ServiceIn(BaseModel):
     items: list[OrderItem] = Field(default_factory=list, max_length=50)
 
 
+def _host_name(value: str) -> str:
+    """The host part of a Host header or an Origin, without the port."""
+    value = value.split("://", 1)[-1].split("/", 1)[0].strip().lower()
+    if value.startswith("["):
+        return value[1:].split("]", 1)[0]
+    return value.rsplit(":", 1)[0] if value.count(":") == 1 else value
+
+
+def _trusted_host(host: str) -> bool:
+    """Phones reach the remote by the computer's address (the QR code) or its .local name.
+
+    Any other name is a web page that pointed its own domain at this computer (DNS
+    rebinding) to drive the room from a guest's browser, so it is refused.
+    """
+    if host in ("localhost", "testserver") or host.endswith(".local"):
+        return True
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
+
+
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
 def create_app(controller: KTVController, source: SongSource) -> FastAPI:
     broadcaster = _Broadcaster()
 
@@ -190,6 +217,34 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
         broadcaster.loop = None
 
     app = FastAPI(title="YTKTV", docs_url=None, redoc_url=None, lifespan=lifespan)
+
+    def _allowed(headers: Any, method: str) -> bool:
+        host = _host_name(headers.get("host", ""))
+        if not _trusted_host(host):
+            return False
+        # Another site's page may send requests here without reading the answer; only
+        # this page (same origin) may change anything.
+        origin = headers.get("origin")
+        if method not in _SAFE_METHODS and origin is not None:
+            return _host_name(origin) == host
+        return True
+
+    class SameSiteOnly:
+        """Plain ASGI (FastAPI's @app.middleware("http") costs ~0.7 ms per request)."""
+
+        def __init__(self, inner: Any) -> None:
+            self.inner = inner
+
+        async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+            if scope["type"] == "http":
+                headers = {k.decode("latin-1"): v.decode("latin-1") for k, v in scope["headers"]}
+                if not _allowed(headers, scope["method"]):
+                    refused = JSONResponse({"detail": "Forbidden"}, status_code=403)
+                    await refused(scope, receive, send)
+                    return
+            await self.inner(scope, receive, send)
+
+    app.add_middleware(SameSiteOnly)
 
     @app.exception_handler(PermissionError)
     async def room_closed(_request: Request, exc: PermissionError) -> JSONResponse:
@@ -498,6 +553,10 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
 
     @app.websocket("/ws")
     async def websocket(ws: WebSocket) -> None:
+        # Browsers let any page open a WebSocket here, so check where it comes from.
+        if not _allowed(ws.headers, "WEBSOCKET"):
+            await ws.close(code=1008)
+            return
         await ws.accept()
         inbox: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
         broadcaster.clients.add(inbox)

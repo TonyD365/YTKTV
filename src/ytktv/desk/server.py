@@ -33,12 +33,20 @@ class PairIn(BaseModel):
 class Channel:
     """One room's authenticated connection; messages are signed and numbered."""
 
-    def __init__(self, ws: WebSocket, store: DeskStore, room_nonce: str) -> None:
-        self.ws, self.store, self.room_nonce, self.seq = ws, store, room_nonce, 0
+    def __init__(self, ws: WebSocket, store: DeskStore, room_nonce: str, room_id: str = "") -> None:
+        self.ws, self.store, self.room_nonce, self.room_id, self.seq = (
+            ws,
+            store,
+            room_nonce,
+            room_id,
+            0,
+        )
 
     async def send(self, message: dict[str, Any]) -> None:
         self.seq += 1
-        body = json.dumps({**message, "seq": self.seq}, sort_keys=True)
+        # Naming the room in the signed body keeps a message for one room (an unbind for an
+        # id the desk does not know) from being passed on to another.
+        body = json.dumps({**message, "seq": self.seq, "room": self.room_id}, sort_keys=True)
         signature = self.store.sign(f"{self.room_nonce}|{body}".encode())
         await self.ws.send_text(json.dumps({"body": body, "sig": signature}))
 
@@ -145,7 +153,7 @@ def create_desk_app(
         hub.loop = asyncio.get_running_loop()
         hello = json.loads(await ws.receive_text())
         room_id, room_nonce = str(hello.get("room_id", "")), str(hello.get("nonce", ""))
-        channel = Channel(ws, store, room_nonce)
+        channel = Channel(ws, store, room_nonce, room_id)
         key = store.key(room_id)
         if key is None or len(room_nonce) < 16:
             await channel.send({"type": "unbind"})  # signed, so the room can trust it
