@@ -104,6 +104,9 @@ jobs:
           # Contribution terms (maintainer and bots excepted): agreed when the author has written
           # the sentence in a comment on this pull request or on any earlier one of theirs here.
           PHRASE="I agree to the YTKTV contribution terms"
+          # By the account's number, which stays when a login is renamed (entries from before
+          # numbers were recorded are matched by login).
+          author_id=$(gh api "repos/$GH_REPO/pulls/$NUMBER" -q .user.id)
           # The record: an issue labelled terms-ledger, one bot comment per agreement or
           # withdrawal; the latest one for a person decides (see the terms job below).
           ledger=$(gh issue list --state all --label terms-ledger --json number -q '.[0].number')
@@ -111,7 +114,8 @@ jobs:
             [ -n "$ledger" ] || { echo none; return; }
             gh api --paginate "repos/$GH_REPO/issues/$ledger/comments?per_page=100" \
               -q ".[] | select(.user.login == \"$ME\") | .body | split(\"\n\")[0]" |
-              sed -n "s/^<!-- terms:\(agreed\|declined\):$author -->$/\1/p" | tail -n 1 | grep . || echo none
+              sed -n -e "s/^<!-- terms:\(agreed\|declined\):id=$author_id:.* -->$/\1/p" \
+                     -e "s/^<!-- terms:\(agreed\|declined\):$author -->$/\1/p" | tail -n 1 | grep . || echo none
           }
           ME=$(gh api user -q .login 2>/dev/null || echo "github-actions[bot]")
           case "$author" in
@@ -150,6 +154,12 @@ jobs:
 
           internal=$(awk -F'\t' '$3=="cancelled"||$3=="timed_out"||$3=="startup_failure"||$3=="stale"' checks.tsv | wc -l | tr -d ' ')
           review=$(jq -r .reviewDecision <<<"$pr")
+          # The latest review asking for changes, to point to it.
+          if [ "$review" = CHANGES_REQUESTED ]; then
+            asked=$(gh api "repos/$GH_REPO/pulls/$NUMBER/reviews?per_page=100" \
+              -q '[.[] | select(.state == "CHANGES_REQUESTED")] | last | "\(.user.login)\t\(.html_url)"')
+            asked_by=${asked%%$'\t'*}; asked_url=${asked#*$'\t'}
+          fi
 
           # Status labels: exactly the ones that fit now.
           want=()
@@ -159,13 +169,14 @@ jobs:
           [ "$total" != 0 ] && [ "$running" = 0 ] && [ "$failed" = 0 ] && want+=(Checks-Passed)
           if [ "$failed" != 0 ] || [ "$terms" = no ] || [ "$review" = CHANGES_REQUESTED ] || [ -n "$conflict" ]; then want+=(Needs-Author-Action); fi
           [ -n "$conflict" ] && want+=(Merge-Conflict)
+          [ "$review" = CHANGES_REQUESTED ] && want+=(Changes-Requested)
           [ "$terms" = no ] && want+=(Needs-Terms-Agreement)
           [ "$terms" = yes ] && want+=(Terms-Agreed)
           [ -n "${declined:-}" ] && want+=(Terms-Declined)
           if [ "$review" = APPROVED ]; then want+=(Maintainer-Approved); else want+=(Needs-Review); fi
           declare -A colours=([Checks-Running]=c5def5 [Checks-Passed]=0e8a16 [Checks-Failed]=d73a4a
             [Internal-Error]=e99695 [Needs-Author-Action]=b60205 [Needs-Review]=fbca04
-            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7 [Terms-Agreed]=c2e0c6 [Terms-Declined]=000000 [Merge-Conflict]=d93f0b)
+            [Maintainer-Approved]=1d7a3b [Needs-Terms-Agreement]=5319e7 [Terms-Agreed]=c2e0c6 [Terms-Declined]=000000 [Merge-Conflict]=d93f0b [Changes-Requested]=e4e669)
           have=$(jq -r '.labels[].name' <<<"$pr")
           for label in "${!colours[@]}"; do
             if printf '%s\n' "${want[@]}" | grep -qx "$label"; then
@@ -192,14 +203,17 @@ jobs:
           fi
 
           # The kind of status: a new kind is posted as a new comment (see the end).
-          if [ -n "$conflict" ]; then kind=conflict
+          if [ "$review" = CHANGES_REQUESTED ]; then kind=changes
+          elif [ -n "$conflict" ]; then kind=conflict
           elif [ "$terms" = no ]; then kind=terms
           elif [ "$total" = 0 ] || [ "$running" != 0 ] && [ "$failed" = 0 ]; then kind=running
           elif [ "$failed" != 0 ]; then kind=failed
           else kind="passed-$review"; fi
           {
             echo "<!-- ytktv-pr-assistant kind=$kind -->"
-            if [ "$total" = 0 ]; then
+            if [ "$review" = CHANGES_REQUESTED ]; then
+              echo "### ✋ Changes requested"
+            elif [ "$total" = 0 ]; then
               echo "### ⏳ Checks are starting"
             elif [ "$failed" != 0 ]; then
               echo "### ❌ $failed of $total checks failed"
@@ -210,6 +224,10 @@ jobs:
             fi
             echo
             echo "Hi @$author, I keep this comment up to date with the state of this pull request."
+            if [ "$review" = CHANGES_REQUESTED ]; then
+              echo
+              echo "**The maintainer (\`${asked_by:-maintainer}\`) asked for changes before this can be merged.** Please read [the review](${asked_url:-$SERVER/$GH_REPO/pull/$NUMBER/files}), make the changes and push them; the review is then looked at again. Auto-merge stays off until it is approved."
+            fi
             if [ "$failed" != 0 ]; then
               echo
               echo "**What failed, and what it usually means**"
@@ -244,6 +262,8 @@ jobs:
             echo "**Next**"
             if [ "$(jq -r .isDraft <<<"$pr")" = true ]; then
               echo "- This is a draft: mark it ready for review when it is done."
+            elif [ "$review" = CHANGES_REQUESTED ]; then
+              echo "- Make the changes asked for in the review and push them."
             elif [ -n "$conflict" ]; then
               echo "- Resolve the merge conflict with \`main\` (see above) and push."
             elif [ "$terms" = no ]; then
@@ -292,7 +312,8 @@ jobs:
           SERVER: ${{ github.server_url }}
           NUMBER: ${{ github.event.issue.number }}
           WHO: ${{ github.event.comment.user.login }}
-          AUTHOR: ${{ github.event.issue.user.login }}
+          WHO_ID: ${{ github.event.comment.user.id }}
+          AUTHOR_ID: ${{ github.event.issue.user.id }}
           BODY: ${{ github.event.comment.body }}
           LINK: ${{ github.event.comment.html_url }}
         run: |
@@ -304,19 +325,28 @@ jobs:
             "i do not agree to the ytktv contribution terms"|"i don't agree to the ytktv contribution terms") what=declined ;;
             *) exit 0 ;;
           esac
-          [ "$WHO" = "$AUTHOR" ] || { echo "only the pull request's author can answer for it"; exit 0; }
+          [ "$WHO_ID" = "$AUTHOR_ID" ] || { echo "only the pull request's author can answer for it"; exit 0; }
 
           # The ledger issue, made (and locked, so only the bot writes) the first time.
           ledger=$(gh issue list --state all --label terms-ledger --json number -q '.[0].number')
           if [ -z "$ledger" ]; then
             gh label create terms-ledger --color ededed --description "Record of contribution terms agreements" 2>/dev/null || true
-            url=$(gh issue create --label terms-ledger --title "Contribution terms: agreements (kept by the bot)" \
-              --body "The bot records here who agreed to the [contribution terms]($SERVER/$GH_REPO/blob/main/CONTRIBUTING.md#contribution-terms), and who withdrew. The latest entry for a person counts. Please do not edit.")
+            printf '%s\n' \
+              "This issue is the record of who agreed to the [contribution terms]($SERVER/$GH_REPO/blob/main/CONTRIBUTING.md#contribution-terms). The bot keeps it; it is closed and locked so it stays out of the way." \
+              "" \
+              "- **To agree**, reply on your pull request: \`I agree to the YTKTV contribution terms\`" \
+              "- **To withdraw**, reply on any of your pull requests: \`I do not agree to the YTKTV contribution terms\`" \
+              "" \
+              "One entry per answer, newest last. A person's latest entry counts; people are matched by their account number, so a renamed account keeps its agreement." > ledger.md
+            url=$(gh issue create --label terms-ledger --title "Contribution terms: agreements (kept by the bot)" --body-file ledger.md)
             ledger=${url##*/}
             gh issue lock "$ledger" --reason resolved >/dev/null 2>&1 || true
+            gh issue close "$ledger" >/dev/null 2>&1 || true
           fi
-          if [ "$what" = agreed ]; then entry="Agreed: \`$WHO\` on #$NUMBER ($LINK)"; else entry="Withdrawn / declined: \`$WHO\` on #$NUMBER ($LINK)"; fi
-          printf '%s\n%s\n' "<!-- terms:$what:$WHO -->" "$entry" > entry.md
+          when=$(date -u '+%Y-%m-%d %H:%M UTC')
+          if [ "$what" = agreed ]; then mark="✅ **Agreed**"; else mark="❌ **Withdrawn**"; fi
+          entry="$mark · \`$WHO\` (account $WHO_ID) · PR #$NUMBER · [their comment]($LINK) · $when"
+          printf '%s\n%s\n' "<!-- terms:$what:id=$WHO_ID:$WHO -->" "$entry" > entry.md
           gh issue comment "$ledger" --body-file entry.md >/dev/null
 
           head=$(gh pr view "$NUMBER" --json headRefOid -q .headRefOid)
