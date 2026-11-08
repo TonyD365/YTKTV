@@ -2,8 +2,13 @@
 #
 #   /help                      what the bot can do (anyone)
 #   /retest                    re-run the failed or cancelled checks (the PR's author or a maintainer)
+#   /benchmark                 compare the speed with main again (author or maintainer)
+#   /ready                     mark a draft ready for review (author or maintainer)
+#   /close, /reopen            close or reopen the pull request (author or maintainer)
 #   /run <area>                run an area's heavier tests: packaging, installer, desk, separation
-#                              (maintainers only: they use the free CI minutes)
+#   /label <names>, /unlabel <names>   add or remove labels (maintainers)
+# A maintainer is the owner or a collaborator of the repository; /run and /label are theirs
+# because they use the free CI minutes or change what others see.
 #
 # Every day: a pull request waiting on its author (Needs-Author-Action) with no activity from
 # them for 14 days gets the Stale label and a reminder; 14 more days and it is closed, with a
@@ -45,17 +50,30 @@ jobs:
           COMMENT_ID: ${{ github.event.comment.id }}
         run: |
           set -euo pipefail
-          line=$(printf '%s' "$BODY" | head -n 1 | tr -d '\r' | tr '[:upper:]' '[:lower:]')
-          read -r cmd arg _ <<<"$line" || true
+          line=$(printf '%s' "$BODY" | head -n 1 | tr -d '\r')
+          read -r cmd arg _ <<<"$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')" || true
+          rest=$(printf '%s' "$line" | sed -E 's#^/[A-Za-z]+[[:space:]]*##')  # as typed, for labels
           case "$ROLE" in OWNER|MEMBER|COLLABORATOR) maintainer=1 ;; *) maintainer="" ;; esac
           react() { gh api -X POST "repos/$GH_REPO/issues/comments/$COMMENT_ID/reactions" -f content="$1" >/dev/null || true; }
           reply() { printf '%s\n' "$@" > reply.md; gh pr comment "$NUMBER" --body-file reply.md >/dev/null; }
+          author_or_maintainer() {
+            [ "$WHO_ID" = "$AUTHOR_ID" ] || [ -n "$maintainer" ] && return 0
+            react confused; reply "Sorry @$WHO, only the pull request's author or a maintainer can use \`$cmd\`."; exit 0
+          }
+          maintainer_only() {
+            [ -n "$maintainer" ] && return 0
+            react confused; reply "Sorry @$WHO, \`$cmd\` is for maintainers (the repository's owner and collaborators)."; exit 0
+          }
           case "$cmd" in
             /help)
               react eyes
               reply "Commands for this pull request (write them at the start of a comment):" "" \
                 "- \`/retest\`: re-run the checks that failed or were cancelled (the author or a maintainer)." \
+                "- \`/benchmark\`: compare the speed with \`main\` again, e.g. after a slowdown that may be a busy runner (author or maintainer)." \
+                "- \`/ready\`: mark a draft as ready for review (author or maintainer)." \
+                "- \`/close\`, \`/reopen\`: close or reopen this pull request (author or maintainer)." \
                 "- \`/run packaging\`, \`/run installer\`, \`/run desk\`, \`/run separation\`: run that part's heavier tests (maintainers)." \
+                "- \`/label name ...\`, \`/unlabel name ...\`: add or remove labels (maintainers)." \
                 "- \`/help\`: this list." "" \
                 "Other things the bot answers: \`I agree to the YTKTV contribution terms\` and \`I do not agree to the YTKTV contribution terms\`."
               ;;
@@ -92,6 +110,46 @@ jobs:
               gh label create "$arg" --color ededed 2>/dev/null || true
               gh api -X POST "repos/$GH_REPO/issues/$NUMBER/labels" -f "labels[]=$arg" >/dev/null
               reply "🚀 Starting the \`$arg\` tests for this pull request (they show among its checks)."
+              ;;
+            /benchmark)
+              author_or_maintainer; react eyes
+              head=$(gh pr view "$NUMBER" --json headRefOid -q .headRefOid)
+              id=$(gh run list --workflow benchmark.yml --commit "$head" --limit 1 --json databaseId -q '.[0].databaseId')
+              if [ -z "$id" ]; then reply "No benchmark run found for the latest commit."; exit 0; fi
+              gh run rerun "$id" >/dev/null && reply "🔁 Measuring again: the benchmark comment updates when it is done."
+              ;;
+            /ready)
+              author_or_maintainer
+              if [ "$(gh pr view "$NUMBER" --json isDraft -q .isDraft)" != true ]; then reply "This pull request is not a draft."; exit 0; fi
+              node=$(gh pr view "$NUMBER" --json id -q .id)
+              gh api graphql -f query='mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){clientMutationId}}' -f id="$node" >/dev/null
+              react "+1"; reply "✅ Marked ready for review."
+              ;;
+            /close)
+              author_or_maintainer
+              gh api -X PATCH "repos/$GH_REPO/pulls/$NUMBER" -f state=closed >/dev/null
+              react "+1"; reply "Closed on request of @$WHO. Comment \`/reopen\` to open it again."
+              ;;
+            /reopen)
+              author_or_maintainer
+              gh api -X PATCH "repos/$GH_REPO/pulls/$NUMBER" -f state=open >/dev/null
+              react "+1"; reply "Reopened on request of @$WHO."
+              ;;
+            /label|/unlabel)
+              maintainer_only
+              [ -n "$rest" ] || { reply "Usage: \`$cmd name\` (several names separated by spaces or commas)."; exit 0; }
+              done_list=""
+              for name in $(printf '%s' "$rest" | tr ',' ' '); do
+                if [ "$cmd" = /label ]; then
+                  gh label create "$name" --color ededed 2>/dev/null || true
+                  gh api -X POST "repos/$GH_REPO/issues/$NUMBER/labels" -f "labels[]=$name" >/dev/null && done_list="$done_list \`$name\`"
+                else
+                  name_url=$(jq -rn --arg n "$name" '$n|@uri')
+                  gh api -X DELETE "repos/$GH_REPO/issues/$NUMBER/labels/$name_url" >/dev/null 2>&1 && done_list="$done_list \`$name\`"
+                fi
+              done
+              react "+1"
+              if [ "$cmd" = /label ]; then reply "Added:${done_list:- nothing}"; else reply "Removed:${done_list:- nothing}"; fi
               ;;
             *) exit 0 ;;
           esac

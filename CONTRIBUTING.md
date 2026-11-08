@@ -41,9 +41,13 @@ a slowdown of more than 25% fails the pull request.
 
 ### The checks on a pull request
 
-**Commands** (at the start of a comment on the pull request): `/retest` re-runs the checks that
-failed or were cancelled (you or a maintainer); `/run packaging`, `/run installer`, `/run desk`
-and `/run separation` run that part's heavier tests (maintainers); `/help` lists them.
+**Commands** (at the start of a comment on the pull request):
+
+- `/retest` re-runs the checks that failed or were cancelled; `/benchmark` measures the speed
+  again; `/ready` marks a draft ready for review; `/close` and `/reopen` (you or a maintainer).
+- `/run packaging`, `/run installer`, `/run desk`, `/run separation` run that part's heavier
+  tests; `/label` and `/unlabel` add or remove labels (maintainers: the owner and collaborators).
+- `/help` lists them.
 
 A pull request that waits on its author (`Needs-Author-Action`) with no push or comment from
 them for 14 days gets the `Stale` label and a reminder, and is closed after 14 more days. It

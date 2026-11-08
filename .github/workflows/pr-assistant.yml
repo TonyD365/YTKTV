@@ -79,11 +79,13 @@ jobs:
           author=$(jq -r .author.login <<<"$pr")
 
           # Every check on the latest commit.
+          # Only the latest run of each check (a re-run replaces the earlier result), not this job.
           gh api "repos/$GH_REPO/commits/$head/check-runs?per_page=100" \
-            -q '.check_runs[] | [.name, .status, (.conclusion // ""), .html_url] | @tsv' \
-            | grep -v -P '^comment\t' | sort -u > checks.tsv || true  # not this job itself
+            -q '[.check_runs[] | select(.name != "comment")] | group_by(.name) | map(max_by(.started_at // ""))[]
+                | [.name, .status, (.conclusion // ""), .html_url] | @tsv' > checks.tsv || true
           total=$(wc -l < checks.tsv | tr -d ' ')
-          failed=$(awk -F'\t' '$3=="failure"||$3=="timed_out"||$3=="cancelled"' checks.tsv | wc -l | tr -d ' ')
+          # Cancelled is not the change's fault: it counts as an internal error, not a failure.
+          failed=$(awk -F'\t' '$3=="failure"||$3=="timed_out"' checks.tsv | wc -l | tr -d ' ')
           running=$(awk -F'\t' '$2!="completed"' checks.tsv | wc -l | tr -d ' ')
 
           hint() {  # what a failed check usually means, and what to do
@@ -148,7 +150,7 @@ jobs:
           gh api -X POST "repos/$GH_REPO/statuses/$head" -f state="$state" -f context="Contribution terms" \
             -f description="$desc" -f target_url="$SERVER/$GH_REPO/blob/main/CONTRIBUTING.md#contribution-terms" >/dev/null
 
-          internal=$(awk -F'\t' '$3=="cancelled"||$3=="timed_out"||$3=="startup_failure"||$3=="stale"' checks.tsv | wc -l | tr -d ' ')
+          internal=$(awk -F'\t' '$3=="cancelled"||$3=="startup_failure"||$3=="stale"' checks.tsv | wc -l | tr -d ' ')
           review=$(jq -r .reviewDecision <<<"$pr")
 
           # Status labels: exactly the ones that fit now.
@@ -180,6 +182,7 @@ jobs:
           # One status for the ruleset to require, and auto-merge once approved.
           if [ "$total" = 0 ] || [ "$running" != 0 ]; then agg=pending; aggdesc="Checks are running"
           elif [ "$failed" != 0 ]; then agg=failure; aggdesc="$failed check(s) failed"
+          elif [ "$internal" != 0 ]; then agg=failure; aggdesc="$internal check(s) cancelled: comment /retest"
           elif [ "$terms" = no ]; then agg=failure; aggdesc="Contribution terms not agreed yet"
           else agg=success; aggdesc="Every check passed"; fi
           [ "$agg" = pending ] && [ "$terms" = no ] && aggdesc="Checks are running; terms not agreed yet"
@@ -196,6 +199,7 @@ jobs:
           elif [ "$terms" = no ]; then kind=terms
           elif [ "$total" = 0 ] || [ "$running" != 0 ] && [ "$failed" = 0 ]; then kind=running
           elif [ "$failed" != 0 ]; then kind=failed
+          elif [ "$internal" != 0 ]; then kind=internal
           else kind="passed-$review"; fi
           {
             echo "<!-- ytktv-pr-assistant kind=$kind -->"
@@ -205,6 +209,8 @@ jobs:
               echo "### ❌ $failed of $total checks failed"
             elif [ "$running" != 0 ]; then
               echo "### ⏳ $running of $total checks still running"
+            elif [ "$internal" != 0 ]; then
+              echo "### ⚠️ $internal of $total checks were cancelled"
             else
               echo "### ✅ All $total checks passed"
             fi
@@ -214,7 +220,7 @@ jobs:
               echo
               echo "**What failed, and what it usually means**"
               echo
-              awk -F'\t' '$3=="failure"||$3=="timed_out"||$3=="cancelled"' checks.tsv |
+              awk -F'\t' '$3=="failure"||$3=="timed_out"' checks.tsv |
                 while IFS=$'\t' read -r name _status _conclusion url; do
                   echo "- [$name]($url): $(hint "$name")"
                 done
@@ -225,7 +231,7 @@ jobs:
             fi
             if [ "$internal" != 0 ]; then
               echo
-              echo "**Internal error:** $internal check(s) were cancelled or timed out, which is usually GitHub, not this change. A maintainer can re-run them."
+              echo "**Internal error:** $internal check(s) were cancelled or could not start, which is usually GitHub, not this change. Comment \`/retest\` to run them again."
             fi
             if [ "$terms" = no ]; then
               echo
@@ -252,6 +258,8 @@ jobs:
               echo "- Fix the failures above and push; the checks run again by themselves."
             elif [ "$running" != 0 ]; then
               echo "- Wait for the running checks; this comment updates when they finish."
+            elif [ "$internal" != 0 ]; then
+              echo "- Comment \`/retest\` to run the cancelled checks again."
             fi
             case "$review" in
               APPROVED) echo "- Approved by the maintainer: it merges by itself once every check passes (auto-merge is on)." ;;

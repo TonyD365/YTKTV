@@ -18,7 +18,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: installer-tests-${{ github.event.pull_request.number || github.ref }}
+  # A label event (the bot labels every pull request) gets a group of its own, so it never
+  # cancels the run for the pull request's files that is under way.
+  group: installer-tests-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name || 'files' }}
   cancel-in-progress: true
 
 jobs:
