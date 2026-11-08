@@ -278,6 +278,52 @@ class TakingsChart(QWidget):
         painter.end()
 
 
+class HeatMap(QWidget):
+    """A grid of weekdays by hours of the day, brighter where more rooms were in use."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setMinimumHeight(150)
+        self.cells: list[list[float]] = []
+
+    def set_cells(self, cells: list[list[float]]) -> None:
+        self.cells = cells
+        self.update()
+
+    def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt's name
+        if not self.cells:
+            return
+        painter = QPainter(self)
+        top = max(max(row) for row in self.cells) or 1.0
+        left, bottom = 32, 18
+        width = (self.width() - left) / 24
+        height = (self.height() - bottom) / len(self.cells)
+        empty, busy = QColor("#3a3352"), QColor("#e0409b")
+        painter.setPen(QColor("#9a93b8"))
+        for d, row in enumerate(self.cells):
+            painter.drawText(
+                QRectF(0, d * height, left, height),
+                int(Qt.AlignmentFlag.AlignVCenter),
+                reports.WEEKDAYS[d],
+            )
+            for h, value in enumerate(row):
+                k = value / top  # mix from the empty colour to the busy one
+                colour = QColor(
+                    int(empty.red() + (busy.red() - empty.red()) * k),
+                    int(empty.green() + (busy.green() - empty.green()) * k),
+                    int(empty.blue() + (busy.blue() - empty.blue()) * k),
+                )
+                cell = QRectF(left + h * width + 1, d * height + 1, width - 2, height - 2)
+                painter.fillRect(cell, colour)
+        for h in range(0, 24, 3):
+            painter.drawText(
+                QRectF(left + h * width, self.height() - bottom + 2, width * 3, bottom),
+                int(Qt.AlignmentFlag.AlignLeft),
+                f"{h:02d}",
+            )
+        painter.end()
+
+
 class RecordsPage(QWidget):
     COLUMNS = ("Closed", "Room", "Guest", "Time", "Songs", "Total")
 
@@ -637,10 +683,23 @@ class InsightsPage(QWidget):
         column.setContentsMargins(24, 18, 24, 18)
         top = QHBoxLayout()
         self.range = QComboBox()
-        self.range.addItems(list(reports.RANGES))
+        self.range.addItems(reports.DASHBOARD_PERIODS)
+        self.range.setCurrentText("Last 7 days")
         self.range.currentIndexChanged.connect(self.refresh)
+        self.first = QDateEdit(QDate.currentDate().addDays(-6))
+        self.last = QDateEdit(QDate.currentDate())
+        for picker in (self.first, self.last):
+            picker.setCalendarPopup(True)
+            picker.dateChanged.connect(self.refresh)
+        export = QPushButton("Export CSV")
+        export.setToolTip("The songs, items, rooms and busy hours below, as a spreadsheet")
+        export.clicked.connect(self.export)
         top.addWidget(self.range)
+        top.addWidget(self.first)
+        top.addWidget(QLabel("to"))
+        top.addWidget(self.last)
         top.addStretch()
+        top.addWidget(export)
         column.addLayout(top)
         tiles = QHBoxLayout()
         self.tiles: dict[str, QLabel] = {}
@@ -658,8 +717,10 @@ class InsightsPage(QWidget):
         charts = QHBoxLayout()
         self.hours = TakingsChart()
         self.days = TakingsChart()
+        self.heat = HeatMap()
         for title, chart in (
             ("BUSY HOURS (rooms in use)", self.hours),
+            ("BY WEEKDAY AND HOUR", self.heat),
             ("TAKINGS BY WEEKDAY", self.days),
         ):
             box = QVBoxLayout()
@@ -685,9 +746,32 @@ class InsightsPage(QWidget):
             self.lists[title] = body
         column.addLayout(lists, stretch=1)
 
+    def picked(self, picker: QDateEdit) -> date:
+        d = picker.date()
+        return date(d.year(), d.month(), d.day())
+
+    def gather(self) -> tuple[reports.Insights, list[tuple[str, float, float]]]:
+        """What the dashboard shows: the period's figures and how much each room was used."""
+        custom = self.range.currentText() == "Custom range"
+        self.first.setVisible(custom)
+        self.last.setVisible(custom)
+        start, end = reports.period_span(
+            self.range.currentText(), time.time(), self.picked(self.first), self.picked(self.last)
+        )
+        visits = self.store.history(start, end)
+        rooms = [room.name for room in self.store.rooms()]
+        return reports.insights(visits), reports.utilisation(visits, rooms, start, end)
+
+    def export(self, _checked: bool = False, path: str | None = None) -> None:
+        if path is None:
+            name = f"ytktv-insights-{date.today().isoformat()}.csv"
+            path, _ = QFileDialog.getSaveFileName(self, "Export CSV", name, "CSV (*.csv)")
+        if path:
+            reports.export_dashboard_csv(*self.gather(), path)
+
     def refresh(self) -> None:
-        days = reports.RANGES[self.range.currentText()]
-        found = reports.insights(reports.last_days(self.store, days))
+        found, used = self.gather()
+        self.heat.set_cells(found.heat)
         c = self.store.setting("currency", "$")
         self.tiles["Takings"].setText(f"{c}{found.takings:,.2f}")
         self.tiles["Sessions"].setText(str(found.sessions))
@@ -708,7 +792,10 @@ class InsightsPage(QWidget):
         self.lists["BEST-SELLING ITEMS"].setText(
             table([(n, f"{q} · {c}{a:,.0f}") for n, q, a in found.top_items])
         )
-        self.lists["ROOMS"].setText(table([(r, f"{c}{a:,.0f}") for r, a in found.rooms]))
+        takings = dict(found.rooms)
+        self.lists["ROOMS"].setText(
+            table([(r, f"{share:.0%} · {c}{takings.get(r, 0):,.0f}") for r, _, share in used])
+        )
         self.lists["PAID BY"].setText(
             table(
                 [
