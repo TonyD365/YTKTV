@@ -28,6 +28,16 @@ on:
     types: [created, edited]
   push:
     branches: [main] # a merge can leave other pull requests in conflict
+  # A review on a first-time contributor's fork pull request starts "Review noted" only after
+  # a maintainer approves the run, so every 10 minutes recent reviews on fork pull requests are
+  # picked up here instead (see the reviews job), and the assistant runs for them by number.
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      number:
+        description: Pull request number
+        required: true
 
 permissions:
   contents: read
@@ -38,12 +48,37 @@ permissions:
   statuses: write
 
 jobs:
+  reviews:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Run the assistant for fork pull requests reviewed in the last 15 minutes
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          since=$(date -u -d '15 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+          for n in $(gh pr list --state open --limit 100 --json number,isCrossRepository \
+              -q '.[] | select(.isCrossRepository) | .number'); do
+            last=$(gh api "repos/$GH_REPO/pulls/$n/reviews" --paginate \
+              -q '[.[] | .submitted_at // empty] | max // ""')
+            if [ -n "$last" ] && [[ "$last" > "$since" ]]; then
+              echo "pull request $n: reviewed at $last"
+              gh workflow run pr-assistant.yml --ref main -f number="$n"
+            fi
+          done
+
   comment:
     concurrency:
-      group: pr-assistant-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.head_sha }}
+      group: pr-assistant-${{ github.event.pull_request.number || github.event.issue.number || inputs.number || github.event.workflow_run.head_sha }}
       cancel-in-progress: false
     if: >-
-      github.event_name == 'pull_request_target' ||
+      github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
         github.event.comment.user.login != 'TonyD365-Agent' &&
         github.event.comment.user.login != 'github-actions[bot]') ||
@@ -55,7 +90,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
           GH_REPO: ${{ github.repository }}
-          NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.number }}
           SHA: ${{ github.event.workflow_run.head_sha }}
           SERVER: ${{ github.server_url }}
         run: |

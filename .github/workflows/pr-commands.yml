@@ -5,6 +5,10 @@
 #   /benchmark                 compare the speed with main again (author or maintainer)
 #   /ready                     mark a draft ready for review (author or maintainer)
 #   /close, /reopen            close or reopen the pull request (author or maintainer)
+#   /update                    merge main into the pull request's branch (author or maintainer;
+#                              only maintainers on a fork, see below)
+#   /remind <time> [note]      remind the one who asked here later, e.g. /remind 3d, /remind 12h
+#                              (anyone; up to 30 days; checked every hour)
 #   /run <area>                run an area's heavier tests: packaging, installer, desk, separation
 #   /label <names>, /unlabel <names>   add or remove labels (maintainers)
 # A maintainer is the owner or a collaborator of the repository; /run and /label are theirs
@@ -21,7 +25,8 @@ on:
   issue_comment:
     types: [created]
   schedule:
-    - cron: "23 8 * * *"
+    - cron: "23 8 * * *" # stale pull requests
+    - cron: "41 * * * *" # reminders
   workflow_dispatch:
 
 permissions:
@@ -72,6 +77,8 @@ jobs:
                 "- \`/benchmark\`: compare the speed with \`main\` again, e.g. after a slowdown that may be a busy runner (author or maintainer)." \
                 "- \`/ready\`: mark a draft as ready for review (author or maintainer)." \
                 "- \`/close\`, \`/reopen\`: close or reopen this pull request (author or maintainer)." \
+                "- \`/update\`: bring this branch up to date with \`main\` (author or maintainer; maintainers only on a fork)." \
+                "- \`/remind 3d\` (or \`12h\`, up to \`30d\`), optionally with a note: the bot reminds you here then." \
                 "- \`/run packaging\`, \`/run installer\`, \`/run desk\`, \`/run separation\`: run that part's heavier tests (maintainers)." \
                 "- \`/label name ...\`, \`/unlabel name ...\`: add or remove labels (maintainers)." \
                 "- \`/help\`: this list." "" \
@@ -135,6 +142,38 @@ jobs:
               gh api -X PATCH "repos/$GH_REPO/pulls/$NUMBER" -f state=open >/dev/null
               react "+1"; reply "Reopened on request of @$WHO."
               ;;
+            /update)
+              author_or_maintainer
+              # On a fork, the bot's merge commit would start the fork's workflows without the
+              # maintainer approving them first, so there only maintainers may ask for it.
+              if [ -z "$maintainer" ] && [ "$(gh pr view "$NUMBER" --json isCrossRepository -q .isCrossRepository)" = true ]; then
+                react confused
+                reply "Sorry @$WHO, on a pull request from a fork only a maintainer can use \`/update\`. Merge \`main\` into your branch yourself, or ask a maintainer."
+                exit 0
+              fi
+              head=$(gh pr view "$NUMBER" --json headRefOid -q .headRefOid)
+              if gh api -X PUT "repos/$GH_REPO/pulls/$NUMBER/update-branch" -f expected_head_sha="$head" >/dev/null 2>err.txt; then
+                react "+1"; reply "🔄 Merging \`main\` into this branch; the checks run again on the new commit."
+              else
+                react confused
+                reply "Could not update the branch: $(jq -r '.message // empty' err.txt 2>/dev/null || true)" "" \
+                  "This happens when the branch is already up to date, when merging \`main\` conflicts (fix it locally), or when a fork does not allow edits by maintainers."
+              fi
+              ;;
+            /remind)
+              case "$arg" in
+                [1-9]d|[12][0-9]d|30d) secs=$(( ${arg%d} * 86400 )) ;;
+                [1-9]h|[1-9][0-9]h|[1-6][0-9][0-9]h) secs=$(( ${arg%h} * 3600 )) ;;
+                *) react confused; reply "Usage: \`/remind 3d\` or \`/remind 12h\` (up to 30 days), optionally followed by a note."; exit 0 ;;
+              esac
+              [ "$secs" -le $((30 * 86400)) ] || { react confused; reply "Reminders go up to 30 days."; exit 0; }
+              at=$(( $(date -u +%s) + secs ))
+              note=$(printf '%s' "$rest" | sed -E 's#^[^[:space:]]+[[:space:]]*##' | tr -d '`<>@' | cut -c1-200)
+              react "+1"
+              reply "<!-- ytktv-remind at=$at who=$WHO -->" \
+                "⏰ OK @$WHO, I will remind you here on $(date -u -d "@$at" '+%Y-%m-%d %H:%M UTC') (within an hour of it)." \
+                ${note:+"" "> $note"}
+              ;;
             /label|/unlabel)
               maintainer_only
               [ -n "$rest" ] || { reply "Usage: \`$cmd name\` (several names separated by spaces or commas)."; exit 0; }
@@ -154,8 +193,40 @@ jobs:
             *) exit 0 ;;
           esac
 
+  reminders:
+    if: github.event_name == 'schedule' && github.event.schedule == '41 * * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          now=$(date -u +%s)
+          for n in $(gh pr list --state open --limit 200 --json number -q '.[].number'); do
+            gh api "repos/$GH_REPO/issues/$n/comments" --paginate \
+              -q '.[] | select(.user.login == "TonyD365-Agent") | select(.body | startswith("<!-- ytktv-remind ")) | .id' |
+            while read -r id; do
+              body=$(gh api "repos/$GH_REPO/issues/comments/$id" -q .body)
+              first=$(printf '%s' "$body" | head -n 1)
+              at=$(sed -nE 's/.* at=([0-9]+) .*/\1/p' <<<"$first")
+              who=$(sed -nE 's/.* who=([A-Za-z0-9-]+) .*/\1/p' <<<"$first")
+              [ -n "$at" ] && [ -n "$who" ] && [ "$at" -le "$now" ] || continue
+              note=$(printf '%s\n' "$body" | sed -n 's/^> //p' | head -n 1)
+              url=$(gh api "repos/$GH_REPO/issues/comments/$id" -q .html_url)
+              printf '%s\n' "⏰ @$who, here is the reminder you asked for ($url)." ${note:+"" "> $note"} > note.md
+              gh pr comment "$n" --body-file note.md >/dev/null
+              # Mark it done, so it is sent once.
+              printf '%s\n' "$body" | sed '1s/<!-- ytktv-remind /<!-- ytktv-remind-done /' > done.md
+              gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -F body=@done.md >/dev/null
+            done
+          done
+
   stale:
-    if: github.event_name != 'issue_comment'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' && github.event.schedule == '23 8 * * *')
     runs-on: ubuntu-latest
     steps:
       - env:
