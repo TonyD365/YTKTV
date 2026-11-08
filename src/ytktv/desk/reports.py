@@ -84,6 +84,7 @@ class Insights:
     takings: float
     hours: float
     busy_hours: list[float]  # how many rooms were in use, summed over the days, per hour of day
+    heat: list[list[float]]  # the same room-hours split by weekday (Monday first), then hour
     weekdays: list[float]  # takings per weekday, Monday first
     top_songs: list[tuple[str, int]]
     top_items: list[tuple[str, int, float]]  # name, how many, takings
@@ -97,6 +98,7 @@ class Insights:
 
 def insights(visits: list[Visit]) -> Insights:
     busy = [0.0] * 24
+    heat = [[0.0] * 24 for _ in range(7)]
     weekdays = [0.0] * 7
     songs: Counter[str] = Counter()
     items: dict[str, tuple[int, float]] = {}
@@ -108,7 +110,9 @@ def insights(visits: list[Visit]) -> Insights:
         while start < v.closed_at:
             hour_start = start - (start % 3600)
             end = min(v.closed_at, hour_start + 3600)
-            busy[time.localtime(start).tm_hour] += (end - start) / 3600
+            local = time.localtime(start)
+            busy[local.tm_hour] += (end - start) / 3600
+            heat[local.tm_wday][local.tm_hour] += (end - start) / 3600
             start = end
         weekdays[time.localtime(v.closed_at).tm_wday] += v.total
         songs.update(v.songs)
@@ -126,9 +130,10 @@ def insights(visits: list[Visit]) -> Insights:
         takings=round(sum(v.total for v in visits), 2),
         hours=sum(v.closed_at - v.opened_at for v in visits) / 3600,
         busy_hours=[round(b, 2) for b in busy],
+        heat=[[round(h, 2) for h in row] for row in heat],
         weekdays=[round(w, 2) for w in weekdays],
-        top_songs=songs.most_common(10),
-        top_items=top_items[:10],
+        top_songs=songs.most_common(20),
+        top_items=top_items[:20],
         rooms=sorted(rooms.items(), key=lambda pair: -pair[1]),
         payments=sorted(payments.items(), key=lambda pair: -pair[1]),
     )
@@ -139,3 +144,78 @@ def last_days(store: DeskStore, days: int, now: float | None = None) -> list[Vis
     today = datetime.fromtimestamp(now).replace(hour=0, minute=0, second=0, microsecond=0)
     start = today - timedelta(days=days - 1)
     return store.history(start.timestamp(), now + 1)
+
+
+# Periods for the dashboard. The fixed ones end now; "Custom range" uses the two dates picked.
+DASHBOARD_PERIODS = (
+    "Today",
+    "This week",
+    "This month",
+    "Last 7 days",
+    "Last 30 days",
+    "Last 90 days",
+    "Custom range",
+)
+
+
+def period_span(
+    period: str, now: float, first: date | None = None, last: date | None = None
+) -> tuple[float, float]:
+    """The (start, end) timestamps of a dashboard period. A custom range includes both dates."""
+    today = datetime.fromtimestamp(now).replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "Custom range" and first and last:
+        if last < first:
+            first, last = last, first
+        start = datetime(first.year, first.month, first.day)
+        end = datetime(last.year, last.month, last.day) + timedelta(days=1)
+        return start.timestamp(), end.timestamp()
+    if period == "This week":
+        start = today - timedelta(days=today.weekday())
+    elif period == "This month":
+        start = today.replace(day=1)
+    elif period in RANGES:
+        start = today - timedelta(days=RANGES[period] - 1)
+    else:  # Today
+        start = today
+    return start.timestamp(), now + 1
+
+
+def utilisation(
+    visits: list[Visit], rooms: list[str], start: float, end: float
+) -> list[tuple[str, float, float]]:
+    """How much of the period each room was in use, as (room, hours, share), busiest first.
+
+    Only the part of each session inside the period counts, and a period that runs into the
+    future is cut at its last session, so "this month" is not diluted by days still to come.
+    """
+    used = dict.fromkeys(rooms, 0.0)
+    for v in visits:
+        overlap = min(v.closed_at, end) - max(v.opened_at, start)
+        if overlap > 0:
+            used[v.room] = used.get(v.room, 0.0) + overlap / 3600
+    span = (min(end, max((v.closed_at for v in visits), default=end)) - start) / 3600
+    rows = [
+        (room, round(h, 2), min(1.0, h / span) if span > 0 else 0.0) for room, h in used.items()
+    ]
+    return sorted(rows, key=lambda row: -row[1])
+
+
+def export_dashboard_csv(
+    found: Insights, rooms: list[tuple[str, float, float]], path: Path | str
+) -> None:
+    """The dashboard's tables, one after another, in a single spreadsheet."""
+    with open(path, "w", newline="", encoding="utf-8-sig") as file:
+        writer = csv.writer(file)
+        writer.writerow(("Top songs", "Times sung"))
+        writer.writerows(found.top_songs)
+        writer.writerow(())
+        writer.writerow(("Best-selling items", "Quantity", "Takings"))
+        writer.writerows((n, q, f"{a:.2f}") for n, q, a in found.top_items)
+        writer.writerow(())
+        writer.writerow(("Room", "Hours in use", "Utilisation"))
+        writer.writerows((r, f"{h:.2f}", f"{s:.0%}") for r, h, s in rooms)
+        writer.writerow(())
+        writer.writerow(("Weekday", *(f"{h:02d}" for h in range(24))))
+        writer.writerows(
+            (day, *(f"{h:.2f}" for h in row)) for day, row in zip(WEEKDAYS, found.heat, strict=True)
+        )

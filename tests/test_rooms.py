@@ -762,6 +762,39 @@ def test_insights_dashboard(qtbot):
     window.show_tab(window.stack.indexOf(window.insights))
     assert window.insights.tiles["Sessions"].text() == "2"
     assert "Cola" in window.insights.lists["BEST-SELLING ITEMS"].text()
+    assert "VIP" in window.insights.lists["ROOMS"].text()
+
+
+def test_dashboard_periods_heat_and_utilisation(tmp_path):
+    import csv
+    from datetime import date, datetime
+
+    from ytktv.desk import reports
+    from ytktv.desk.store import Visit
+
+    now = datetime(2026, 11, 11, 15, 0).timestamp()  # a Wednesday afternoon
+    start, end = reports.period_span("This week", now)
+    assert datetime.fromtimestamp(start) == datetime(2026, 11, 9) and end > now
+    start, _ = reports.period_span("This month", now)
+    assert datetime.fromtimestamp(start) == datetime(2026, 11, 1)
+    start, _ = reports.period_span("Today", now)
+    assert datetime.fromtimestamp(start) == datetime(2026, 11, 11)
+    start, end = reports.period_span("Custom range", now, date(2026, 11, 3), date(2026, 11, 2))
+    assert datetime.fromtimestamp(start) == datetime(2026, 11, 2)
+    assert datetime.fromtimestamp(end) == datetime(2026, 11, 4)
+
+    opened = datetime(2026, 11, 10, 20, 0).timestamp()  # Tuesday 20:00 to 22:00
+    visit = Visit(1, "Kids", "", opened, opened + 7200, 30.0, [("Cola × 2", 6.0)], ["Song"] * 3)
+    found = reports.insights([visit])
+    assert found.heat[1][20] == 1.0 and found.heat[1][21] == 1.0 and sum(map(sum, found.heat)) == 2
+    day = datetime(2026, 11, 10).timestamp()
+    used = reports.utilisation([visit], ["VIP", "Kids"], day, day + 86400)
+    assert used[0][:2] == ("Kids", 2.0) and used[1] == ("VIP", 0.0, 0.0)
+
+    path = tmp_path / "dash.csv"
+    reports.export_dashboard_csv(found, used, path)
+    rows = list(csv.reader(path.read_text(encoding="utf-8-sig").splitlines()))
+    assert ["Song", "3"] in rows and ["Cola", "2", "6.00"] in rows
 
 
 def test_guessing_pairing_codes_is_stopped():
