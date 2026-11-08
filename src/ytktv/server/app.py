@@ -229,12 +229,22 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
             return _host_name(origin) == host
         return True
 
-    @app.middleware("http")
-    async def same_site_only(request: Request, call_next: Any) -> Response:
-        if not _allowed(request.headers, request.method):
-            return JSONResponse({"detail": "Forbidden"}, status_code=403)
-        response: Response = await call_next(request)
-        return response
+    class SameSiteOnly:
+        """Plain ASGI (FastAPI's @app.middleware("http") costs ~0.7 ms per request)."""
+
+        def __init__(self, inner: Any) -> None:
+            self.inner = inner
+
+        async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+            if scope["type"] == "http":
+                headers = {k.decode("latin-1"): v.decode("latin-1") for k, v in scope["headers"]}
+                if not _allowed(headers, scope["method"]):
+                    refused = JSONResponse({"detail": "Forbidden"}, status_code=403)
+                    await refused(scope, receive, send)
+                    return
+            await self.inner(scope, receive, send)
+
+    app.add_middleware(SameSiteOnly)
 
     @app.exception_handler(PermissionError)
     async def room_closed(_request: Request, exc: PermissionError) -> JSONResponse:
