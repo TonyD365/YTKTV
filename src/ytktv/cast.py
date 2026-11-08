@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 PLAYLIST = "stream.m3u8"
 CONTENT_TYPE = "application/x-mpegURL"
 # Only ffmpeg's own file names are ever served, never a path someone made up.
-_SERVED = re.compile(r"^(stream\.m3u8|seg\d{1,9}\.ts)$")
+_SEGMENT = re.compile(r"seg(\d{1,9})\.ts")
 
 
 class CastError(Exception):
@@ -243,9 +243,14 @@ class CastStream:
         folder, secret = self.folder, self.token
         if folder is None or not secret or not hmac.compare_digest(token, secret):
             return None
-        if not _SERVED.match(name):
+        # The file name is rebuilt here, never taken from the request as it was sent.
+        if name == PLAYLIST:
+            served = PLAYLIST
+        elif segment := _SEGMENT.fullmatch(name):
+            served = f"seg{int(segment.group(1))}.ts"
+        else:
             return None
-        path = folder / name
+        path = folder / served
         return path if path.is_file() else None
 
 
