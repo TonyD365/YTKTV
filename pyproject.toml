@@ -37,6 +37,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Cast to Chromecast (ytktv/cast.py); pychromecast is MIT-licensed.
+cast = ["pychromecast>=14.1.1"]
 separation = ["audio-separator[cpu]>=0.48.0", "audioread"]
 separation-cuda = ["audio-separator[gpu]>=0.48.0", "audioread"]
 dev = [

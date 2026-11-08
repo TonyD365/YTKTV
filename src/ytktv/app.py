@@ -439,10 +439,13 @@ def main(argv: list[str] | None = None) -> int:
     elif runtime is None:
         controller.accelerator = "Not installed"
 
+    from ytktv.cast import CastStream
     from ytktv.server.app import ServerThread, create_app
 
+    cast_stream = CastStream(ffmpeg) if ffmpeg else None  # Chromecast, see ytktv.cast
     server = ServerThread(
-        create_app(controller, youtube), free_port(args.port or settings.server_port)
+        create_app(controller, youtube, cast=cast_stream),
+        free_port(args.port or settings.server_port),
     )
     server.start()
     log.info("phone remote: %s", server.url)
@@ -517,6 +520,13 @@ def main(argv: list[str] | None = None) -> int:
         window.settings_page.install_hd_unlock.connect(hd_setup.install)
         hd_setup.publish()
     window.settings_page.run_setup.connect(window.run_setup)
+    cast_card = None
+    if cast_stream is not None:
+        from ytktv.cast import Caster
+        from ytktv.ui.cast_card import CastCard, FrameGrabber
+
+        cast_card = CastCard(Caster(cast_stream, server.url), FrameGrabber(mv_window, cast_stream))
+        window.settings_page.tv_card.addWidget(cast_card)
     from ytktv.ui.remote_keys import RemoteKeys
 
     keys = RemoteKeys(controller, app)  # media keys and remotes work in every window
@@ -532,6 +542,8 @@ def main(argv: list[str] | None = None) -> int:
         window.show_toast("Video playback is unavailable: mpv is not installed.", error=True)
 
     def shutdown() -> None:
+        if cast_card is not None:
+            cast_card.stop()  # the TV goes back to its home screen; ffmpeg ends
         server.stop()
         if mic_server is not None:
             mic_server.stop()

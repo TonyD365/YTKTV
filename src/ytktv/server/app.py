@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from ytktv import catalog, icon_set
 from ytktv.audio.sfx import SFX_NAMES
+from ytktv.cast import CastStream
 from ytktv.core.controller import KTVController
 from ytktv.core.games import BIRTHDAY_SEARCH
 from ytktv.core.models import Song, VocalMode
@@ -205,7 +206,9 @@ def _trusted_host(host: str) -> bool:
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
-def create_app(controller: KTVController, source: SongSource) -> FastAPI:
+def create_app(
+    controller: KTVController, source: SongSource, cast: CastStream | None = None
+) -> FastAPI:
     broadcaster = _Broadcaster()
 
     @contextlib.asynccontextmanager
@@ -267,6 +270,24 @@ def create_app(controller: KTVController, source: SongSource) -> FastAPI:
             f"const ICON_FOR = {json.dumps(icon_set.EMOJI, ensure_ascii=False)};",
             media_type="text/javascript",
             headers={"Cache-Control": "no-cache"},
+        )
+
+    @app.get("/cast/{token}/{name}", include_in_schema=False)
+    def cast_file(token: str, name: str) -> Response:
+        """The live MV stream a Chromecast plays (read-only; see ytktv.cast)."""
+        path = cast.file(token, name) if cast is not None else None
+        try:
+            body = path.read_bytes() if path is not None else None
+        except OSError:  # ffmpeg removed an old piece just now
+            body = None
+        if body is None:
+            raise HTTPException(404, "not casting")
+        playlist = name.endswith(".m3u8")
+        return Response(
+            body,
+            media_type="application/vnd.apple.mpegurl" if playlist else "video/mp2t",
+            # The Chromecast's player fetches from its own origin.
+            headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
         )
 
     @app.get("/", include_in_schema=False)

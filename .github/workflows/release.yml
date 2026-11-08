@@ -99,8 +99,8 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          extras="package"
-          if [ "$YTKTV_SEPARATION_MODE" = "bundle" ]; then extras="package,separation"; fi
+          extras="package,cast"
+          if [ "$YTKTV_SEPARATION_MODE" = "bundle" ]; then extras="package,cast,separation"; fi
           python -m pip install ".[${extras}]"
           python -c "import ytktv; print('Building YTKTV', ytktv.__version__)"
 

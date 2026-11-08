@@ -42,6 +42,25 @@ Then open the package. If the installed app still will not open, run
 
 You can run the setup again at any time from **Settings → Setup**.
 
+## A TV without a cable
+
+**AirPlay and Miracast.** The TV becomes a second display over Wi-Fi and gets the whole MV,
+lyrics and effects included. On a Mac: Control Centre → Screen Mirroring → pick the TV, then
+*Use As Separate Display*. On Windows: press **Win + K** and pick the TV. See
+**Settings → TV Without a Cable**.
+
+**Chromecast.** A Chromecast (or a TV with Chromecast built in) cannot be a second display, so
+YTKTV films the MV screen and sends it as a live video instead: in **Settings → TV Without a
+Cable → Chromecast**, press *Search*, pick the TV and press *Cast to Chromecast*; *Stop
+Casting* (or quitting YTKTV) ends it, and the TV's own stop button ends it too.
+
+- **Picture only.** The sound stays on the computer's speakers, where the microphones are
+  mixed in; the TV gets a silent sound track.
+- **The picture arrives about 1–3 seconds late.** Turn *Picture delay of the TV* up to its
+  highest so the lyrics stay closer to what you hear.
+- The computer and the Chromecast must be on the same network, and the MV screen must be open
+  on the computer (it may sit behind other windows). Casting uses some processor time.
+
 ## Your first song
 
 1. Press **Search**, type a song, and press **Select** on a result (or **Priority** to play it
