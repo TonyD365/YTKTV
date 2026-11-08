@@ -1,0 +1,183 @@
+# The issue side of the bot (TonyD365-Agent):
+#
+# - Triage: a new or edited issue gets area and platform labels from what it says (the
+#   issue forms' answers and keywords). A bug report without a version or a system gets
+#   needs-info and one comment asking for them; the label goes once they are there.
+# - Fixed notices: a merged pull request that says "Fixes #12" (or closes / resolves) leaves
+#   a note on #12 and the label fixed-in-next-release; when a release is published, those
+#   issues hear which version has the fix, and the label is removed.
+# - Commands in issue comments: /label, /unlabel (maintainers), /close, /reopen (the
+#   issue's author or a maintainer), /help.
+name: Issue assistant
+
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [closed]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  triage:
+    if: github.event_name == 'issues' && github.event.issue.user.login != 'TonyD365-Agent'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+          TITLE: ${{ github.event.issue.title }}
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          set -uo pipefail
+          text=$(printf '%s\n%s' "$TITLE" "$BODY" | tr '[:upper:]' '[:lower:]')
+          has() { grep -Eq -- "$1" <<<"$text"; }
+          add=()
+          # Areas (the bug form's "area" answers and plain keywords, in English and Chinese).
+          has 'desk|front desk|staff terminal|前台|管理终端|server mode' && add+=(desk)
+          has 'microphone|mixer|mixing console|麦克风|调音' && add+=(mixer)
+          has 'vocal separation|instrumental|original / instrumental|去人声|伴奏|人声分离' && add+=(separation)
+          has 'lyrics|歌词' && add+=(lyrics)
+          has 'scor(e|ing)|打分|评分' && add+=(scoring)
+          has 'phone page|phone microphone|qr code|手机|扫码' && add+=(phone)
+          has 'update|updater|patch|更新' && add+=(updater)
+          has 'install|installer|winget|install\.sh|install\.ps1|安装' && add+=(installer)
+          has 'playback|video|mpv|播放|视频' && add+=(player)
+          # Platforms.
+          has 'windows|win(10|11)' && add+=("platform: Windows")
+          has 'macos|mac os|apple silicon|intel mac|macbook|imac|苹果' && add+=("platform: macOS")
+          has 'linux|ubuntu|debian|fedora|arch|raspberry|appimage|树莓派' && add+=("platform: Linux")
+          for label in "${add[@]}"; do
+            gh api -X POST "repos/$GH_REPO/issues/$NUMBER/labels" -f "labels[]=$label" >/dev/null 2>&1 || true
+          done
+
+          # A bug needs a version and a system.
+          labels=$(gh issue view "$NUMBER" --json labels -q '[.labels[].name] | join(",")')
+          case ",$labels," in *,bug,*) ;; *) exit 0 ;; esac
+          missing=()
+          grep -Eq '[0-9]+\.[0-9]+\.[0-9]+' <<<"$text" || missing+=("the **YTKTV version** (Settings → Updates, or the Release you installed)")
+          has 'windows|macos|mac os|apple silicon|intel|linux|ubuntu|debian|fedora|raspberry' || missing+=("your **system** (macOS, Windows or Linux, and which version)")
+          asked=$(gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \
+            -q '[.[] | select(.body | startswith("<!-- ytktv-needs-info -->"))] | length')
+          if [ "${#missing[@]}" = 0 ]; then
+            gh api -X DELETE "repos/$GH_REPO/issues/$NUMBER/labels/needs-info" >/dev/null 2>&1 || true
+            exit 0
+          fi
+          gh label create needs-info --color d4c5f9 --description "Waiting for details from the reporter" 2>/dev/null || true
+          gh api -X POST "repos/$GH_REPO/issues/$NUMBER/labels" -f "labels[]=needs-info" >/dev/null || true
+          if [ "$asked" = 0 ]; then
+            {
+              echo "<!-- ytktv-needs-info -->"
+              echo "Thank you for the report, @$AUTHOR! To look into it, please add (edit the issue, or reply):"
+              echo
+              for m in "${missing[@]}"; do echo "- $m"; done
+              echo
+              echo "The \`needs-info\` label goes away by itself once they are there."
+            } > ask.md
+            gh issue comment "$NUMBER" --body-file ask.md >/dev/null
+          fi
+
+  fixed:
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.merged
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BODY: ${{ github.event.pull_request.body }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -uo pipefail
+          gh label create fixed-in-next-release --color 0e8a16 --description "Fixed on main; ships in the next release" 2>/dev/null || true
+          for n in $(printf '%s\n%s' "$TITLE" "$BODY" |
+              grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?) +#[0-9]+' | grep -oE '[0-9]+$' | sort -un); do
+            # Only issues (not pull requests) of this repository.
+            [ "$(gh api "repos/$GH_REPO/issues/$n" -q 'has("pull_request")' 2>/dev/null)" = false ] || continue
+            gh api -X POST "repos/$GH_REPO/issues/$n/labels" -f "labels[]=fixed-in-next-release" >/dev/null || true
+            printf '%s\n' "<!-- ytktv-fixed -->" "✅ Fixed by #$PR, now on \`main\`. It ships in the next release; I will say here which version has it." > note.md
+            gh issue comment "$n" --body-file note.md >/dev/null
+          done
+
+  released:
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+          URL: ${{ github.event.release.html_url }}
+        run: |
+          set -uo pipefail
+          for n in $(gh issue list --state all --label fixed-in-next-release --limit 200 --json number -q '.[].number'); do
+            printf '%s\n' "<!-- ytktv-released -->" "🎉 The fix is in **YTKTV $TAG** ($URL). YTKTV and YTKTV Desk update themselves (Settings → Updates)." > note.md
+            gh issue comment "$n" --body-file note.md >/dev/null
+            gh api -X DELETE "repos/$GH_REPO/issues/$n/labels/fixed-in-next-release" >/dev/null 2>&1 || true
+          done
+
+  command:
+    if: >-
+      github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/') &&
+      github.event.comment.user.login != 'TonyD365-Agent'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          WHO: ${{ github.event.comment.user.login }}
+          WHO_ID: ${{ github.event.comment.user.id }}
+          AUTHOR_ID: ${{ github.event.issue.user.id }}
+          ROLE: ${{ github.event.comment.author_association }}
+          BODY: ${{ github.event.comment.body }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          set -uo pipefail
+          line=$(printf '%s' "$BODY" | head -n 1 | tr -d '\r')
+          cmd=$(printf '%s' "$line" | awk '{print tolower($1)}')
+          rest=$(printf '%s' "$line" | sed -E 's#^/[A-Za-z]+[[:space:]]*##')
+          case "$ROLE" in OWNER|MEMBER|COLLABORATOR) maintainer=1 ;; *) maintainer="" ;; esac
+          react() { gh api -X POST "repos/$GH_REPO/issues/comments/$COMMENT_ID/reactions" -f content="$1" >/dev/null || true; }
+          reply() { printf '%s\n' "$@" > reply.md; gh issue comment "$NUMBER" --body-file reply.md >/dev/null; }
+          deny() { react confused; reply "Sorry @$WHO, \`$cmd\` is for $1."; exit 0; }
+          case "$cmd" in
+            /help)
+              react eyes
+              reply "Commands for this issue (at the start of a comment):" "" \
+                "- \`/close\`, \`/reopen\`: close or reopen it (whoever opened it, or a maintainer)." \
+                "- \`/label name ...\`, \`/unlabel name ...\`: add or remove labels (maintainers)." \
+                "- \`/help\`: this list."
+              ;;
+            /close|/reopen)
+              [ "$WHO_ID" = "$AUTHOR_ID" ] || [ -n "$maintainer" ] || deny "whoever opened the issue, or a maintainer"
+              state=closed; [ "$cmd" = /reopen ] && state=open
+              gh api -X PATCH "repos/$GH_REPO/issues/$NUMBER" -f state="$state" >/dev/null
+              react "+1"
+              ;;
+            /label|/unlabel)
+              [ -n "$maintainer" ] || deny "maintainers (the repository's owner and collaborators)"
+              [ -n "$rest" ] || { reply "Usage: \`$cmd name\` (several names separated by spaces or commas)."; exit 0; }
+              done_list=""
+              for name in $(printf '%s' "$rest" | tr ',' ' '); do
+                if [ "$cmd" = /label ]; then
+                  gh label create "$name" --color ededed 2>/dev/null || true
+                  gh api -X POST "repos/$GH_REPO/issues/$NUMBER/labels" -f "labels[]=$name" >/dev/null && done_list="$done_list \`$name\`"
+                else
+                  gh api -X DELETE "repos/$GH_REPO/issues/$NUMBER/labels/$(jq -rn --arg n "$name" '$n|@uri')" >/dev/null 2>&1 && done_list="$done_list \`$name\`"
+                fi
+              done
+              react "+1"
+              if [ "$cmd" = /label ]; then reply "Added:${done_list:- nothing}"; else reply "Removed:${done_list:- nothing}"; fi
+              ;;
+          esac

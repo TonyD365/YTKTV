@@ -28,6 +28,14 @@ python -m ytktv
 The first start offers to install mpv if it is missing. Add the `separation` extra
 (`pip install -e ".[dev,separation]"`) to work on vocal separation.
 
+## Issues
+
+The bot labels a new issue by what it is about (area and system), and asks for the version and
+system when a bug report has none (`needs-info`, gone once they are added). When a pull request
+that says `Fixes #12` is merged, #12 hears about it (`fixed-in-next-release`), and again with the
+version once that is released. In an issue, `/close` and `/reopen` (whoever opened it, or a
+maintainer), `/label` and `/unlabel` (maintainers) and `/help` work as on pull requests.
+
 ## Before you open a pull request
 
 ```bash
