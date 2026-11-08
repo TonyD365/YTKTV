@@ -237,11 +237,11 @@ function Install-YTKTV {
             catch { Fail 'The download failed. Please try again.' }
             Ok 'Downloaded'
             $line = ($sums -split "`n") | Where-Object { $_ -match "\s\*?$([regex]::Escape($asset.name))\s*$" } | Select-Object -First 1
-            if ($line) {
-                Say 'Checking the download...'
-                if ((Hash-Of $file) -ne ($line -split '\s+')[0].ToLower()) { Fail 'The download is damaged (checksum mismatch). Please try again.' }
-                Ok 'Checksum OK'
-            }
+            # Without a checksum to compare with, nothing is installed.
+            if (-not $line) { Fail "Could not get the checksum for $($asset.name) (SHA256SUMS), so it was not installed. Please try again in a few minutes." }
+            Say 'Checking the download...'
+            if ((Hash-Of $file) -ne ($line -split '\s+')[0].ToLower()) { Fail 'The download is damaged (checksum mismatch). Please try again.' }
+            Ok 'Checksum OK'
             Say "Installing $label..."
             $process = Start-Process -FilePath $file -Wait -PassThru `
                 -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER'
