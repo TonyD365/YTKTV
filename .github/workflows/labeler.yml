@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   note:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - run: echo "${{ github.event.pull_request.number }}" > pr-number
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

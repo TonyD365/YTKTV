@@ -28,7 +28,7 @@ permissions:
 jobs:
   triage:
     if: github.event_name == 'issues' && github.event.issue.user.login != 'TonyD365-Agent'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -88,7 +88,7 @@ jobs:
 
   fixed:
     if: github.event_name == 'pull_request_target' && github.event.pull_request.merged
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -110,7 +110,7 @@ jobs:
 
   released:
     if: github.event_name == 'release' && !github.event.release.prerelease
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -130,7 +130,7 @@ jobs:
       github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/') &&
       github.event.comment.user.login != 'TonyD365-Agent'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
