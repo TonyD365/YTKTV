@@ -279,6 +279,15 @@ jobs:
                   echo "- [$name]($url): $(hint "$name")"
                 done
             fi
+            if [ "$running" != 0 ]; then
+              echo
+              echo "**Still running** (queued ones are waiting for a GitHub runner; GitHub's checks list can hide them when a newer run of the same workflow was skipped)"
+              echo
+              awk -F'\t' '$2!="completed"' checks.tsv |
+                while IFS=$'\t' read -r name status _conclusion url; do
+                  echo "- [$name]($url): ${status/_/ }"
+                done
+            fi
             if [ -n "$conflict" ]; then
               echo
               echo "**Merge conflict:** this pull request and \`main\` change the same lines, so it cannot be merged (auto-merge waits). Bring \`main\` into your branch, fix the conflicting files, and push: \`git fetch origin && git merge origin/main\`, or use **Resolve conflicts** on this page. [How to resolve a merge conflict]($SERVER/docs/pull-requests/collaborating-with-pull-requests/addressing-merge-conflicts/resolving-a-merge-conflict-on-github)"
