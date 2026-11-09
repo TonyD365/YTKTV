@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   remind:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}

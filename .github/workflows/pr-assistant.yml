@@ -51,7 +51,7 @@ permissions:
 jobs:
   reviews:
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     permissions:
       contents: read
@@ -85,7 +85,7 @@ jobs:
         github.event.comment.user.login != 'github-actions[bot]') ||
       github.event.workflow_run.event == 'pull_request' ||
       github.event.workflow_run.event == 'pull_request_review'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Write the status comment
         env:
@@ -363,7 +363,7 @@ jobs:
       github.event_name == 'issue_comment' && github.event.issue.pull_request &&
       github.event.comment.user.login != 'TonyD365-Agent' &&
       github.event.comment.user.login != 'github-actions[bot]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -431,7 +431,7 @@ jobs:
     # After a push to main: label every open pull request that is now in conflict (or no
     # longer), since nothing else runs for them then. The comment job above explains it.
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -466,7 +466,7 @@ jobs:
       (github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' ||
        github.event.pull_request.author_association == 'FIRST_TIMER' ||
        github.event.pull_request.author_association == 'NONE')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -502,7 +502,7 @@ jobs:
     if: >-
       github.event_name == 'pull_request_target' && github.event.action == 'closed' &&
       github.event.pull_request.merged
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - env:

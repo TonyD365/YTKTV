@@ -15,7 +15,7 @@ permissions:
 jobs:
   label:
     if: github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       # Into a folder of its own: the artifact comes from the pull request's run, so nothing
       # in it may land where the labeler looks for its config (that is read from main).

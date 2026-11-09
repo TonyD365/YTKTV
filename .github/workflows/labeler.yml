@@ -17,9 +17,6 @@ jobs:
   note:
     runs-on: ubuntu-slim
     steps:
-      # Trial on ubuntu-slim: which tools the assistants need are there (removed when they move).
-      - run: |
-          for t in gh jq curl git awk sed python3; do printf '%s: ' "$t"; command -v "$t" || echo MISSING; done
       - run: echo "${{ github.event.pull_request.number }}" > pr-number
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
