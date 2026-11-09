@@ -22,11 +22,15 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: ${{ github.repository }}.wiki
           token: ${{ secrets.AGENT_TOKEN }}
           path: wiki
+          # The token is not left in wiki/.git/config; the push below gets it from gh.
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.13"
@@ -42,4 +46,5 @@ jobs:
           git config user.name TonyD365-Agent
           git config user.email "$(gh api user -q .id)+TonyD365-Agent@users.noreply.github.com"
           git commit -qm "Copy the user guide from docs/guide (${SHA:0:7})"
+          gh auth setup-git
           git push -q

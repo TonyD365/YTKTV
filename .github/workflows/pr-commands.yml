@@ -178,7 +178,9 @@ jobs:
               maintainer_only
               [ -n "$rest" ] || { reply "Usage: \`$cmd name\` (several names separated by spaces or commas)."; exit 0; }
               done_list=""
-              for name in $(printf '%s' "$rest" | tr ',' ' '); do
+              # Split on spaces and commas without expanding * or ? against the runner's files.
+              IFS=', ' read -ra names <<<"$rest"
+              for name in "${names[@]}"; do
                 if [ "$cmd" = /label ]; then
                   gh label create "$name" --color ededed 2>/dev/null || true
                   gh api -X POST "repos/$GH_REPO/issues/$NUMBER/labels" -f "labels[]=$name" >/dev/null && done_list="$done_list \`$name\`"
