@@ -24,8 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          token: ${{ secrets.AGENT_TOKEN }}
           fetch-depth: 0
+          # The token is not left in .git/config; the push below gets it from gh.
+          persist-credentials: false
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -65,6 +66,7 @@ jobs:
           git config user.email "$(gh api user -q .id)+TonyD365-Agent@users.noreply.github.com"
           git switch -c "$branch"
           git commit -qam "Changelog: $VERSION (draft)"
+          gh auth setup-git
           git push -q origin "$branch"
           printf '%s\n' "Draft of the changelog for $VERSION, from the pull requests merged since $tag." "" \
             "Before approving: rewrite the lines for users (what changed for them), merge or drop small ones, and add a bold note at the top for a security update or anything users must do." > body.md
