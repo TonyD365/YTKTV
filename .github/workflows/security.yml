@@ -79,6 +79,9 @@ jobs:
       - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           languages: ${{ matrix.language }}
+          # The extended suite: more security queries than the default (for workflows, also
+          # untrusted checkouts, artifact poisoning, cache poisoning and excessive secrets).
+          queries: security-extended
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           category: /language:${{ matrix.language }}
