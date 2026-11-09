@@ -2,7 +2,7 @@
 // render that leaves a one-line answer behind, so the flow in main.tsx reads top to bottom.
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import Spinner from "ink-spinner";
-import { NoTerminal, answered, clickRow, style } from "./buttons";
+import { NoTerminal, answered, clickRow, size, style, wrap } from "./buttons";
 import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 
 export const PINK = "#ff3d9a";
@@ -333,7 +333,37 @@ function Pager({ title, text, done }: { title: string; text: string; done: (v: n
   );
 }
 
-export function page(title: string, text: string): Promise<null> {
+export async function page(title: string, text: string): Promise<null> {
+  if (process.platform !== "win32") {
+    try {
+      const [rows, cols] = size();
+      const lines = wrap(text, Math.max(20, cols - 4));
+      const height = Math.max(5, rows - 6);
+      const last = Math.max(0, lines.length - height);
+      let top = 0;
+      const percent = () => Math.min(100, Math.round(((top + height) / lines.length) * 100));
+      clickRow(
+        () => [
+          `${style.CYAN}\x1b[1m${title}${style.RESET} ${style.DIM}· scroll with the mouse wheel · ${percent()}%${style.RESET}`,
+          ...Array.from({ length: Math.min(height, lines.length) }, (_, i) => `  ${lines[top + i] ?? ""}`),
+        ],
+        () => ["Done reading", "Page down ↓", "Page up ↑"],
+        (i) => {
+          if (i === 0) return true;
+          top = i === 1 ? Math.min(last, top + height) : Math.max(0, top - height);
+          return undefined;
+        },
+        () => new Cancelled(),
+        (down) => {
+          top = down ? Math.min(last, top + 3) : Math.max(0, top - 3);
+        },
+      );
+      say(`\x1b[32m✔${style.RESET} Read the ${title}\n`);
+      return null;
+    } catch (error) {
+      if (!(error instanceof NoTerminal)) throw error;
+    }
+  }
   return ask<null>((done) => <Pager title={title} text={text} done={done} />);
 }
 

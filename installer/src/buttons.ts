@@ -8,6 +8,29 @@ const CYAN = "\x1b[38;2;46;230;255m";
 const DIM = "\x1b[2m";
 const RESET = "\x1b[0m";
 
+/** The terminal's size, [rows, columns]. */
+export function size(): [number, number] {
+  const out = Bun.spawnSync(["sh", "-c", "stty size </dev/tty"]).stdout.toString().trim().split(/\s+/);
+  const [rows, cols] = out.map(Number);
+  return [rows || 24, cols || 80];
+}
+
+/** Splits *text* into lines no wider than *width*, breaking at spaces where it can. */
+export function wrap(text: string, width: number): string[] {
+  const out: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    let rest = line;
+    while (rest.length > width) {
+      let cut = rest.lastIndexOf(" ", width);
+      if (cut <= 0) cut = width;
+      out.push(rest.slice(0, cut));
+      rest = rest.slice(cut).trimStart();
+    }
+    out.push(rest);
+  }
+  return out;
+}
+
 export class NoTerminal extends Error {}
 
 /**
@@ -16,11 +39,14 @@ export class NoTerminal extends Error {}
  * Throws NoTerminal when there is no /dev/tty, and *cancel()* on esc / ctrl-c / q.
  */
 export function clickRow<T>(
-  lines: string[],
+  lines: string[] | (() => string[]),
   labels: () => string[],
   pick: (i: number) => T | undefined,
   cancel: () => Error,
+  wheel?: (down: boolean) => void,
 ): T {
+  const text = typeof lines === "function" ? lines : () => lines;
+  let shown = 0;
   let fd: number;
   try {
     fd = openSync("/dev/tty", "r+");
@@ -45,8 +71,15 @@ export function clickRow<T>(
     say(`\r\x1b[2K${line}${DIM}← click a button${RESET}`);
   };
   try {
-    say(`\r\n${lines.join("\r\n")}\r\n\x1b[?25l`);
-    draw();
+    const block = () => {
+      if (shown) say(`\r\x1b[${shown}A\x1b[J`);
+      const body = text();
+      shown = body.length;
+      say(`${body.join("\r\n")}\r\n`);
+      draw();
+    };
+    say("\r\n\x1b[?25l");
+    block();
     say("\x1b[?1000h\x1b[?1006h\x1b[6n");
     const buf = Buffer.alloc(256);
     let row = -1;
@@ -62,7 +95,10 @@ export function clickRow<T>(
       }
       let chosen = -1;
       for (const m of pending.matchAll(/\x1b\[<(\d+);(\d+);(\d+)([Mm])/g)) {
-        if (m[1] === "0" && m[4] === "M" && Number(m[3]) === row) {
+        if (wheel && (m[1] === "64" || m[1] === "65")) {
+          wheel(m[1] === "65");
+          block();
+        } else if (m[1] === "0" && m[4] === "M" && Number(m[3]) === row) {
           const x = Number(m[2]);
           chosen = ranges.findIndex(([from, to]) => x >= from && x <= to);
         }
@@ -77,7 +113,7 @@ export function clickRow<T>(
       const result = pick(chosen);
       if (result !== undefined) {
         // Leave the question and the answer, not the buttons.
-        say(`\r\x1b[2K\x1b[${lines.length}A\r\x1b[J`);
+        say(`\r\x1b[${shown}A\x1b[J`);
         return result;
       }
       draw();
