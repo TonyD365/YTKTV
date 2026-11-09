@@ -1,7 +1,7 @@
 // The YTKTV installer: pick YTKTV, YTKTV Desk or both, read and accept the license, then
 // it checks the disk, closes running copies, downloads (with resume), verifies, installs,
 // offers mpv, and can open the apps. Run by site/install.sh and site/install.ps1.
-import { closeSync, mkdtempSync, openSync, rmSync } from "node:fs";
+import { closeSync, mkdtempSync, openSync, readSync, rmSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Text } from "ink";
@@ -20,7 +20,7 @@ import {
   repoText,
 } from "./release";
 import * as sys from "./system";
-import { CYAN, Cancelled, PINK, Done, Failed, Header, Note, Page, checklist, page, print, progress, select, task } from "./ui";
+import { CYAN, Cancelled, Done, Failed, Header, Note, Page, checklist, page, print, progress, select, task } from "./ui";
 
 const HELP = `YTKTV installer
 
@@ -91,30 +91,67 @@ async function runInTerminal(command: string[]): Promise<number> {
 }
 
 /**
- * Asks with buttons: each option is a key in brackets, like [O] Open  [N] Not now; type the
- * key and press enter (enter alone takes the first). After sudo the terminal can no longer
- * be read through Ink, so on macOS and Linux the answer is read by sh from its own /dev/tty.
+ * Asks with buttons you click in the terminal (or press the letter, or enter for the first).
+ * After sudo the terminal can no longer be read through Ink, so on macOS and Linux this opens
+ * /dev/tty itself, turns on mouse reports and reads them there.
  */
 async function buttons(question: string, options: { key: string; label: string }[]): Promise<number> {
   if (sys.SYSTEM === "Windows") return select(question, options.map((o) => ({ label: o.label })));
-  const row = options.map((o) => `[${o.key}] ${o.label}`).join("   ");
-  for (;;) {
-    await print(
-      <Text>
-        <Text color={PINK}>? </Text>
-        <Text bold>{question}</Text> <Text color={CYAN}>{row}</Text>
-      </Text>,
-    );
-    const reader = Bun.spawn(["sh", "-c", 'printf "  > " >/dev/tty; IFS= read -r a </dev/tty && printf %s "$a"'], {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "ignore",
-    });
-    const answer = (await new Response(reader.stdout).text()).trim().toLowerCase();
-    if ((await reader.exited) !== 0) throw new Cancelled();
-    if (answer === "") return 0;
-    const i = options.findIndex((o) => o.key.toLowerCase() === answer || o.label.toLowerCase() === answer);
-    if (i >= 0) return i;
+  let fd: number;
+  try {
+    fd = openSync("/dev/tty", "r+");
+  } catch {
+    return select(question, options.map((o) => ({ label: o.label })));
+  }
+  const say = (text: string) => writeSync(fd, text);
+  const saved = Bun.spawnSync(["sh", "-c", "stty -g </dev/tty"]).stdout.toString().trim();
+  Bun.spawnSync(["sh", "-c", "stty raw -echo </dev/tty"]);
+  const ranges: [number, number][] = [];
+  try {
+    let line = `\x1b[1m\x1b[38;2;255;61;154m? \x1b[39m${question}\x1b[0m  `;
+    let col = 3 + question.length + 2;
+    for (const o of options) {
+      const text = ` ${o.label} `;
+      ranges.push([col, col + text.length - 1]);
+      line += `\x1b[7;1m${text}\x1b[0m  `;
+      col += text.length + 2;
+    }
+    say(`\r\n${line}\x1b[?25l\x1b[?1000h\x1b[?1006h\x1b[6n`);
+    const buf = Buffer.alloc(256);
+    let row = -1;
+    let pending = "";
+    for (;;) {
+      const n = readSync(fd, buf, 0, buf.length, null);
+      if (n <= 0) throw new Cancelled();
+      pending += buf.toString("latin1", 0, n);
+      const pos = /\x1b\[(\d+);\d+R/.exec(pending);
+      if (pos) {
+        row = Number(pos[1]);
+        pending = pending.replace(pos[0], "");
+      }
+      for (const m of pending.matchAll(/\x1b\[<(\d+);(\d+);(\d+)([Mm])/g)) {
+        const [x, y] = [Number(m[2]), Number(m[3])];
+        if (m[1] === "0" && m[4] === "M" && y === row) {
+          const i = ranges.findIndex(([from, to]) => x >= from && x <= to);
+          if (i >= 0) return answer(i);
+        }
+      }
+      pending = pending.replace(/\x1b\[<[\d;]*[Mm]/g, "");
+      if (pending === "\x1b" || pending.includes("\x03") || pending.toLowerCase() === "q") throw new Cancelled();
+      if (pending.includes("\r") || pending.includes("\n")) return answer(0);
+      const i = options.findIndex((o) => pending.toLowerCase().includes(o.key.toLowerCase()));
+      if (i >= 0) return answer(i);
+      if (!pending.startsWith("\x1b")) pending = "";
+    }
+  } finally {
+    say("\x1b[?1006l\x1b[?1000l\x1b[?25h");
+    Bun.spawnSync(["sh", "-c", `stty ${saved.replace(/[^\w:=-]/g, "") || "sane"} </dev/tty`]);
+    closeSync(fd);
+  }
+
+  function answer(i: number): number {
+    say(`\r\x1b[2K\x1b[38;2;255;61;154m? \x1b[39m${question} \x1b[38;2;46;230;255m${options[i].label}\x1b[0m\r\n`);
+    return i;
   }
 }
 
