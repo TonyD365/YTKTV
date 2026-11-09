@@ -9,6 +9,9 @@ on:
   push:
     branches: [main]
   pull_request:
+    # A pull request that only changes documentation skips the tests and scans (main
+    # still runs everything after the merge).
+    paths-ignore: ["docs/**", "**/*.md", "LICENSE"]
   schedule:
     - cron: "41 5 */2 * *" # every two days
   workflow_dispatch:
