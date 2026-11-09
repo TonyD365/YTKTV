@@ -26,6 +26,12 @@ concurrency:
 jobs:
   decide:
     name: Changes the installers?
+    # Not after the pull request is closed, and not for the bot's status labels
+    # (Checks-Passed and so on): only for the label that asks for these tests.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.state == 'open' &&
+       (github.event.action != 'labeled' || github.event.label.name == 'installer'))
     runs-on: ubuntu-latest
     outputs:
       run: ${{ steps.check.outputs.run }}
