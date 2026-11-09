@@ -128,6 +128,8 @@ export async function install(app: App, file: string, version: string): Promise<
     if (code !== 0) throw new Error(`The installer stopped with code ${code}.`);
     return;
   }
+  // The version comes from the release's tag: write it only if it is a plain version number.
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`Unexpected version: ${version.slice(0, 40)}`);
   const target = appPath(app);
   mkdirSync(dirname(target), { recursive: true });
   renameSync(file, target);
