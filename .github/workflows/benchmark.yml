@@ -8,6 +8,9 @@ name: Benchmark
 
 on:
   pull_request:
+    # A pull request that only changes documentation skips the tests and scans (main
+    # still runs everything after the merge).
+    paths-ignore: ["docs/**", "**/*.md", "LICENSE"]
 
 concurrency:
   group: benchmark-${{ github.ref }}
