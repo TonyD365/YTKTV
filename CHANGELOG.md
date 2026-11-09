@@ -5,20 +5,21 @@ has the installers and the full notes.
 
 ## 4.3.0
 
-<!-- Draft from the pull requests merged since v4.2.0: rewrite each line for users. -->
+### 📺 Cast to a Chromecast (beta)
+- **Settings → TV Without a Cable** finds the Chromecasts on your network and casts the whole MV screen to one: the video, lyrics, pitch guide and scores. The sound stays on the computer's speakers, and the picture on the TV is 1 to 3 seconds behind, so sing along with the speakers. Each cast uses a new private address, so others on the Wi-Fi cannot watch it. This is new: tell us how it works with your Chromecast.
 
-### ✨ New
-- Desk Insights: period picker, busy-hours heat map, top 20 lists, room utilisation, CSV export (#209)
-- Desk: time-of-day room prices (happy hour, surcharges, late-night packages) (#208)
-- Pitch guide on/off switch (#207)
+### 🎤 Pitch guide switch
+- A **Guide** button next to **Score** shows or hides the original singer's melody on the MV screen. Hide it for a cleaner screen; the score still counts.
+
+### 💰 Time prices for rooms (YTKTV Desk)
+- Happy hours, weekend surcharges and late-night packages in **Settings → Packages and Coupons → Time prices**: a percentage on the room's rate, a fixed hourly rate, or one price for a time window (e.g. midnight to 6:00). Rules can cover chosen days and cross midnight. Each part shows as its own line on the bill.
+
+### 📈 Insights (YTKTV Desk)
+- Pick any period, see the busiest hours as a weekday-by-hour heat map, the top 20 songs and best-selling items, how much each room was used, and export it all as CSV.
 
 ### 🔧 Also
-- Cast the MV screen to a Chromecast (#210)
-- Keep the wiki in sync with docs/guide automatically (#206)
-- Stale pull requests: 30 days instead of 14 (#205)
-- YouTube check: a bot check on GitHub's machine is a warning, not a failure (#204)
-- Release token scope, safer label step, changelog draft workflow (#201)
-
+- The online guide (GitHub wiki) now updates by itself whenever the guide changes.
+- Behind the scenes: tighter permissions in the release steps, and the nightly YouTube check no longer raises a false alarm when YouTube blocks GitHub's servers.
 
 ## 4.2.0
 
