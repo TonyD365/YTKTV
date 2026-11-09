@@ -20,7 +20,7 @@ import {
   repoText,
 } from "./release";
 import * as sys from "./system";
-import { CYAN, Cancelled, Done, Failed, Header, Note, Page, checklist, page, print, progress, select, task } from "./ui";
+import { CYAN, Cancelled, PINK, Done, Failed, Header, Note, Page, checklist, page, print, progress, select, task } from "./ui";
 
 const HELP = `YTKTV installer
 
@@ -87,6 +87,34 @@ async function runInTerminal(command: string[]): Promise<number> {
     return await Bun.spawn(command, { stdio: [io, io, io] }).exited;
   } finally {
     if (tty !== undefined) closeSync(tty);
+  }
+}
+
+/**
+ * Asks with buttons: each option is a key in brackets, like [O] Open  [N] Not now; type the
+ * key and press enter (enter alone takes the first). After sudo the terminal can no longer
+ * be read through Ink, so on macOS and Linux the answer is read by sh from its own /dev/tty.
+ */
+async function buttons(question: string, options: { key: string; label: string }[]): Promise<number> {
+  if (sys.SYSTEM === "Windows") return select(question, options.map((o) => ({ label: o.label })));
+  const row = options.map((o) => `[${o.key}] ${o.label}`).join("   ");
+  for (;;) {
+    await print(
+      <Text>
+        <Text color={PINK}>? </Text>
+        <Text bold>{question}</Text> <Text color={CYAN}>{row}</Text>
+      </Text>,
+    );
+    const reader = Bun.spawn(["sh", "-c", 'printf "  > " >/dev/tty; IFS= read -r a </dev/tty && printf %s "$a"'], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    const answer = (await new Response(reader.stdout).text()).trim().toLowerCase();
+    if ((await reader.exited) !== 0) throw new Cancelled();
+    if (answer === "") return 0;
+    const i = options.findIndex((o) => o.key.toLowerCase() === answer || o.label.toLowerCase() === answer);
+    if (i >= 0) return i;
   }
 }
 
@@ -215,9 +243,9 @@ async function main(): Promise<void> {
     } else {
       const go = YES
         ? 1
-        : await select("YTKTV plays songs through mpv, which is not on this computer. Install it now?", [
-            { label: "Install mpv", hint: `runs: ${command.join(" ")}` },
-            { label: "Later", hint: "YTKTV offers it when it first opens" },
+        : await buttons(`YTKTV plays songs through mpv, which is not on this computer. Install it now (runs: ${command.join(" ")})?`, [
+            { key: "I", label: "Install mpv" },
+            { key: "L", label: "Later" },
           ]);
       if (go === 0) {
         await print(<Text color={CYAN}>$ {command.join(" ")}</Text>);
@@ -235,10 +263,10 @@ async function main(): Promise<void> {
     if (text) await print(<Page text={text} color="green" />);
   }
   if (YES) return;
-  const options = apps.map((app) => ({ label: `Open ${label(app)}`, hint: "start it now" }));
-  if (apps.length > 1) options.push({ label: "Open both", hint: "start YTKTV and YTKTV Desk" });
-  options.push({ label: "Not now", hint: "close the installer" });
-  const choice = await select("Open it now?", options);
+  const options = apps.map((app) => ({ key: app === "YTKTV" ? "Y" : "D", label: `Open ${label(app)}` }));
+  if (apps.length > 1) options.push({ key: "B", label: "Open both" });
+  options.push({ key: "N", label: "Not now" });
+  const choice = await buttons("Open it now?", options);
   if (choice < apps.length) sys.open(apps[choice]);
   else if (apps.length > 1 && choice === apps.length) apps.forEach(sys.open);
 }
