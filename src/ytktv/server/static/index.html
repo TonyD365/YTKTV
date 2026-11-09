@@ -414,16 +414,21 @@ function renderService() {
   document.querySelectorAll('[data-call="Drinks"], [data-call="Snacks"]').forEach((b) => {
     b.style.display = service.products.length ? "none" : "";
   });
-  const groups = {};
-  for (const p of service.products) (groups[p.category || "Other"] ||= []).push(p);
+  // A Map, so a category named like "__proto__" is just a name.
+  const groups = new Map();
+  for (const p of service.products) {
+    const key = String(p.category || "Other");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  }
   const rows = [];
-  for (const category of Object.keys(groups).sort()) {
+  for (const category of [...groups.keys()].sort()) {
     const head = document.createElement("div");
     head.className = "menu-category";
     head.style.cssText = "margin:14px 0 2px;font-size:12px;letter-spacing:1.5px;color:var(--cyan);text-transform:uppercase;font-weight:700";
     head.textContent = category;
     rows.push(head);
-    for (const p of groups[category]) {
+    for (const p of groups.get(category)) {
       const row = document.createElement("div");
       row.className = "menu-row";
       row.style.cssText = "display:flex;align-items:center;gap:8px;margin:6px 0";
