@@ -25,6 +25,12 @@ concurrency:
 jobs:
   decide:
     name: Which areas?
+    # Not after the pull request is closed, and not for the bot's status labels
+    # (Checks-Passed and so on): only for the label that asks for these tests.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.state == 'open' &&
+       (github.event.action != 'labeled' || contains(fromJSON('["desk","separation","packaging"]'), github.event.label.name)))
     runs-on: ubuntu-latest
     outputs:
       desk: ${{ steps.check.outputs.desk }}
