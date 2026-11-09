@@ -11,6 +11,6 @@ permissions:
 
 jobs:
   note:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - run: echo "Review on pull request ${{ github.event.pull_request.number }}"
