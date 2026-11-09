@@ -3,6 +3,23 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.3.0
+
+<!-- Draft from the pull requests merged since v4.2.0: rewrite each line for users. -->
+
+### ✨ New
+- Desk Insights: period picker, busy-hours heat map, top 20 lists, room utilisation, CSV export (#209)
+- Desk: time-of-day room prices (happy hour, surcharges, late-night packages) (#208)
+- Pitch guide on/off switch (#207)
+
+### 🔧 Also
+- Cast the MV screen to a Chromecast (#210)
+- Keep the wiki in sync with docs/guide automatically (#206)
+- Stale pull requests: 30 days instead of 14 (#205)
+- YouTube check: a bot check on GitHub's machine is a warning, not a failure (#204)
+- Release token scope, safer label step, changelog draft workflow (#201)
+
+
 ## 4.2.0
 
 **Update YTKTV Desk and every room's YTKTV to 4.2.0 together.** The Desk and the rooms now name the room in every message the Desk signs; a room on 4.2.0 ignores an "unpair" from an older Desk. Everything else between them keeps working while you update.
