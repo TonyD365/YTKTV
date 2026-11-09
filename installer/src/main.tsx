@@ -215,9 +215,9 @@ async function main(): Promise<void> {
     } else {
       const go = YES
         ? 1
-        : await select("YTKTV plays songs through mpv, which is not on this computer. Install it now?", [
-            { label: "Install mpv", hint: `runs: ${command.join(" ")}` },
-            { label: "Later", hint: "YTKTV offers it when it first opens" },
+        : await select(`YTKTV plays songs through mpv, which is not on this computer. Install it now (runs: ${command.join(" ")})?`, [
+            { label: "Install mpv" },
+            { label: "Later" },
           ]);
       if (go === 0) {
         await print(<Text color={CYAN}>$ {command.join(" ")}</Text>);
@@ -235,9 +235,9 @@ async function main(): Promise<void> {
     if (text) await print(<Page text={text} color="green" />);
   }
   if (YES) return;
-  const options = apps.map((app) => ({ label: `Open ${label(app)}`, hint: "start it now" }));
-  if (apps.length > 1) options.push({ label: "Open both", hint: "start YTKTV and YTKTV Desk" });
-  options.push({ label: "Not now", hint: "close the installer" });
+  const options = apps.map((app) => ({ label: `Open ${label(app)}` }));
+  if (apps.length > 1) options.push({ label: "Open both" });
+  options.push({ label: "Not now" });
   const choice = await select("Open it now?", options);
   if (choice < apps.length) sys.open(apps[choice]);
   else if (apps.length > 1 && choice === apps.length) apps.forEach(sys.open);
