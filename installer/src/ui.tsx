@@ -2,6 +2,7 @@
 // render that leaves a one-line answer behind, so the flow in main.tsx reads top to bottom.
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import Spinner from "ink-spinner";
+import { NoTerminal, answered, clickRow, style } from "./buttons";
 import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 
 export const PINK = "#ff3d9a";
@@ -38,6 +39,13 @@ function close(instance: { unmount: () => void }): Promise<void> {
 }
 
 export class Cancelled extends Error {}
+
+const say = (text: string) => process.stdout.write(text);
+
+/** The options' hints, one dim line each, shown above the buttons. */
+function hints(options: Option[]): string[] {
+  return options.filter((o) => o.hint).map((o) => `  ${o.label.padEnd(14)}${style.DIM}${o.hint}${style.RESET}`);
+}
 
 function useCancel(onCancel: () => void) {
   useInput((input, key) => {
@@ -172,6 +180,20 @@ function Select({ question, options, done }: { question: string; options: Option
 
 /** An arrow-key menu; resolves with the chosen index, throws Cancelled on esc / q. */
 export async function select(question: string, options: Option[]): Promise<number> {
+  if (process.platform !== "win32") {
+    try {
+      const i = clickRow(
+        [`${style.PINK}? ${style.RESET}\x1b[1m${question}${style.RESET}`, ...hints(options)],
+        () => options.map((o) => o.label),
+        (i) => i,
+        () => new Cancelled(),
+      );
+      answered(say, question, options[i].label);
+      return i;
+    } catch (error) {
+      if (!(error instanceof NoTerminal)) throw error;
+    }
+  }
   const chosen = await ask<number>((done) => <Select question={question} options={options} done={done} />);
   if (chosen < 0) throw new Cancelled();
   return chosen;
@@ -247,6 +269,25 @@ function Checklist({
 
 /** Checkboxes; resolves with the ticks, throws Cancelled on esc / q. */
 export async function checklist(question: string, options: Option[], initial: boolean[]): Promise<boolean[]> {
+  if (process.platform !== "win32") {
+    const ticks = [...initial];
+    try {
+      clickRow(
+        [`${style.PINK}? ${style.RESET}\x1b[1m${question}${style.RESET} ${style.DIM}(click to tick, then Continue)${style.RESET}`, ...hints(options)],
+        () => [...options.map((o, i) => `${ticks[i] ? "◉" : "◯"} ${o.label}`), "Continue →"],
+        (i) => {
+          if (i < options.length) ticks[i] = !ticks[i];
+          else if (ticks.includes(true)) return true;
+          return undefined;
+        },
+        () => new Cancelled(),
+      );
+      answered(say, question, options.filter((_, i) => ticks[i]).map((o) => o.label).join(" + "));
+      return ticks;
+    } catch (error) {
+      if (!(error instanceof NoTerminal)) throw error;
+    }
+  }
   const ticks = await ask<boolean[] | null>((done) => (
     <Checklist question={question} options={options} initial={initial} done={done} />
   ));

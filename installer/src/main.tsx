@@ -1,7 +1,7 @@
 // The YTKTV installer: pick YTKTV, YTKTV Desk or both, read and accept the license, then
 // it checks the disk, closes running copies, downloads (with resume), verifies, installs,
 // offers mpv, and can open the apps. Run by site/install.sh and site/install.ps1.
-import { closeSync, mkdtempSync, openSync, readSync, rmSync, writeSync } from "node:fs";
+import { closeSync, mkdtempSync, openSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Text } from "ink";
@@ -87,71 +87,6 @@ async function runInTerminal(command: string[]): Promise<number> {
     return await Bun.spawn(command, { stdio: [io, io, io] }).exited;
   } finally {
     if (tty !== undefined) closeSync(tty);
-  }
-}
-
-/**
- * Asks with buttons you click in the terminal (or press the letter, or enter for the first).
- * After sudo the terminal can no longer be read through Ink, so on macOS and Linux this opens
- * /dev/tty itself, turns on mouse reports and reads them there.
- */
-async function buttons(question: string, options: { key: string; label: string }[]): Promise<number> {
-  if (sys.SYSTEM === "Windows") return select(question, options.map((o) => ({ label: o.label })));
-  let fd: number;
-  try {
-    fd = openSync("/dev/tty", "r+");
-  } catch {
-    return select(question, options.map((o) => ({ label: o.label })));
-  }
-  const say = (text: string) => writeSync(fd, text);
-  const saved = Bun.spawnSync(["sh", "-c", "stty -g </dev/tty"]).stdout.toString().trim();
-  Bun.spawnSync(["sh", "-c", "stty raw -echo </dev/tty"]);
-  const ranges: [number, number][] = [];
-  try {
-    let line = `\x1b[1m\x1b[38;2;255;61;154m? \x1b[39m${question}\x1b[0m  `;
-    let col = 3 + question.length + 2;
-    for (const o of options) {
-      const text = ` ${o.label} `;
-      ranges.push([col, col + text.length - 1]);
-      line += `\x1b[7;1m${text}\x1b[0m  `;
-      col += text.length + 2;
-    }
-    say(`\r\n${line}\x1b[?25l\x1b[?1000h\x1b[?1006h\x1b[6n`);
-    const buf = Buffer.alloc(256);
-    let row = -1;
-    let pending = "";
-    for (;;) {
-      const n = readSync(fd, buf, 0, buf.length, null);
-      if (n <= 0) throw new Cancelled();
-      pending += buf.toString("latin1", 0, n);
-      const pos = /\x1b\[(\d+);\d+R/.exec(pending);
-      if (pos) {
-        row = Number(pos[1]);
-        pending = pending.replace(pos[0], "");
-      }
-      for (const m of pending.matchAll(/\x1b\[<(\d+);(\d+);(\d+)([Mm])/g)) {
-        const [x, y] = [Number(m[2]), Number(m[3])];
-        if (m[1] === "0" && m[4] === "M" && y === row) {
-          const i = ranges.findIndex(([from, to]) => x >= from && x <= to);
-          if (i >= 0) return answer(i);
-        }
-      }
-      pending = pending.replace(/\x1b\[<[\d;]*[Mm]/g, "");
-      if (pending === "\x1b" || pending.includes("\x03") || pending.toLowerCase() === "q") throw new Cancelled();
-      if (pending.includes("\r") || pending.includes("\n")) return answer(0);
-      const i = options.findIndex((o) => pending.toLowerCase().includes(o.key.toLowerCase()));
-      if (i >= 0) return answer(i);
-      if (!pending.startsWith("\x1b")) pending = "";
-    }
-  } finally {
-    say("\x1b[?1006l\x1b[?1000l\x1b[?25h");
-    Bun.spawnSync(["sh", "-c", `stty ${saved.replace(/[^\w:=-]/g, "") || "sane"} </dev/tty`]);
-    closeSync(fd);
-  }
-
-  function answer(i: number): number {
-    say(`\r\x1b[2K\x1b[38;2;255;61;154m? \x1b[39m${question} \x1b[38;2;46;230;255m${options[i].label}\x1b[0m\r\n`);
-    return i;
   }
 }
 
@@ -280,9 +215,9 @@ async function main(): Promise<void> {
     } else {
       const go = YES
         ? 1
-        : await buttons(`YTKTV plays songs through mpv, which is not on this computer. Install it now (runs: ${command.join(" ")})?`, [
-            { key: "I", label: "Install mpv" },
-            { key: "L", label: "Later" },
+        : await select(`YTKTV plays songs through mpv, which is not on this computer. Install it now (runs: ${command.join(" ")})?`, [
+            { label: "Install mpv" },
+            { label: "Later" },
           ]);
       if (go === 0) {
         await print(<Text color={CYAN}>$ {command.join(" ")}</Text>);
@@ -300,10 +235,10 @@ async function main(): Promise<void> {
     if (text) await print(<Page text={text} color="green" />);
   }
   if (YES) return;
-  const options = apps.map((app) => ({ key: app === "YTKTV" ? "Y" : "D", label: `Open ${label(app)}` }));
-  if (apps.length > 1) options.push({ key: "B", label: "Open both" });
-  options.push({ key: "N", label: "Not now" });
-  const choice = await buttons("Open it now?", options);
+  const options = apps.map((app) => ({ label: `Open ${label(app)}` }));
+  if (apps.length > 1) options.push({ label: "Open both" });
+  options.push({ label: "Not now" });
+  const choice = await select("Open it now?", options);
   if (choice < apps.length) sys.open(apps[choice]);
   else if (apps.length > 1 && choice === apps.length) apps.forEach(sys.open);
 }
