@@ -123,6 +123,12 @@ jobs:
           # Cancelled is not the change's fault: it counts as an internal error, not a failure.
           failed=$(awk -F'\t' '$3=="failure"||$3=="timed_out"' checks.tsv | wc -l | tr -d ' ')
           running=$(awk -F'\t' '$2!="completed"' checks.tsv | wc -l | tr -d ' ')
+          # A job just re-run can be missing from the check list for a few seconds; a workflow run
+          # for this commit that hasn't finished still counts as running (only pull_request ones:
+          # the bot's own workflows run on other events).
+          busy=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$head&event=pull_request&per_page=100" \
+            -q '[.workflow_runs[] | select(.status != "completed")] | length' || echo 0)
+          if [ "$running" = 0 ] && [ "${busy:-0}" != 0 ]; then running=$busy; fi
 
           hint() {  # what a failed check usually means, and what to do
             case "$1" in
