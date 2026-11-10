@@ -878,6 +878,12 @@ class SettingsPage(Page):
         low.toggled.connect(self.set_low_power)
         display.addWidget(low)
 
+        check(
+            display,
+            "Show a recap of the session (and a QR code) when the desk closes the room",
+            "session_recap",
+        )
+
         # Background videos while nobody sings
         idle_card = card("Background Videos")
         idle_note = QLabel(

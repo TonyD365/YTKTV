@@ -411,6 +411,22 @@ class MvWindow(QWidget):
         self._closed_cover.setVisible(closed)
         if closed:
             self._closed_cover.raise_()
+        else:
+            self.show_recap(None)
+
+    def show_recap(self, summary: dict[str, Any] | None, url: str = "") -> None:
+        """The session's recap card on the closed screen (None takes it away)."""
+        from ytktv.ui.recap_card import RecapCard
+
+        old = getattr(self, "recap_card", None)
+        if old is not None:
+            old.deleteLater()
+        self.recap_card: RecapCard | None = None
+        if summary is None or not hasattr(self, "_closed_cover"):
+            return
+        self.recap_card = RecapCard(self._closed_cover, summary, url)
+        self.recap_card.place()
+        self.recap_card.show()
 
     def set_time_left(self, text: str | None) -> None:
         """The room's remaining time, small in the top-left corner."""

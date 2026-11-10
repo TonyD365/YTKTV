@@ -753,6 +753,10 @@ class MainWindow(QMainWindow):
         closed = client.state.closed
         if closed and not self.controller.room_closed:
             self.controller.close_room()
+            self.mv_window.set_room_closed(True)
+            summary = self.controller.last_recap
+            if summary is not None:
+                self.mv_window.show_recap(summary, f"{self.server_url}/recap/{summary['token']}")
         elif not closed and self.controller.room_closed:
             self.controller.open_room()
             self._warned = False
