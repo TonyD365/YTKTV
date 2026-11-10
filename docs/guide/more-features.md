@@ -67,6 +67,18 @@ On a Raspberry Pi or an old computer, **Settings → Low-power mode** plays vide
 turns off the light effects so songs stay smooth. On a weak computer it is already on from the
 first start.
 
+## Themes and your venue's logo
+
+**Settings → Theme** changes the console's colours at once: **Neon** (the default), **Midnight**
+(calm blue-grey), **Lounge** (warm gold) or **Daylight** (light, high contrast, for bright
+rooms). A venue can also type its own accent colour (like `#00a3e0`), which the phones' remote
+page uses too, and choose a logo (PNG, JPEG, WebP, GIF or BMP, up to 2 MB and 4096 pixels a
+side). The logo is copied into YTKTV's data folder and shown on the home screen and on the MV
+screen between songs. Lyrics keep their own colours whatever the theme.
+
+YTKTV Desk has its own **Theme** setting on its settings tab, which the lobby screen follows; it
+takes effect the next time the Desk starts.
+
 ## Reporting a problem
 
 The feedback button opens a GitHub issue with your version and system filled in. After an

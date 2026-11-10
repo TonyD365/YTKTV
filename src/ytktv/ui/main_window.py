@@ -276,8 +276,11 @@ class MainWindow(QMainWindow):
         self.settings_page = SettingsPage(self.ctx, self.server_url)
         self.settings_page.display_changed.connect(self.place_mv)
         self.mixer_page = MixerPanel(self.controller)
+        home = HomePage(self.ctx, self.show_page)
+        self.settings_page.look_changed.connect(home.show_logo)
+        self.settings_page.look_changed.connect(lambda: self.mv_window.idle.update())
         self.pages: dict[str, QWidget] = {
-            "home": HomePage(self.ctx, self.show_page),
+            "home": home,
             "search": SearchPage(self.ctx),
             "hot": HotPage(self.ctx),
             "artists": ArtistsPage(self.ctx),

@@ -3,6 +3,9 @@
 Phones need no app: they use the web browser. The phone and the computer must be on the same
 Wi-Fi network.
 
+The pages follow the phone's own light or dark setting, and use the room's accent colour when
+the venue has set one.
+
 ## Queueing songs
 
 Scan the QR code on the console (top right) or on the TV while nothing is playing. The page has

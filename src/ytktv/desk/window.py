@@ -33,7 +33,7 @@ from ytktv.desk import birthday, lock
 from ytktv.desk.admin_dialog import AdminSettingsDialog
 from ytktv.desk.billing import bill
 from ytktv.desk.deals import DealsSettings
-from ytktv.desk.lobby import Lobby, LobbySettings
+from ytktv.desk.lobby import Lobby, LobbySettings, ThemeSettings
 from ytktv.desk.pages import (
     BookingsPage,
     InsightsPage,
@@ -417,6 +417,8 @@ class DeskWindow(QMainWindow):
         column.addWidget(self.call_settings)
         self.lobby_settings = LobbySettings(self.store, self._lobby_changed)
         column.addWidget(self.lobby_settings)
+        self.theme_settings = ThemeSettings(self.store)
+        column.addWidget(self.theme_settings)
         return tab
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt)
