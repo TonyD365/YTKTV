@@ -682,6 +682,10 @@ class MainWindow(QMainWindow):
             if self.controller.local is not None:
                 self.controller.local.scan_soon()
             self.settings_page.local_card.load()
+        if kind in ("member_songs", "open", "close", "unbind"):
+            # The member's songs arrived or the session ended: the Favorites page and phones.
+            self.controller.bus.emit("favorites", None)
+            self.controller.notify()
         if kind == "unbind":
             self.room_closed_view.hide()
         elif kind == "call_done":

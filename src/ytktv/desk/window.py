@@ -839,7 +839,11 @@ class DeskWindow(QMainWindow):
 
     # Each takes optional answers so tests can skip the dialogs.
     def open_room(
-        self, _checked: bool = False, guest: str | None = None, length: str | None = None
+        self,
+        _checked: bool = False,
+        guest: str | None = None,
+        length: str | None = None,
+        member_phone: str | None = None,
     ) -> None:
         if self.selected is None:
             return
@@ -847,6 +851,20 @@ class DeskWindow(QMainWindow):
             guest, ok = QInputDialog.getText(self, "Open room", "Guest name (optional):")
             if not ok:
                 return
+        elif member_phone is None:
+            member_phone = ""  # answered in code (tests): no member unless given
+        if member_phone is None:
+            member_phone, ok = QInputDialog.getText(
+                self, "Open room", "Member phone (optional, brings their songs):"
+            )
+            if not ok:
+                return
+        member = self.store.member_by_phone(member_phone) if member_phone.strip() else None
+        if member_phone.strip() and member is None:
+            QMessageBox.information(self, "Open room", "No member has that phone number.")
+            return
+        if member is not None and not guest.strip():
+            guest = member.name
         currency = self.store.setting("currency", "$")
         packages = {
             f"Package · {p.name} ({p.minutes / 60:g} h, {currency}{p.price:g})": p
@@ -873,6 +891,8 @@ class DeskWindow(QMainWindow):
         self.store.open_room(self.selected, guest.strip(), minutes)
         if package is not None:
             self.store.set_session_package(self.selected, package.package_id)
+        if member is not None:
+            self.store.set_session_member(self.selected, member.member_id)
         self.store.set_state(self.selected, "ready")
         tell(self.store, self.hub, self.selected)
         birthday.celebrate_if_birthday(self.store, self.hub, self.selected)

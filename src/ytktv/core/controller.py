@@ -257,6 +257,20 @@ class KTVController:
             return None
         return {"currency": desk.currency, "products": desk.products}
 
+    def member_songs(self) -> dict[str, Any] | None:
+        """The songs of the member the staff terminal opened this room for, if any."""
+        desk = self.front_desk
+        member = getattr(desk, "member", None) if desk is not None else None
+        if self.room_closed or not isinstance(member, dict):
+            return None
+        return member
+
+    def _tell_member(self, kind: str, song: Song) -> None:
+        """Send a song sung or liked in this session back to the member's list at the desk."""
+        desk = self.front_desk
+        if desk is not None and self.member_songs() is not None:
+            desk.member_song(kind, song.to_dict())
+
     def close_room(self) -> None:
         """The staff terminal closed this room: stop singing and forget the queue."""
         self.room_closed = True
@@ -378,6 +392,7 @@ class KTVController:
                 if self.current is not None and self._started and not self.idle_playing:
                     self.queue.add_history(self.current.song)
                     self.library.save(self.queue.history())
+                    self._tell_member("sung", self.current.song)
                     self.recap.song(self.current.song.title, self.current.singer, self.position)
                     self._announce_score(self.current)
                 had_melody, self._keeper = self._keeper is not None, None
@@ -1348,6 +1363,7 @@ class KTVController:
             result = False
         else:
             self.library.add_favorite(song)
+            self._tell_member("favourite", song)
             result = True
         self.bus.emit("favorites", None)
         return result
@@ -1512,6 +1528,7 @@ class KTVController:
             "current": self._item_dict(current) if current else None,
             "queue": self._queue_dicts(current),
             "history": [song.to_dict() for song in self.queue.history()[:50]],
+            "member_songs": self.member_songs(),
             "position": self.position,
             "duration": self.duration,
             "vocal_mode": self.vocal_mode.value,

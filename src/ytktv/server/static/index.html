@@ -177,6 +177,10 @@
       <h3>Tonight's best</h3>
       <div id="board"></div>
     </div>
+    <div id="member-box" hidden>
+      <h3 id="member-name"></h3>
+      <div id="member-songs"></div>
+    </div>
     <h3>Sung</h3>
     <div id="history"></div>
   </section>
@@ -524,6 +528,22 @@ function render() {
     board.append(el("div", {class: "turn"}, el("b", {}, `${entry.rank}.  ${who}`), el("span", {}, String(entry.points))));
   }
   $("board-box").hidden = !board.children.length;
+
+  // The songs of the member the staff opened this room for (this session only).
+  const member = state.member_songs;
+  const ms = $("member-songs");
+  ms.replaceChildren();
+  $("member-box").hidden = !member;
+  if (member) {
+    $("member-name").textContent = `${member.name || "Member"}'s songs`;
+    const seen = new Set();
+    for (const song of [...member.favourites, ...member.sung]) {
+      if (seen.has(song.video_id) || seen.size >= 20) continue;
+      seen.add(song.video_id);
+      ms.append(songCard(song, [el("button", {class: "mini pink", onclick: () => add(song, false)}, "Add")]));
+    }
+    if (!seen.size) ms.append(el("div", {class: "empty"}, "No songs saved yet."));
+  }
 
   const h = $("history");
   h.replaceChildren();

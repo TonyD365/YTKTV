@@ -451,6 +451,13 @@ class ShopSettings(QFrame):
         steady(self.points_per_unit)
         form.addRow("Members save", self.member_discount)
         form.addRow("Member points per 1 spent", self.points_per_unit)
+        self.member_songs = QCheckBox("Members' songs follow them into rooms")
+        self.member_songs.setToolTip(
+            "A room opened for a member gets their favourites and recent songs, only for"
+            " that session; what they sing and like there is saved back to them"
+        )
+        self.member_songs.setChecked(store.setting("member_songs", "1") != "0")
+        form.addRow("", self.member_songs)
         self.service_rate = QDoubleSpinBox()
         self.service_rate.setRange(0, 100)
         self.service_rate.setSuffix(" %")
@@ -581,6 +588,7 @@ class ShopSettings(QFrame):
         self.store.set_setting("block", str(self.block.value()))
         self.store.set_setting("member_discount", str(self.member_discount.value()))
         self.store.set_setting("points_per_unit", str(self.points_per_unit.value()))
+        self.store.set_setting("member_songs", "1" if self.member_songs.isChecked() else "0")
         self.store.set_setting("service_rate", f"{self.service_rate.value():g}")
         self.store.set_setting("tax_rate", f"{self.tax_rate.value():g}")
         self.store.set_setting("low_stock", str(self.low_stock.value()))

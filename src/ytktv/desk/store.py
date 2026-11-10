@@ -19,6 +19,8 @@ from ytktv.rooms import crypto
 CODE_SECONDS = 300  # a pairing code works for five minutes, once
 MAX_PICTURE = 60_000  # base64 characters: plenty for a 160-pixel JPEG
 LOW_STOCK = 5  # warn when a product is down to this many, unless the shop sets otherwise
+MEMBER_RECENT = 30  # songs a member sang lately, kept per member
+MEMBER_FAVOURITES = 50  # favourites kept per member
 
 
 @dataclass
@@ -492,6 +494,62 @@ class DeskStore:
         if row is None:
             return None
         return Package(row[0], row[1], row[2], row[3], row[4], bool(row[5]))
+
+    def set_session_member(self, room_id: str, member_id: int | None) -> None:
+        """The open room's guests are this member: their songs follow them in."""
+        with self._lock:
+            self._db.execute(
+                "UPDATE sessions SET member_id=? WHERE room_id=?", (member_id, room_id)
+            )
+            self._db.commit()
+
+    def session_member(self, room_id: str) -> Member | None:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT m.id, m.name, m.phone, m.balance, m.points, m.birthday FROM sessions s"
+                " JOIN members m ON m.id = s.member_id WHERE s.room_id=?",
+                (room_id,),
+            ).fetchone()
+        return None if row is None else Member(*row)
+
+    def add_member_song(self, member_id: int, kind: str, song: dict[str, Any]) -> None:
+        """Remember a song a member sang ("sung") or liked ("favourite"), newest first."""
+        if kind not in ("sung", "favourite"):
+            return
+        video_id = str(song.get("video_id", "")).strip()[:64]
+        title = str(song.get("title", "")).strip()[:200]
+        if not video_id or not title:
+            return
+        clean = {
+            "video_id": video_id,
+            "title": title,
+            "channel": str(song.get("channel", ""))[:120],
+            "duration": int(song["duration"]) if isinstance(song.get("duration"), int) else 0,
+        }
+        cap = MEMBER_RECENT if kind == "sung" else MEMBER_FAVOURITES
+        with self._lock:
+            self._db.execute(
+                "INSERT OR REPLACE INTO member_songs (member_id, kind, video_id, song, at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (member_id, kind, video_id, json.dumps(clean), time.time()),
+            )
+            self._db.execute(
+                "DELETE FROM member_songs WHERE member_id=? AND kind=? AND video_id NOT IN"
+                " (SELECT video_id FROM member_songs WHERE member_id=? AND kind=?"
+                " ORDER BY at DESC LIMIT ?)",
+                (member_id, kind, member_id, kind, cap),
+            )
+            self._db.commit()
+
+    def member_songs(self, member_id: int, kind: str) -> list[dict[str, Any]]:
+        cap = MEMBER_RECENT if kind == "sung" else MEMBER_FAVOURITES
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT song FROM member_songs WHERE member_id=? AND kind=?"
+                " ORDER BY at DESC LIMIT ?",
+                (member_id, kind, cap),
+            ).fetchall()
+        return [json.loads(row[0]) for row in rows]
 
     def coupons(self) -> list[Coupon]:
         with self._lock:
@@ -1032,6 +1090,16 @@ def _product_pictures(db: sqlite3.Connection) -> None:
     )
 
 
+def _member_songs(db: sqlite3.Connection) -> None:
+    """A member's sung songs and favourites, which follow them into the rooms they open."""
+    db.executescript(
+        "ALTER TABLE sessions ADD COLUMN member_id INTEGER;"
+        "CREATE TABLE IF NOT EXISTS member_songs (member_id INTEGER NOT NULL,"
+        " kind TEXT NOT NULL, video_id TEXT NOT NULL, song TEXT NOT NULL, at REAL NOT NULL,"
+        " PRIMARY KEY (member_id, kind, video_id));"
+    )
+
+
 MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _baseline,
     _staff_terminals,
@@ -1041,5 +1109,6 @@ MIGRATIONS: list[Callable[[sqlite3.Connection], None]] = [
     _call_handled_at,
     _product_pictures,
     _scores,
+    _member_songs,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
