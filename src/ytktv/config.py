@@ -66,6 +66,9 @@ class Settings:
     smart_lights_host: str = ""  # the WLED controller's or the Hue bridge's address
     hue_key: str = ""  # what the Hue bridge gave when paired
     text_size: str = "Normal"  # Normal, Large or Extra large (see theme.TEXT_SIZES)
+    theme: str = "Neon"  # the console's colours (see theme.THEMES)
+    accent_color: str = ""  # the venue's own accent colour, #rrggbb, or "" for the theme's
+    venue_logo: str = ""  # venue-logo.<ext> in the data folder: home and idle screens
     # Write lyrics with Whisper (a download): every song's with a GPU, so the timing
     # matches the video; with only a CPU, the songs that have no lyrics online.
     ai_lyrics: bool = True
@@ -102,6 +105,8 @@ class Settings:
     lights: bool = True
     # Score each song by comparing the microphones with the original singer's melody.
     scoring: bool = True
+    # When the desk closes the room, show what was sung (and a QR code to keep it).
+    session_recap: bool = True
     # While scoring, draw the original singer's melody on the MV screen (the pitch guide),
     # with what is being sung on top; scoring works the same with it hidden.
     pitch_guide: bool = True

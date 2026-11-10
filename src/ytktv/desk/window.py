@@ -29,11 +29,11 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv import updater
-from ytktv.desk import lock
+from ytktv.desk import birthday, lock
 from ytktv.desk.admin_dialog import AdminSettingsDialog
 from ytktv.desk.billing import bill
 from ytktv.desk.deals import DealsSettings
-from ytktv.desk.lobby import Lobby, LobbySettings
+from ytktv.desk.lobby import Lobby, LobbySettings, ThemeSettings
 from ytktv.desk.pages import (
     BookingsPage,
     InsightsPage,
@@ -63,7 +63,14 @@ from ytktv.ui import backdrop, icons
 
 COLUMNS = 4
 ICON = Path(__file__).parent / "assets" / "icon.png"
-TIPS = ("Skip the song", "Pause or resume", "Music volume", "Send a message", "Lock or unlock")
+TIPS = (
+    "Skip the song",
+    "Pause or resume",
+    "Music volume",
+    "Send a message",
+    "Lock or unlock",
+    "Birthday party on the room's TV",
+)
 LENGTHS = {"1 hour": 60, "2 hours": 120, "3 hours": 180, "No time limit": None}
 EXTRA = {"30 minutes": 30, "1 hour": 60}
 STYLE = """
@@ -335,6 +342,7 @@ class DeskWindow(QMainWindow):
             ("🔊", self._volume),
             ("💬", self._message_room),
             ("🔒", self._toggle_lock),
+            ("🎂", self._birthday),
         ):
             button = QPushButton(text)
             button.clicked.connect(handler)
@@ -409,6 +417,8 @@ class DeskWindow(QMainWindow):
         column.addWidget(self.call_settings)
         self.lobby_settings = LobbySettings(self.store, self._lobby_changed)
         column.addWidget(self.lobby_settings)
+        self.theme_settings = ThemeSettings(self.store)
+        column.addWidget(self.theme_settings)
         return tab
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt)
@@ -635,6 +645,20 @@ class DeskWindow(QMainWindow):
         if self.selected:
             self.broadcast(rooms=[self.selected])
 
+    def _birthday(self, _checked: bool = False, name: str | None = None) -> None:
+        """Throw a birthday party in the selected room, for the guest or a name typed in."""
+        room = self.store.room(self.selected) if self.selected else None
+        if room is None or not room.is_open:
+            return
+        if name is None:
+            member = birthday.member_for_guest(self.store, room.guest)
+            name, ok = QInputDialog.getText(
+                self, "Birthday", "Whose birthday?", text=member.name if member else room.guest
+            )
+            if not ok:
+                return
+        birthday.celebrate(self.hub, room.room_id, name.strip() or "you")
+
     def _toggle_lock(self) -> None:
         if not self.selected:
             return
@@ -851,12 +875,14 @@ class DeskWindow(QMainWindow):
             self.store.set_session_package(self.selected, package.package_id)
         self.store.set_state(self.selected, "ready")
         tell(self.store, self.hub, self.selected)
+        birthday.celebrate_if_birthday(self.store, self.hub, self.selected)
         self.refresh()
 
     def check_in(self, booking: Booking) -> None:
         """A booked guest arrived: open their room as booked."""
         self.store.open_room(booking.room_id, booking.guest, booking.minutes)
         tell(self.store, self.hub, booking.room_id)
+        birthday.celebrate_if_birthday(self.store, self.hub, booking.room_id)
         self.selected = booking.room_id
         self.show_tab(0)
         self.refresh()

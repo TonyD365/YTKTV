@@ -91,6 +91,7 @@ def main() -> int:
     if config is not None:
         return run_terminal(app, config)
     store = DeskStore(data_dir() / "desk.sqlite3")
+    app.setStyleSheet(theme.apply(store.setting("theme", theme.DEFAULT_THEME)))
     hub = Hub()
     from ytktv.desk import staff
     from ytktv.desk.metrics import Metrics

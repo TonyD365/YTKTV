@@ -23,9 +23,11 @@ from ytktv.core.library import Library
 from ytktv.core.local import is_local
 from ytktv.core.models import PlayStatus, QueueItem, Song, StemStatus, VocalMode
 from ytktv.core.queue import SongQueue
+from ytktv.core.recap import SessionRecap
 from ytktv.core.scoring import Melody, Scoreboard, ScoreKeeper, ScoringLoop
 from ytktv.core.warmup import PLAYBACK
 from ytktv.player.base import PlayerBackend
+from ytktv.ui.theme import accent_of
 from ytktv.youtube.lyrics import LyricLine
 from ytktv.youtube.parse import MediaSource
 
@@ -137,6 +139,8 @@ class KTVController:
         self._keeper: ScoreKeeper | None = None  # scores the song that is playing
         self.last_score: dict[str, Any] | None = None
         self.scoreboard = Scoreboard()  # tonight's scores; starts empty with the app
+        self.recap = SessionRecap()  # this session's songs, for the card when it ends
+        self.last_recap: dict[str, Any] | None = None
         self._scoring_loop: ScoringLoop | None = None
         self._wake = threading.Event()
         self._retries: dict[str, int] = {}
@@ -256,6 +260,13 @@ class KTVController:
     def close_room(self) -> None:
         """The staff terminal closed this room: stop singing and forget the queue."""
         self.room_closed = True
+        with self._lock:
+            current = self.current
+            if current is not None and self._started and not self.idle_playing:
+                # The song cut short by closing still counts.
+                self.recap.song(current.song.title, current.singer, self.position)
+        summary = self.recap.finish()
+        self.last_recap = summary if self.settings.session_recap else None
         self.queue.clear()
         self._sync_preload()
         if self.current is not None:
@@ -264,6 +275,8 @@ class KTVController:
 
     def open_room(self) -> None:
         self.room_closed = False
+        self.recap.start()  # a new session: the last one's recap link stops working
+        self.last_recap = None
         self._emit_state()
 
     def set_local_only(self, enabled: bool) -> None:
@@ -365,6 +378,7 @@ class KTVController:
                 if self.current is not None and self._started and not self.idle_playing:
                     self.queue.add_history(self.current.song)
                     self.library.save(self.queue.history())
+                    self.recap.song(self.current.song.title, self.current.singer, self.position)
                     self._announce_score(self.current)
                 had_melody, self._keeper = self._keeper is not None, None
                 self._started = False
@@ -734,8 +748,11 @@ class KTVController:
                 entries.append({"mic": mic + 1, **score.to_dict(), "rank": place})
             best = max(entries, key=lambda entry: entry["points"])
             result, rank = voices[best["mic"] - 1], best["rank"]
+            if not self.pk_mode:
+                self.recap.score(result.points, item.song.title, item.singer, duet=True)
         else:
             rank = self.scoreboard.add(result.points, item.song.title, item.singer)
+        self.recap.score(result.points, item.song.title, item.singer)
         pk: dict[str, Any] | None = None
         if self.pk_mode:
             if len(entries) >= 2:
@@ -1489,6 +1506,7 @@ class KTVController:
         settings = self.settings
         return {
             "version": __version__,
+            "accent": accent_of(settings.theme, settings.accent_color),  # the phone page's
             "status": status.value,
             "loading": self.loading if status == PlayStatus.LOADING else "",
             "current": self._item_dict(current) if current else None,

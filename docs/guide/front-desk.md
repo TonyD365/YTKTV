@@ -102,6 +102,15 @@ points per unit spent in **Settings → Menu and prices**. **🎂 Birthday** sav
 birthday (MM-DD): on that day they also get the birthday discount set in **Settings → Packages
 and coupons**.
 
+### Birthday party
+
+When you open a room with a member's name or phone number as the guest and it is their birthday,
+the room's TV throws a party: "Happy birthday, (first name)!" with confetti, and a Happy
+Birthday karaoke song goes to the top of the queue. The **🎂** button under the room panel does
+the same by hand, for any name. In **Settings → Packages and coupons**, **Birthday party** turns
+the automatic party off, and **Counts as the birthday** lets it run for a few days either side.
+Only that room is told; the lobby screen never shows it.
+
 ## Packages and coupons
 
 **Settings → Packages and coupons**:

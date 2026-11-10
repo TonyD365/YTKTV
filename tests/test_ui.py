@@ -1224,3 +1224,61 @@ def test_wireless_tv_screen_and_picture_delay(window, qtbot):
     assert "Living Room TV" in main.toast.text()
     main.settings_page.screen_delay.setValue(240)
     assert controller.settings.screen_delay_ms == 240 and controller.player.audio_delay == 0.24
+
+
+def test_settings_switch_theme_and_logo_live(window, qtbot, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QApplication
+
+    from tests.test_themes import picture as _picture
+    from ytktv.ui import theme
+
+    main, controller = window
+    monkeypatch.setattr("ytktv.config.data_dir", lambda: tmp_path)
+    page = main.settings_page
+    page.theme_choice.setCurrentText("Midnight")
+    assert controller.settings.theme == "Midnight" and theme.current == "Midnight"
+    assert theme.THEMES["Midnight"]["PANEL"] in QApplication.instance().styleSheet()
+    page.accent.setText("bad")
+    page.set_look()
+    assert controller.settings.accent_color == "" and "#ff3d9a" in page.look_note.text()
+    page.accent.setText("#00ff88")
+    page.set_look()
+    assert controller.settings.accent_color == "#00ff88"
+    assert controller.state()["accent"] == "#00ff88"
+
+    home = main.pages["home"]
+    page.set_logo(str(_picture(tmp_path / "logo.png")))
+    assert controller.settings.venue_logo == "venue-logo.png"
+    assert theme.logo == tmp_path / "venue-logo.png" and home.logo.pixmap().width() > 0
+    page.set_logo(str(tmp_path / "nothing.txt"))
+    assert "PNG" in page.look_note.text() and controller.settings.venue_logo == "venue-logo.png"
+    page.set_logo("")
+    assert controller.settings.venue_logo == "" and theme.logo is None and home.logo.isHidden()
+    QApplication.instance().setStyleSheet("")
+    theme.apply()
+
+
+def test_console_pages_have_no_white_boxes_in_another_theme(window, qtbot):
+    """The look check again in a non-default dark theme (Midnight)."""
+    from PySide6.QtWidgets import QApplication
+
+    from ytktv.ui import theme
+
+    main, _ = window
+    app = QApplication.instance()
+    before = app.styleSheet()
+    app.setStyleSheet(theme.apply("Midnight"))
+    try:
+        main.resize(1400, 900)
+        problems = {}
+        for key in main.pages:
+            main.show_page(key)
+            qtbot.wait(20)
+            main.setProperty("shot", f"console-midnight-{key}")
+            found = white_boxes(main)
+            if found:
+                problems[key] = found
+        assert problems == {}
+    finally:
+        theme.apply()
+        app.setStyleSheet(before)

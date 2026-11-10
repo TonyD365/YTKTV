@@ -16,13 +16,14 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ytktv import catalog, icon_set
 from ytktv.audio.sfx import SFX_NAMES
 from ytktv.cast import CastStream
+from ytktv.core import recap
 from ytktv.core.controller import KTVController
 from ytktv.core.games import BIRTHDAY_SEARCH
 from ytktv.core.models import Song, VocalMode
@@ -289,6 +290,14 @@ def create_app(
             # The Chromecast's player fetches from its own origin.
             headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
         )
+
+    @app.get("/recap/{token}", include_in_schema=False)
+    def recap_page(token: str) -> HTMLResponse:
+        """The session recap a phone opens from the QR code on the closed room's TV."""
+        summary = controller.recap.lookup(token)
+        if summary is None:
+            raise HTTPException(404, "this recap has expired")
+        return HTMLResponse(recap.page(summary), headers={"Cache-Control": "no-store"})
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
