@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ytktv.desk import birthday
 from ytktv.desk.pricing import (
     DAY_NAMES,
     KINDS,
@@ -266,6 +267,21 @@ class DealsSettings(QFrame):
         self.birthday.setValue(int(float(store.setting("birthday_discount", "0"))))
         self.birthday.valueChanged.connect(lambda v: store.set_setting("birthday_discount", str(v)))
         form.addRow("Members' birthday discount", self.birthday)
+        self.party = QCheckBox("Birthday party on the room's TV when a member's room opens")
+        self.party.setChecked(birthday.enabled(store))
+        self.party.toggled.connect(
+            lambda on: store.set_setting(birthday.ENABLED_SETTING, "1" if on else "0")
+        )
+        form.addRow("Birthday party", self.party)
+        self.party_days = QSpinBox()
+        self.party_days.setRange(0, 31)
+        self.party_days.setSpecialValueText("Only on the day")
+        self.party_days.setSuffix(" days either side")
+        self.party_days.setValue(birthday.window_days(store))
+        self.party_days.valueChanged.connect(
+            lambda v: store.set_setting(birthday.WINDOW_SETTING, str(v))
+        )
+        form.addRow("Counts as the birthday", self.party_days)
         column.addLayout(form)
         self.load()
 
