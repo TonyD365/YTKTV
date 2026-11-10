@@ -14,6 +14,15 @@ while nobody has chosen a song, like a KTV room before the first song. Choose to
 favorites and sung songs, or from one playlist. The first song anyone chooses starts at once;
 background videos are not scored and are not added to Sung.
 
+## Session recap
+
+When YTKTV Desk closes a room, the room's TV shows a recap of the session: how many songs were
+sung, the time spent singing, who sang the most (from the singer names in the queue), the
+highest score and the best duet. Its QR code opens the same recap on a phone, from the room's
+own phone remote server. The link carries a random code and stops working as soon as the room
+opens for the next session. Turn it off in **Settings → MV Screen** ("Show a recap of the
+session...").
+
 ## Mood scenes
 
 On the **Party** page, under **Mood**, pick **Birthday**, **Romantic**, **Party** or **Chill**.

@@ -95,6 +95,8 @@ class Settings:
     lights: bool = True
     # Score each song by comparing the microphones with the original singer's melody.
     scoring: bool = True
+    # When the desk closes the room, show what was sung (and a QR code to keep it).
+    session_recap: bool = True
     # While scoring, draw the original singer's melody on the MV screen (the pitch guide),
     # with what is being sung on top; scoring works the same with it hidden.
     pitch_guide: bool = True
