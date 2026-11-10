@@ -146,8 +146,22 @@ class IdleCard(QWidget):
         glow.setColorAt(0.0, QColor(theme.PINK))
         glow.setColorAt(1.0, QColor(theme.CYAN))
         text_rect = QRectF(0, unit * 8, w, unit * 24)
-        painter.setPen(QPen(QBrush(glow), 1))
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, "YTKTV")
+        venue = QPixmap(str(theme.logo)) if theme.logo is not None else QPixmap()
+        if not venue.isNull():  # the venue's own logo instead of the YTKTV word mark
+            fitted = venue.scaled(
+                int(w * 0.6),
+                int(unit * 22),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            painter.drawPixmap(
+                int((w - fitted.width()) / 2),
+                int(text_rect.center().y() - fitted.height() / 2),
+                fitted,
+            )
+        else:
+            painter.setPen(QPen(QBrush(glow), 1))
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, "YTKTV")
 
         body = QFont()
         body.setPixelSize(int(unit * 4.2))

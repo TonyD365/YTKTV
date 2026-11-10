@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ytktv.ui import icons
+from ytktv.ui import icons, theme
 from ytktv.ui.pages import Context, Page
 
 # (page, label, icon, colour): one tile each, in reading order.
@@ -78,6 +78,11 @@ class HomePage(Page):
         # The room: now playing, up next, how many songs are waiting.
         room = QVBoxLayout()
         room.setSpacing(10)
+        self.logo = QLabel()  # the venue's own logo, when it has set one
+        self.logo.setObjectName("venueLogo")
+        self.logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        room.addWidget(self.logo)
+        self.show_logo()
         now = QFrame()
         now.setObjectName("homeNow")
         now_box = QVBoxLayout(now)
@@ -144,6 +149,23 @@ class HomePage(Page):
         wall.setLayout(grid)
         columns.addWidget(wall, stretch=62)
         self._cover_url = ""
+
+    def show_logo(self) -> None:
+        """Show the venue logo above the room panel, or nothing when there is none."""
+        pixmap = QPixmap(str(theme.logo)) if theme.logo is not None else QPixmap()
+        if pixmap.isNull():
+            self.logo.clear()
+            self.logo.hide()
+            return
+        self.logo.setPixmap(
+            pixmap.scaled(
+                360,
+                90,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+        self.logo.show()
 
     def on_state(self, state: dict[str, Any]) -> None:
         current = state.get("current")

@@ -19,18 +19,24 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv.desk.store import Booking, DeskStore, Room
+from ytktv.ui import theme
 
 # Settings key: "" = off, "-1" = the first screen that is not the main one, "0"... = that screen
 SETTING = "lobby_screen"
 
-STYLE = """
-#lobby { background: #0b0718; }
-#lobby QLabel { color: #f3eeff; }
-#lobby QLabel#title { font-size: 46px; font-weight: 900; color: #ff3d9a; }
-#lobby QLabel#clock { font-size: 40px; font-weight: 700; }
-#lobby QLabel#head { font-size: 22px; font-weight: 800; color: #2ee6ff; letter-spacing: 3px; }
-#lobby QLabel#list { font-size: 28px; }
-#lobby QFrame#card { background: #170f2e; border: 2px solid #2b1f50; border-radius: 18px; }
+
+def style() -> str:
+    """The lobby's look, in the Desk's theme (Neon by default)."""
+    return f"""
+#lobby {{ background: {theme.BG}; }}
+#lobby QLabel {{ color: {theme.TEXT}; }}
+#lobby QLabel#title {{ font-size: 46px; font-weight: 900; color: {theme.PINK}; }}
+#lobby QLabel#clock {{ font-size: 40px; font-weight: 700; }}
+#lobby QLabel#head {{ font-size: 22px; font-weight: 800; color: {theme.CYAN};
+    letter-spacing: 3px; }}
+#lobby QLabel#list {{ font-size: 28px; }}
+#lobby QFrame#card {{ background: {theme.PANEL}; border: 2px solid {theme.LINE};
+    border-radius: 18px; }}
 """
 
 
@@ -66,7 +72,7 @@ class LobbyWindow(QWidget):
         self.setWindowTitle("YTKTV Desk · Lobby")
         self.setObjectName("lobby")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(STYLE)
+        self.setStyleSheet(style())
         page = QVBoxLayout(self)
         page.setContentsMargins(48, 36, 48, 36)
         top = QHBoxLayout()
@@ -173,6 +179,28 @@ class LobbySettings(QFrame):
         on = self.enabled.isChecked()
         self.store.set_setting(SETTING, str(self.display.currentData()) if on else "")
         self.changed()
+
+
+class ThemeSettings(QFrame):
+    """The Desk's colour theme, which the lobby screen follows too."""
+
+    def __init__(self, store: DeskStore) -> None:
+        super().__init__()
+        self.store = store
+        self.setObjectName("panel")
+        column = QVBoxLayout(self)
+        column.setContentsMargins(24, 20, 24, 20)
+        head = QLabel("THEME")
+        head.setObjectName("panelHead")
+        note = QLabel("The Desk's and the lobby screen's colours. Takes effect after a restart.")
+        note.setObjectName("muted")
+        note.setWordWrap(True)
+        self.choice = QComboBox()
+        self.choice.addItems(list(theme.THEMES))
+        self.choice.setCurrentText(store.setting("theme", theme.DEFAULT_THEME))
+        self.choice.currentTextChanged.connect(lambda name: store.set_setting("theme", name))
+        for widget in (head, note, self.choice):
+            column.addWidget(widget)
 
 
 class Lobby:

@@ -26,6 +26,7 @@ from ytktv.core.queue import SongQueue
 from ytktv.core.scoring import Melody, Scoreboard, ScoreKeeper, ScoringLoop
 from ytktv.core.warmup import PLAYBACK
 from ytktv.player.base import PlayerBackend
+from ytktv.ui.theme import accent_of
 from ytktv.youtube.lyrics import LyricLine
 from ytktv.youtube.parse import MediaSource
 
@@ -1489,6 +1490,7 @@ class KTVController:
         settings = self.settings
         return {
             "version": __version__,
+            "accent": accent_of(settings.theme, settings.accent_color),  # the phone page's
             "status": status.value,
             "loading": self.loading if status == PlayStatus.LOADING else "",
             "current": self._item_dict(current) if current else None,
