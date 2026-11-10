@@ -94,6 +94,13 @@ class Settings:
     guide_vocal: int = 0
     # Show the video's own subtitles as karaoke lyrics on the MV screen.
     show_lyrics: bool = True  # the Lyrics button in the control bar
+    # How the lyrics look on the MV screen (names from ui.mv_overlays.LYRIC_*).
+    lyrics_size: str = "Medium"
+    lyrics_outline: str = "Normal"
+    lyrics_high_contrast: bool = False
+    lyrics_colours: str = "Classic"  # a preset, or "Custom" with the two colours below
+    lyrics_waiting_colour: str = "#ffffff"
+    lyrics_sung_colour: str = "#ff3d9a"
     # Music-reactive glow around the MV screen.
     lights: bool = True
     # Score each song by comparing the microphones with the original singer's melody.

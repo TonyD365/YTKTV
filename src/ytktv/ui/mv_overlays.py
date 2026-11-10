@@ -81,6 +81,53 @@ def _outlined_text(
     painter.setOpacity(1.0)
 
 
+# Lyric looks people can choose in Settings. The colours are fixed here, not taken from
+# the app theme, so the MV screen looks the same whatever theme the console uses.
+LYRIC_SIZES = {"Small": 0.8, "Medium": 1.0, "Large": 1.25, "Extra large": 1.5}
+LYRIC_OUTLINES = {"Thin": 0.6, "Normal": 1.0, "Thick": 1.8}
+# Name: (colour before it is sung, sung blend left, sung blend right).
+LYRIC_COLOURS = {
+    "Classic": ("#ffffff", "#ff3d9a", "#2ee6ff"),
+    "Gold": ("#ffffff", "#ffb000", "#ffe066"),
+    "Ocean": ("#ffffff", "#2f7bff", "#33e0ff"),
+    "Lime": ("#ffffff", "#2fd65a", "#c6ff3d"),
+    "Sunset": ("#fff3d6", "#ff5a3d", "#ffb020"),
+}
+CUSTOM_COLOURS = "Custom"
+_EDGE_COLOUR = QColor(6, 3, 16)
+
+
+@dataclass(frozen=True, slots=True)
+class LyricsStyle:
+    """How the lyrics look on the MV screen; the defaults are the original look."""
+
+    size: float = 1.0  # 1.0 = Medium; above 1 the lyrics area grows upwards
+    outline: float = 1.0  # times the normal outline thickness
+    high_contrast: bool = False  # black outline, dark band behind, brighter next line
+    waiting: str = "#ffffff"
+    sung: tuple[str, str] = ("#ff3d9a", "#2ee6ff")
+
+    @classmethod
+    def from_settings(cls, settings: Any) -> LyricsStyle:
+        name = getattr(settings, "lyrics_colours", "Classic")
+        if name == CUSTOM_COLOURS:
+            waiting = str(getattr(settings, "lyrics_waiting_colour", "#ffffff"))
+            sung = str(getattr(settings, "lyrics_sung_colour", "#ff3d9a"))
+            colours = (waiting, sung, sung)
+        else:
+            colours = LYRIC_COLOURS.get(name, LYRIC_COLOURS["Classic"])
+        return cls(
+            size=LYRIC_SIZES.get(getattr(settings, "lyrics_size", ""), 1.0),
+            outline=LYRIC_OUTLINES.get(getattr(settings, "lyrics_outline", ""), 1.0),
+            high_contrast=bool(getattr(settings, "lyrics_high_contrast", False)),
+            waiting=colours[0],
+            sung=(colours[1], colours[2]),
+        )
+
+    def edge_scale(self) -> float:
+        return self.outline * (1.5 if self.high_contrast else 1.0)
+
+
 class _TextSprite:
     """Outlined text drawn once into a pixmap, so later frames only copy it.
 
@@ -97,12 +144,17 @@ class _TextSprite:
         fill: QColor | tuple[QColor, QColor],  # one colour, or a left-to-right blend
         ratio: float,
         outline: bool = True,
+        edge_scale: float = 1.0,
+        edge_colour: QColor = _EDGE_COLOUR,
     ) -> None:
         metrics = QFontMetricsF(font)
         self.width = metrics.horizontalAdvance(text)
         self._font, self._text, self._fill, self._ratio = font, text, fill, ratio
-        self._edge = max(1.5, font.pixelSize() / 14.0) if outline else 0.0
-        self._pad = max(1.5, font.pixelSize() / 14.0) + 2.0
+        edge = max(1.5, font.pixelSize() / 14.0) * edge_scale
+        self._edge = edge if outline else 0.0
+        self._edge_colour = edge_colour
+        self._thick = edge_scale > 1.0
+        self._pad = edge + 2.0
         self._ascent = metrics.ascent()
         self._size = QSizeF(self.width + 2 * self._pad, metrics.height() + 2 * self._pad)
         self.pixmap = QPixmap()
@@ -121,6 +173,13 @@ class _TextSprite:
         painter.drawText(QPointF(self._pad, self._pad + self._ascent), self._text)
         painter.end()
 
+    def _stamps(self) -> list[tuple[float, float]]:
+        """Where the dark copies go; a thick outline needs a fuller ring to stay solid."""
+        if not self._thick:
+            return [(dx * self._edge, dy * self._edge) for dx, dy in _OUTLINE]
+        ring = [(math.cos(i * math.pi / 8), math.sin(i * math.pi / 8)) for i in range(16)]
+        return [(x * r, y * r) for r in (self._edge * 0.5, self._edge) for x, y in ring]
+
     def steps(self) -> Iterator[None]:
         """Draw the sprite, yielding between pieces of work of a few milliseconds each.
 
@@ -132,11 +191,11 @@ class _TextSprite:
         if self._edge:
             # One dark copy of the text, stamped around the origin, makes the outline.
             dark = self._blank()
-            self._write(dark, QColor(6, 3, 16))
+            self._write(dark, self._edge_colour)
             yield
-            for dx, dy in _OUTLINE:
+            for dx, dy in self._stamps():
                 painter = QPainter(pixmap)
-                painter.drawPixmap(QPointF(dx * self._edge, dy * self._edge), dark)
+                painter.drawPixmap(QPointF(dx, dy), dark)
                 painter.end()
                 yield
         if isinstance(self._fill, tuple):
@@ -218,6 +277,18 @@ class LyricsOverlay(_Overlay):
         self._stops: dict[int, list[tuple[float, float]]] = {}
         self._job: tuple[int, Iterator[None]] | None = None
         self._geometry: tuple[int, int, float] | None = None
+        self._style = LyricsStyle()
+
+    def lyrics_style(self) -> LyricsStyle:
+        return self._style
+
+    def set_style(self, style: LyricsStyle) -> None:
+        """Change the look; every line is drawn again."""
+        if style != self._style:
+            self._style = style
+            self._art.clear()
+            self._job = None
+            self.update()
 
     def set_lines(self, lines: list[dict[str, Any]]) -> None:
         self._source = [LyricLine.from_dict(d) for d in lines]
@@ -311,17 +382,31 @@ class LyricsOverlay(_Overlay):
         ratio = self.devicePixelRatioF()
         w, h = float(self.width()), float(self.height())
         line = self._lines[index]
-        font, width = self._fitted_font(line.text, h * 0.36, w * 0.92)
+        style = self._style
+        # Larger sizes make the widget taller (see MvWindow), smaller ones the text.
+        scale = min(1.0, style.size)
+        edge_scale = style.edge_scale()
+        edge_colour = QColor("black") if style.high_contrast else _EDGE_COLOUR
+        font, width = self._fitted_font(line.text, h * 0.36 * scale, w * 0.92)
         waiting, fill = self._colours(index)
-        white = _TextSprite(font, line.text, waiting, ratio)
+        white = _TextSprite(
+            font, line.text, waiting, ratio, edge_scale=edge_scale, edge_colour=edge_colour
+        )
         sung = _TextSprite(font, line.text, fill, ratio, outline=False)
         upcoming = None
         if index + 1 < len(self._lines):
             following = self._lines[index + 1]
             if following.start - line.end < 8.0:  # not across an instrumental break
-                next_font, _width = self._fitted_font(following.text, h * 0.24, w * 0.88)
+                next_font, _width = self._fitted_font(following.text, h * 0.24 * scale, w * 0.88)
                 next_colour = self._colours(index + 1)[0]
-                upcoming = _TextSprite(next_font, following.text, next_colour, ratio)
+                upcoming = _TextSprite(
+                    next_font,
+                    following.text,
+                    next_colour,
+                    ratio,
+                    edge_scale=edge_scale,
+                    edge_colour=edge_colour,
+                )
         for sprite in (white, sung, upcoming):
             if sprite is not None:
                 yield from sprite.steps()
@@ -331,7 +416,8 @@ class LyricsOverlay(_Overlay):
     def _colours(self, index: int) -> tuple[QColor, tuple[QColor, QColor]]:
         """The colour of line *index* before it is sung, and the blend it fills with."""
         if not self._parts:
-            return QColor("white"), (QColor(theme.PINK), QColor(theme.CYAN))
+            style = self._style
+            return QColor(style.waiting), (QColor(style.sung[0]), QColor(style.sung[1]))
         waiting, left, right = DUET_COLOURS[self._parts[index]]
         return QColor(waiting), (QColor(left), QColor(right))
 
@@ -372,9 +458,18 @@ class LyricsOverlay(_Overlay):
         painter = QPainter(self)
         w, h = float(self.width()), float(self.height())
         baseline = h * 0.46
+        if self._style.high_contrast:  # a dark band behind both lines
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(0, 0, 0, 160))
+            band = max(art.line.width, art.upcoming.width if art.upcoming else 0.0)
+            pad = h * 0.06
+            painter.drawRoundedRect(
+                QRectF((w - band) / 2 - pad, h * 0.04, band + 2 * pad, h * 0.92), pad, pad
+            )
         art.line.draw(painter, art.x, baseline)
         if art.upcoming is not None:
-            painter.setOpacity(0.6)
+            painter.setOpacity(0.9 if self._style.high_contrast else 0.6)
             art.upcoming.draw(painter, (w - art.upcoming.width) / 2, h * 0.84)
             painter.setOpacity(1.0)
         if progress > 0:

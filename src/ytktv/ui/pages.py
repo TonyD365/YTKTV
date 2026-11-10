@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
-from PySide6.QtCore import QStringListModel, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QStringListModel, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QCursor, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QApplication,
@@ -768,6 +768,7 @@ class HistoryPage(Page):
 
 class SettingsPage(Page):
     display_changed = Signal()
+    lyrics_style_changed = Signal()
     check_updates = Signal()
     run_setup = Signal()
     install_update = Signal()
@@ -929,6 +930,7 @@ class SettingsPage(Page):
         low.toggled.connect(self.set_low_power)
         display.addWidget(low)
 
+        self._build_lyrics_card(card("Lyrics on the MV"), labelled)
         check(
             display,
             "Show a recap of the session (and a QR code) when the desk closes the room",
@@ -1175,6 +1177,137 @@ class SettingsPage(Page):
             lambda: QDesktopServices.openUrl(QUrl(self._release_url))
         )
 
+    def _build_lyrics_card(
+        self, layout: QVBoxLayout, labelled: Callable[[QVBoxLayout, str, QWidget], None]
+    ) -> None:
+        """Size, outline and colours of the lyrics, with a sample of how they look."""
+        from ytktv.ui.mv_overlays import (
+            CUSTOM_COLOURS,
+            LYRIC_COLOURS,
+            LYRIC_OUTLINES,
+            LYRIC_SIZES,
+            LyricsOverlay,
+        )
+
+        self.lyrics_size = QComboBox()
+        self.lyrics_size.addItems(list(LYRIC_SIZES))
+        labelled(layout, "Lyrics size", self.lyrics_size)
+        self.lyrics_outline = QComboBox()
+        self.lyrics_outline.addItems(list(LYRIC_OUTLINES))
+        labelled(layout, "Outline", self.lyrics_outline)
+        self.lyrics_colours = QComboBox()
+        self.lyrics_colours.addItems([*LYRIC_COLOURS, CUSTOM_COLOURS])
+        labelled(layout, "Colours", self.lyrics_colours)
+        self.lyrics_waiting_button = QPushButton("Not yet sung…")
+        self.lyrics_sung_button = QPushButton("Sung…")
+        custom_row = QHBoxLayout()
+        custom_row.addWidget(self.lyrics_waiting_button)
+        custom_row.addWidget(self.lyrics_sung_button)
+        custom_row.addStretch()
+        holder = QWidget()
+        holder.setLayout(custom_row)
+        labelled(layout, "Custom colours", holder)
+        self.lyrics_contrast = QCheckBox(
+            "High contrast: thicker black outline and a dark band behind the lyrics"
+        )
+        layout.addWidget(self.lyrics_contrast)
+
+        # The sample: a line half sung, over a dark stand-in for the video.
+        self.lyrics_preview_frame = QFrame()
+        self.lyrics_preview_frame.setStyleSheet("background: #1b1530; border-radius: 8px;")
+        self.lyrics_preview_frame.setFixedHeight(180)
+        self.lyrics_preview = LyricsOverlay(self.lyrics_preview_frame)
+        self.lyrics_preview.set_lines(
+            [
+                {"start": 0.0, "end": 4.0, "text": "Sing it loud, sing it proud"},
+                {"start": 4.0, "end": 8.0, "text": "This is the next line"},
+            ]
+        )
+        self.lyrics_preview.set_time(2.0)
+        self.lyrics_preview_frame.installEventFilter(self)
+        layout.addWidget(self.lyrics_preview_frame)
+
+        self.load_lyrics_style()
+        self.lyrics_size.currentTextChanged.connect(
+            lambda v: self._set_lyrics_option("lyrics_size", v)
+        )
+        self.lyrics_outline.currentTextChanged.connect(
+            lambda v: self._set_lyrics_option("lyrics_outline", v)
+        )
+        self.lyrics_colours.currentTextChanged.connect(
+            lambda v: self._set_lyrics_option("lyrics_colours", v)
+        )
+        self.lyrics_contrast.toggled.connect(
+            lambda on: self._set_lyrics_option("lyrics_high_contrast", on)
+        )
+        self.lyrics_waiting_button.clicked.connect(
+            lambda: self._pick_lyrics_colour("lyrics_waiting_colour")
+        )
+        self.lyrics_sung_button.clicked.connect(
+            lambda: self._pick_lyrics_colour("lyrics_sung_colour")
+        )
+
+    def load_lyrics_style(self) -> None:
+        """Show the lyric settings in the controls (without saving anything)."""
+        settings = self.ctx.controller.settings
+        for combo, value in (
+            (self.lyrics_size, settings.lyrics_size),
+            (self.lyrics_outline, settings.lyrics_outline),
+            (self.lyrics_colours, settings.lyrics_colours),
+        ):
+            combo.blockSignals(True)
+            combo.setCurrentIndex(max(0, combo.findText(value)))
+            combo.blockSignals(False)
+        self.lyrics_contrast.blockSignals(True)
+        self.lyrics_contrast.setChecked(settings.lyrics_high_contrast)
+        self.lyrics_contrast.blockSignals(False)
+        self._show_lyrics_style()
+
+    def _show_lyrics_style(self) -> None:
+        from ytktv.ui.mv_overlays import CUSTOM_COLOURS, LyricsStyle
+
+        settings = self.ctx.controller.settings
+        custom = settings.lyrics_colours == CUSTOM_COLOURS
+        for button, colour in (
+            (self.lyrics_waiting_button, settings.lyrics_waiting_colour),
+            (self.lyrics_sung_button, settings.lyrics_sung_colour),
+        ):
+            button.setEnabled(custom)
+            button.setStyleSheet(f"border-left: 14px solid {colour};")
+        style = LyricsStyle.from_settings(settings)
+        self.lyrics_preview.set_style(style)
+        self._place_lyrics_preview()
+
+    def _place_lyrics_preview(self) -> None:
+        # Laid out like the MV screen: larger sizes take more height, from the bottom.
+        frame = self.lyrics_preview_frame
+        height = int(frame.height() * 0.6 * max(1.0, self.lyrics_preview.lyrics_style().size))
+        height = min(height, frame.height())
+        self.lyrics_preview.setGeometry(0, frame.height() - height, frame.width(), height)
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt's name
+        if watched is getattr(self, "lyrics_preview_frame", None) and event.type() == (
+            QEvent.Type.Resize
+        ):
+            self._place_lyrics_preview()
+        return super().eventFilter(watched, event)
+
+    def _set_lyrics_option(self, attr: str, value: Any) -> None:
+        setattr(self.ctx.controller.settings, attr, value)
+        self.ctx.controller.store.save()
+        self._show_lyrics_style()
+        self.lyrics_style_changed.emit()
+
+    def _pick_lyrics_colour(self, attr: str) -> None:
+        from PySide6.QtGui import QColor
+        from PySide6.QtWidgets import QColorDialog
+
+        colour = QColorDialog.getColor(
+            QColor(getattr(self.ctx.controller.settings, attr)), self, "Lyrics colour"
+        )
+        if colour.isValid():
+            self._set_lyrics_option(attr, colour.name())
+
     def _show_ai_lyrics(self, text: str = "") -> None:
         writer = self.ctx.controller.ai_lyrics
         installed = writer is not None and writer.installed
@@ -1232,6 +1365,8 @@ class SettingsPage(Page):
             box.setChecked(bool(getattr(settings, attr)))
             box.blockSignals(False)
         self.quality.setCurrentIndex(max(0, self.quality.findData(settings.max_height)))
+        self.load_lyrics_style()
+        self.lyrics_style_changed.emit()
         self._fill_screens()
         self.local_card.load()
         self.apply_role()
