@@ -3,18 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d0720">
+<meta name="theme-color" content="#0d0720" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f5f8" media="(prefers-color-scheme: light)">
 <title>YTKTV Microphone</title>
 <style>
   :root {
     --bg: #0d0720; --panel: #1a1035; --panel-2: #241650; --line: #3a2a70;
     --text: #f3eeff; --muted: #a99bd6; --pink: #ff3d9a; --cyan: #2ee6ff;
     --purple: #8b5cff; --gold: #ffc94d; --danger: #ff5470;
+    --glow: #3a1a7a; color-scheme: dark;
+  }
+  /* A phone set to light mode gets a light page; dark mode keeps the console's look. */
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f4f5f8; --panel: #ffffff; --panel-2: #e4e7ee; --line: #c3c9d6;
+      --text: #0b0f1a; --muted: #4a5266; --pink: #c2185b; --cyan: #00639b;
+      --purple: #4a3aa8; --gold: #8a5a00; --danger: #b3261e;
+      --glow: #ffffff; color-scheme: light;
+    }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; min-height: 100%; }
   body {
-    background: radial-gradient(1200px 500px at 50% -10%, #3a1a7a 0%, var(--bg) 60%) fixed;
+    background: radial-gradient(1200px 500px at 50% -10%, var(--glow) 0%, var(--bg) 60%) fixed;
     color: var(--text); font: 16px/1.45 -apple-system, "Segoe UI", Roboto, "PingFang SC", sans-serif;
     padding: calc(16px + env(safe-area-inset-top)) 18px calc(24px + env(safe-area-inset-bottom));
   }

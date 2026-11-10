@@ -801,6 +801,7 @@ class SettingsPage(Page):
     install_update = Signal()
     install_separation = Signal()
     install_hd_unlock = Signal()
+    look_changed = Signal()  # the theme or the venue logo changed
 
     def save_diagnostics(self, path: str | None = None) -> str:
         from dataclasses import asdict
@@ -819,6 +820,56 @@ class SettingsPage(Page):
         app = QApplication.instance()
         if isinstance(app, QApplication):
             app.setStyleSheet(theme.stylesheet(size))
+
+    def set_look(self) -> None:
+        """Switch the colour theme and the venue's accent colour, at once."""
+        settings = self.ctx.controller.settings
+        accent = self.accent.text().strip()
+        if accent and not theme.valid_accent(accent):
+            self.look_note.setText("The accent colour must look like #ff3d9a.")
+            return
+        settings.theme = self.theme_choice.currentText()
+        settings.accent_color = accent
+        self.ctx.controller.store.save()
+        theme.apply(settings.theme, accent)
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            app.setStyleSheet(theme.stylesheet(settings.text_size))
+            for widget in app.topLevelWidgets():
+                widget.update()
+        self.look_note.setText("Theme changed.")
+        self.look_changed.emit()
+
+    def choose_logo(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Venue logo", "", "Pictures (*.png *.jpg *.jpeg *.webp *.gif *.bmp)"
+        )
+        if path:
+            self.set_logo(path)
+
+    def set_logo(self, path: str) -> None:
+        """Use a picture as the venue logo ("" removes it)."""
+        from ytktv.config import data_dir
+
+        folder = data_dir()
+        if path:
+            try:
+                stored = theme.import_logo(path, folder)
+            except (ValueError, OSError) as exc:
+                self.look_note.setText(str(exc))
+                return
+            name = stored.name
+        else:
+            for old in folder.glob("venue-logo.*"):
+                old.unlink(missing_ok=True)
+            name = ""
+        self.ctx.controller.settings.venue_logo = name
+        self.ctx.controller.store.save()
+        theme.logo = theme.logo_file(name, folder)
+        self.look_note.setText("Logo saved." if name else "Logo removed.")
+        self.look_changed.emit()
 
     def __init__(self, ctx: Context, server_url: str) -> None:
         super().__init__("Settings", ctx)
@@ -905,6 +956,12 @@ class SettingsPage(Page):
         low.setChecked(settings.low_power)
         low.toggled.connect(self.set_low_power)
         display.addWidget(low)
+
+        check(
+            display,
+            "Show a recap of the session (and a QR code) when the desk closes the room",
+            "session_recap",
+        )
 
         # Background videos while nobody sings
         idle_card = card("Background Videos")
@@ -1071,6 +1128,31 @@ class SettingsPage(Page):
         self.text_size.setCurrentText(ctx.controller.settings.text_size)
         self.text_size.currentTextChanged.connect(self.set_text_size)
         labelled(display, "Text on the console", self.text_size)
+
+        look = card("Theme", admin=True)
+        self.theme_choice = QComboBox()
+        self.theme_choice.addItems(list(theme.THEMES))
+        self.theme_choice.setCurrentText(settings.theme)
+        self.theme_choice.currentTextChanged.connect(lambda _t: self.set_look())
+        labelled(look, "Colours", self.theme_choice)
+        self.accent = QLineEdit(settings.accent_color)
+        self.accent.setPlaceholderText("#rrggbb, empty for the theme's own")
+        self.accent.editingFinished.connect(self.set_look)
+        labelled(look, "Venue accent colour", self.accent)
+        logo_row = QHBoxLayout()
+        choose_logo = QPushButton("Choose Logo…")
+        choose_logo.setToolTip("A PNG, JPEG, WebP, GIF or BMP picture up to 2 MB")
+        choose_logo.clicked.connect(lambda: self.choose_logo())
+        remove_logo = QPushButton("Remove Logo")
+        remove_logo.clicked.connect(lambda: self.set_logo(""))
+        logo_row.addWidget(choose_logo)
+        logo_row.addWidget(remove_logo)
+        logo_row.addStretch()
+        look.addLayout(logo_row)
+        self.look_note = QLabel("The venue logo shows on the home screen and between songs.")
+        self.look_note.setObjectName("hint")
+        self.look_note.setWordWrap(True)
+        look.addWidget(self.look_note)
 
         setup = card("Setup", admin=True)
         again = QPushButton("Run Setup Again")

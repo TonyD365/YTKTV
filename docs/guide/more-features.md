@@ -14,6 +14,15 @@ while nobody has chosen a song, like a KTV room before the first song. Choose to
 favorites and sung songs, or from one playlist. The first song anyone chooses starts at once;
 background videos are not scored and are not added to Sung.
 
+## Session recap
+
+When YTKTV Desk closes a room, the room's TV shows a recap of the session: how many songs were
+sung, the time spent singing, who sang the most (from the singer names in the queue), the
+highest score and the best duet. Its QR code opens the same recap on a phone, from the room's
+own phone remote server. The link carries a random code and stops working as soon as the room
+opens for the next session. Turn it off in **Settings → MV Screen** ("Show a recap of the
+session...").
+
 ## Mood scenes
 
 On the **Party** page, under **Mood**, pick **Birthday**, **Romantic**, **Party** or **Chill**.
@@ -57,6 +66,18 @@ YTKTV Desk gets this from the desk's **Admin Settings** instead.
 On a Raspberry Pi or an old computer, **Settings → Low-power mode** plays video at 720p and
 turns off the light effects so songs stay smooth. On a weak computer it is already on from the
 first start.
+
+## Themes and your venue's logo
+
+**Settings → Theme** changes the console's colours at once: **Neon** (the default), **Midnight**
+(calm blue-grey), **Lounge** (warm gold) or **Daylight** (light, high contrast, for bright
+rooms). A venue can also type its own accent colour (like `#00a3e0`), which the phones' remote
+page uses too, and choose a logo (PNG, JPEG, WebP, GIF or BMP, up to 2 MB and 4096 pixels a
+side). The logo is copied into YTKTV's data folder and shown on the home screen and on the MV
+screen between songs. Lyrics keep their own colours whatever the theme.
+
+YTKTV Desk has its own **Theme** setting on its settings tab, which the lobby screen follows; it
+takes effect the next time the Desk starts.
 
 ## Reporting a problem
 

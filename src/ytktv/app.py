@@ -289,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if low_power.first_start(settings):  # a Raspberry Pi or an old computer
         store.save()
+    theme.apply(settings.theme, settings.accent_color)
+    theme.logo = theme.logo_file(settings.venue_logo, data_dir())
     app.setStyleSheet(theme.stylesheet(settings.text_size))
 
     player: Any

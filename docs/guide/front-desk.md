@@ -111,6 +111,14 @@ added in that session are saved back to the member at the Desk. The list goes on
 that member is in, only until the room closes, and never to the lobby screen. Up to 30 recent
 songs and 50 favourites are kept per member. Turn it off with **Members' songs follow them into
 rooms** in **Settings → Menu and prices**.
+### Birthday party
+
+When you open a room with a member's name or phone number as the guest and it is their birthday,
+the room's TV throws a party: "Happy birthday, (first name)!" with confetti, and a Happy
+Birthday karaoke song goes to the top of the queue. The **🎂** button under the room panel does
+the same by hand, for any name. In **Settings → Packages and coupons**, **Birthday party** turns
+the automatic party off, and **Counts as the birthday** lets it run for a few days either side.
+Only that room is told; the lobby screen never shows it.
 
 ## Packages and coupons
 

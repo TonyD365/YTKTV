@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv import __version__
+from ytktv.core import games
 from ytktv.core.controller import PITCH_RANGE, SPEEDS, KTVController
 from ytktv.core.models import PlayStatus, VocalMode
 from ytktv.rooms import admin, binding
@@ -60,6 +61,7 @@ from ytktv.ui.support import (
     fade_out,
     format_time,
     qr_pixmap,
+    run_async,
 )
 from ytktv.youtube.search import YouTube
 
@@ -274,8 +276,11 @@ class MainWindow(QMainWindow):
         self.settings_page = SettingsPage(self.ctx, self.server_url)
         self.settings_page.display_changed.connect(self.place_mv)
         self.mixer_page = MixerPanel(self.controller)
+        home = HomePage(self.ctx, self.show_page)
+        self.settings_page.look_changed.connect(home.show_logo)
+        self.settings_page.look_changed.connect(lambda: self.mv_window.idle.update())
         self.pages: dict[str, QWidget] = {
-            "home": HomePage(self.ctx, self.show_page),
+            "home": home,
             "search": SearchPage(self.ctx),
             "hot": HotPage(self.ctx),
             "artists": ArtistsPage(self.ctx),
@@ -684,6 +689,8 @@ class MainWindow(QMainWindow):
             self._desk_control(str(message.get("action", "")), message.get("value"))
         elif kind == "message":
             self._desk_message(message)
+        elif kind == "birthday":
+            self._desk_birthday(str(message.get("name", ""))[:40])
         elif kind == "lock" and self.controller.status == PlayStatus.PLAYING:
             self.controller.toggle_pause()
         self.apply_room()
@@ -696,6 +703,28 @@ class MainWindow(QMainWindow):
         elif action == "volume" and isinstance(value, int):
             self.controller.set_volume("music", max(0, min(100, value)))
             self._show_level("music_volume", max(0, min(100, value)))
+
+    def _desk_birthday(self, name: str) -> None:
+        """The desk says it is a guest's birthday: a party on the TV, the song up next."""
+        if self.controller.room_closed:
+            return
+        name = name.strip() or "you"
+
+        def party(songs: list[Any]) -> None:
+            self.controller.birthday(name, songs[0] if songs else None)
+            self.mv_window.show_game(
+                {"title": "🎂 Happy birthday!", "text": f"Happy birthday, {name}!",
+                 "detail": "Everyone sing along!"},
+                seconds=10.0,
+            )  # fmt: skip
+            self.mv_window.celebration.burst()
+            self.show_toast(f"Happy birthday, {name}!")
+
+        run_async(
+            lambda: self.ctx.youtube.search(games.BIRTHDAY_SEARCH, 5),
+            party,
+            lambda _exc: party([]),
+        )
 
     def _desk_message(self, message: dict[str, Any]) -> None:
         """A message or broadcast from the desk, big on the TV and the console."""
@@ -731,6 +760,10 @@ class MainWindow(QMainWindow):
         closed = client.state.closed
         if closed and not self.controller.room_closed:
             self.controller.close_room()
+            self.mv_window.set_room_closed(True)
+            summary = self.controller.last_recap
+            if summary is not None:
+                self.mv_window.show_recap(summary, f"{self.server_url}/recap/{summary['token']}")
         elif not closed and self.controller.room_closed:
             self.controller.open_room()
             self._warned = False
