@@ -3,6 +3,38 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.4.0
+
+**Update YTKTV Desk and every room's YTKTV to 4.4.0 together** to get the birthday party and members' songs in the rooms.
+
+### 🎨 Themes
+- **Settings → Theme** has four themes: Neon (the look you know), Midnight, Lounge and Daylight. Pick your venue's accent colour and add its logo to the home and between-songs screens. Rooms switch at once; YTKTV Desk switches after a restart, and the lobby screen follows the Desk.
+- The phone remote and the phone mic page now follow the phone's light or dark mode.
+
+### 🎂 Birthday party (YTKTV Desk)
+- Open a room for a member on their birthday and the room's TV says "Happy birthday!" with confetti, and a Happy Birthday karaoke song goes to the top of the queue. The 🎂 button does the same by hand. Turn it off, or let it count a few days either side, in **Settings → Packages and coupons**.
+
+### 🧾 Session recap
+- When the Desk closes a room, its TV shows a recap of the night: the songs, who sang them and the best scores, with a QR code to keep it on the phone. Turn it on in **Settings → MV Screen**.
+
+### ⭐ Members' songs (YTKTV Desk)
+- Enter a member's phone number when you open a room, and the room shows their favourites and recent songs. What they sing and favourite is saved back to them. The list goes only to their room and never to the lobby screen.
+
+### 🔤 Lyrics on the MV
+- Choose the size, outline and colour of the lyrics, or turn on high contrast, in **Settings → Lyrics on the MV**. Nothing changes unless you change it.
+
+### 🔧 Also
+- Behind the scenes: more security checks on the project (OpenSSF Scorecard, stricter CodeQL) and faster checks for documentation-only changes.
+
+## 4.3.1
+
+### Fixes
+- **Installer:** no longer freezes on "Open it now?" after you type your Mac password.
+
+### Also
+- **Installer:** every question is a row of buttons you can click with the mouse. Number keys and enter still work.
+- **Installer:** the license scrolls with the mouse wheel, and you close it with the Done reading button.
+
 ## 4.3.0
 
 ### 📺 Cast to a Chromecast (beta)
