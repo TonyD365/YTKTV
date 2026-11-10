@@ -31,7 +31,7 @@ dependencies = [
     # OpenSSL linked in statically so it cannot clash with Python's own).
     "cryptography>=50.0.2",
     # Finds the front desk on the local network even when its IP address changes.
-    "zeroconf>=0.153.0",
+    "zeroconf>=0.154.0",
     # Pinyin initials for the song book: "yldb" finds 月亮代表我的心.
     "pypinyin>=0.55.0",
 ]
