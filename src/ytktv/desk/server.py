@@ -174,6 +174,9 @@ def create_desk_app(
         room = store.room(room_id)
         if room is not None:  # a room that restarted learns whether it is open
             await channel.send(room.message())
+            songs = member_message(store, room_id)
+            if songs is not None:
+                await channel.send(songs)
         await channel.send(products_message(store))
         if room is not None:
             await channel.send(folders_message(room))
@@ -209,6 +212,12 @@ def receive(store: DeskStore, room_id: str, message: dict[str, Any]) -> None:
         return
     if kind == "heartbeat":
         store.note_song(room_id, str(message.get("song", "")))
+    elif kind == "member_song":
+        # Only for the member this room was opened for, and only while that is switched on.
+        member = store.session_member(room_id) if member_songs_on(store) else None
+        song = message.get("song")
+        if member is not None and isinstance(song, dict):
+            store.add_member_song(member.member_id, str(message.get("kind", "")), song)
     elif kind == "score":
         points = message.get("points")
         if isinstance(points, int) and 0 <= points <= 100:
@@ -280,11 +289,35 @@ def tell_all_products(store: DeskStore, hub: Hub) -> None:
         hub.send_soon(room_id, products_message(store))
 
 
+def member_songs_on(store: DeskStore) -> bool:
+    """Settings → Members: whether members' songs follow them into rooms."""
+    return store.setting("member_songs", "1") != "0"
+
+
+def member_message(store: DeskStore, room_id: str) -> dict[str, Any] | None:
+    """The songs of the member this room is open for, or None. Sent to that room only."""
+    room = store.room(room_id)
+    if room is None or not room.is_open or not member_songs_on(store):
+        return None
+    member = store.session_member(room_id)
+    if member is None:
+        return None
+    return {
+        "type": "member_songs",
+        "name": member.name[:40],
+        "sung": store.member_songs(member.member_id, "sung"),
+        "favourites": store.member_songs(member.member_id, "favourite"),
+    }
+
+
 def tell(store: DeskStore, hub: Hub, room_id: str) -> None:
     """Send a room its current open/closed state after the desk changed it."""
     room = store.room(room_id)
     if room is not None:
         hub.send_soon(room_id, room.message())
+        songs = member_message(store, room_id)
+        if songs is not None:
+            hub.send_soon(room_id, songs)
 
 
 def unbind(store: DeskStore, hub: Hub, room_id: str) -> None:

@@ -102,6 +102,16 @@ points per unit spent in **Settings → Menu and prices**. **🎂 Birthday** sav
 birthday (MM-DD): on that day they also get the birthday discount set in **Settings → Packages
 and coupons**.
 
+### Members' songs
+
+When you open a room, enter a member's phone number to open it for that member (the guest name
+is filled in for you). The room then shows **"<name>'s songs"** on its Favorites page and on the
+phone page: the member's favourites and the last songs they sang. Songs sung and favourites
+added in that session are saved back to the member at the Desk. The list goes only to the room
+that member is in, only until the room closes, and never to the lobby screen. Up to 30 recent
+songs and 50 favourites are kept per member. Turn it off with **Members' songs follow them into
+rooms** in **Settings → Menu and prices**.
+
 ## Packages and coupons
 
 **Settings → Packages and coupons**:

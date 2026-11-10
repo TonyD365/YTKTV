@@ -49,7 +49,7 @@ READS = frozenset(
         "rooms", "room", "now_singing", "history", "members", "member_by_phone", "bookings",
         "clashes", "setting", "low_stock", "products", "orders", "calls", "terminals", "oplog",
         "packages", "session_package", "coupons", "coupon", "overdue_minutes", "late_calls",
-        "product_pictures", "top_scores",
+        "product_pictures", "top_scores", "session_member",
     }
 )  # fmt: skip
 CHANGES = frozenset(
@@ -60,7 +60,7 @@ CHANGES = frozenset(
         "set_product_picture", "add_score",
         "add_order", "set_order_status", "finish_call", "remove_terminal", "rename_terminal",
         "save_package", "remove_package", "set_session_package", "save_coupon", "remove_coupon",
-        "use_coupon", "set_birthday",
+        "use_coupon", "set_birthday", "set_session_member",
         "set_local_only", "set_local_folders",
     }
 )  # fmt: skip

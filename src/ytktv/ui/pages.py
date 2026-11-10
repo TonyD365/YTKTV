@@ -491,12 +491,40 @@ class ArtistsPage(Page):
 class FavoritesPage(Page):
     def __init__(self, ctx: Context) -> None:
         super().__init__("Favorites", ctx)
+        # The songs of the member this room was opened for, while the session lasts.
+        self.member_button = QPushButton()
+        self.member_button.setCheckable(True)
+        self.member_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.member_button.toggled.connect(lambda _on: self.on_favorites())
+        self.member_button.hide()
+        self.header.addWidget(self.member_button)
         self.browse_list = SongList("No favorites yet. Tap ♡ on any song to keep it here.")
         self.body.addWidget(self.browse_list, stretch=1)
         self.on_favorites()
 
     def on_favorites(self) -> None:
+        member = self.ctx.controller.member_songs()
+        self.member_button.setVisible(member is not None)
+        if member is None:
+            self.member_button.setChecked(False)
+        else:
+            self.member_button.setText(f"{member['name'] or 'Member'}'s songs")
+        if member is not None and self.member_button.isChecked():
+            self.show_songs(member_song_list(member), "No songs saved for this member yet.")
+            return
         self.show_songs(self.ctx.controller.library.favorites())
+
+
+def member_song_list(member: dict[str, Any]) -> list[Song]:
+    """A member's favourites, then what they sang lately, each song once."""
+    seen: set[str] = set()
+    songs: list[Song] = []
+    for raw in (*member.get("favourites", []), *member.get("sung", [])):
+        song = Song.from_dict(raw)
+        if song.video_id not in seen:
+            seen.add(song.video_id)
+            songs.append(song)
+    return songs
 
 
 class LocalPage(Page):

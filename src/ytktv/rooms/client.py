@@ -38,6 +38,8 @@ class RoomClient:
         self.state = RoomState(closed=binding.is_bound(store.settings))
         self.products: list[dict[str, Any]] = []
         self.currency = "$"
+        # The songs of the member the desk opened this room for; only for this session.
+        self.member: dict[str, Any] | None = None
         # Calls and orders wait here until the desk is reachable.
         self._outbox: list[dict[str, Any]] = []
         self._outbox_lock = threading.Lock()
@@ -56,6 +58,13 @@ class RoomClient:
         return self._post(
             {"type": "score", "points": int(points), "title": title[:80], "singer": singer[:40]}
         )
+
+    def member_song(self, kind: str, song: dict[str, Any]) -> bool:
+        """Tell the desk the member sang (``"sung"``) or liked (``"favourite"``) a song."""
+        if self.member is None:
+            return False
+        keep = {k: song.get(k) for k in ("video_id", "title", "channel", "duration")}
+        return self._post({"type": "member_song", "kind": kind, "song": keep})
 
     def order(self, items: list[tuple[int, int]]) -> bool:
         wanted = [{"product_id": p, "qty": q} for p, q in items if q > 0]
@@ -161,9 +170,40 @@ class RoomClient:
             folders = [str(f) for f in message.get("folders", []) if str(f).strip()]
             self.store.settings.local_folders = folders
             self.store.save()
+        if kind in ("open", "close", "unbind"):
+            self.member = None  # a new session starts without anyone's songs
+        if kind == "member_songs":
+            self.member = member_lists(message)
         if kind == "products":
             self.products = [i for i in message.get("items", []) if isinstance(i, dict)]
             self.currency = str(message.get("currency", "$"))
         self.state.apply(message)
         if kind != "ack":
             self.on_event(kind, message)
+
+
+MEMBER_LIST_CAP = 50
+
+
+def member_lists(message: dict[str, Any]) -> dict[str, Any]:
+    """A member's songs from the desk, checked and capped."""
+
+    def songs(key: str) -> list[dict[str, Any]]:
+        raw = message.get(key)
+        items = [i for i in raw if isinstance(i, dict)] if isinstance(raw, list) else []
+        return [
+            {
+                "video_id": str(i.get("video_id", ""))[:64],
+                "title": str(i.get("title", ""))[:200],
+                "channel": str(i.get("channel", ""))[:120],
+                "duration": i["duration"] if isinstance(i.get("duration"), int) else 0,
+            }
+            for i in items[:MEMBER_LIST_CAP]
+            if i.get("video_id") and i.get("title")
+        ]
+
+    return {
+        "name": str(message.get("name", ""))[:40],
+        "sung": songs("sung"),
+        "favourites": songs("favourites"),
+    }
