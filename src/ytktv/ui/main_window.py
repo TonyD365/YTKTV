@@ -273,6 +273,8 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.settings_page = SettingsPage(self.ctx, self.server_url)
         self.settings_page.display_changed.connect(self.place_mv)
+        self.settings_page.lyrics_style_changed.connect(self.apply_lyrics_style)
+        self.apply_lyrics_style()
         self.mixer_page = MixerPanel(self.controller)
         self.pages: dict[str, QWidget] = {
             "home": HomePage(self.ctx, self.show_page),
@@ -546,6 +548,11 @@ class MainWindow(QMainWindow):
         # Wireless displays take a moment to settle their size; place the MV after that.
         QTimer.singleShot(1500, self.place_mv)
         self.show_toast(f"TV connected: the MV moves to {screen.name()}")
+
+    def apply_lyrics_style(self) -> None:
+        from ytktv.ui.mv_overlays import LyricsStyle
+
+        self.mv_window.set_lyrics_style(LyricsStyle.from_settings(self.controller.settings))
 
     def place_mv(self) -> None:
         settings = self.controller.settings

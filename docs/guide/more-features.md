@@ -46,6 +46,20 @@ Download it once in **Settings → AI Lyrics**.
 
 Written lyrics are kept, so a song is only done once.
 
+## Lyrics size and colours
+
+**Settings → Lyrics on the MV** changes how the lyrics look on the MV screen, with a sample
+that updates as you choose:
+
+- **Lyrics size**: Small, Medium (the default), Large or Extra large. Long lines shrink to fit
+  the screen, and larger lyrics move the pitch guide up so the two never overlap.
+- **Outline**: Thin, Normal or Thick.
+- **Colours**: Classic (white filling with pink and cyan), Gold, Ocean, Lime, Sunset, or
+  Custom, where you pick the not-yet-sung and the sung colour yourself. Duets keep their own
+  colours per singer.
+- **High contrast**: a thicker black outline, a dark band behind the lyrics and a brighter
+  next line, for bright videos or a far-away screen.
+
 ## Kids mode
 
 For a children's room. In **Settings → Kids Mode**, songs not meant for children are left out

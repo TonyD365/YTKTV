@@ -41,6 +41,7 @@ from ytktv.ui.mv_overlays import (
     EdgeLight,
     LightShow,
     LyricsOverlay,
+    LyricsStyle,
     PitchLane,
     ReactionOverlay,
     ScoreCard,
@@ -313,12 +314,24 @@ class MvWindow(QWidget):
         self.lights["right"].setGeometry(w - strip_w, 0, strip_w, h)
         self.lights["top"].setGeometry(0, 0, w, strip_h)
         self.lights["bottom"].setGeometry(0, h - strip_h, w, strip_h)
-        self.lyrics.setGeometry(0, int(h * 0.74), w, int(h * 0.24))
-        self.pitch_lane.setGeometry(int(w * 0.2), int(h * 0.57), int(w * 0.6), int(h * 0.15))
+        self._place_lyrics()
         self.danmaku.setGeometry(0, int(h * 0.12), w, int(h * 0.42))
         self.reactions.setGeometry(0, 0, w, h)
         self._place_score_card()
         self._place_live_score()
+
+    def set_lyrics_style(self, style: LyricsStyle) -> None:
+        self.lyrics.set_style(style)
+        self._place_lyrics()
+
+    def _place_lyrics(self) -> None:
+        """Bigger lyrics take more room upwards, and push the pitch guide up with them."""
+        w, h = self.width(), self.height()
+        size = max(1.0, self.lyrics.lyrics_style().size)
+        top = 0.98 - 0.24 * size
+        self.lyrics.setGeometry(0, int(h * top), w, int(h * 0.24 * size))
+        lane_top = min(0.57, top - 0.17)
+        self.pitch_lane.setGeometry(int(w * 0.2), int(h * lane_top), int(w * 0.6), int(h * 0.15))
 
     def _place_score_card(self) -> None:
         w, h = self.width(), self.height()

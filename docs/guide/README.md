@@ -8,7 +8,7 @@ Everything you need to run a karaoke night with YTKTV.
 | [The mixing console](mixer.md) | Microphones, effects and presets, the feedback guard, getting a good sound |
 | [Phones](phones.md) | Queueing songs from a phone, waiting times, using a phone as a microphone |
 | [YTKTV Desk](front-desk.md) | Running several rooms from a staff terminal: pairing, opening rooms, calls and orders, the till, members, receipts, bookings, stock alerts, records and CSV export, shift reports, staff terminals and the log, updates |
-| [More features](more-features.md) | Voice effects, Spotify and Apple Music playlists, AI lyrics, kids mode, low-power mode, reporting a problem, service charge and tax, Admin Settings |
+| [More features](more-features.md) | Voice effects, Spotify and Apple Music playlists, AI lyrics, lyrics size and colours, kids mode, low-power mode, reporting a problem, service charge and tax, Admin Settings |
 | [Troubleshooting](troubleshooting.md) | Delay, silence, songs that will not play, getting a log for a bug report |
 
 Short answers to common questions are in the [FAQ](../../README.md#faq). Something missing or
