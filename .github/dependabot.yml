@@ -6,6 +6,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     labels: [dependencies, ci]
     groups:
       actions:
@@ -17,6 +19,8 @@ updates:
     directory: /
     schedule:
       interval: daily
+    cooldown:
+      default-days: 7
     versioning-strategy: increase
     labels: [dependencies]
     ignore:

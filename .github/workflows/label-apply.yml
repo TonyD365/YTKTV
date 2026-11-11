@@ -3,7 +3,7 @@
 name: Apply pull request labels
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- reviewed: never runs PR code
     workflows: [Label pull requests]
     types: [completed]
 

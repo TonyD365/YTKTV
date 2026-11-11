@@ -59,10 +59,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # the version comes from the git tag
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
-          cache: pip
 
       - name: Tools to build cryptography (no wheels for this platform)
         if: matrix.name == 'macos-x86_64' || matrix.name == 'windows-arm64'
@@ -340,10 +340,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # the version comes from the git tag
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
-          cache: pip
       - name: Tools to build cryptography (no wheels for this platform)
         if: matrix.name == 'macos-x86_64' || matrix.name == 'windows-arm64'
         shell: bash
@@ -456,6 +456,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: parts
@@ -529,11 +531,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: installer/package-lock.json
+          package-manager-cache: false
       - name: Build
         working-directory: installer
         run: |
@@ -594,6 +597,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           sparse-checkout: packaging/release
+          persist-credentials: false
       - name: Install instructions at the end of the notes
         env:
           GH_TOKEN: ${{ github.token }}

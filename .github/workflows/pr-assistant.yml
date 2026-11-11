@@ -20,12 +20,12 @@
 name: PR assistant
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- reviewed: never runs PR code
     workflows: [CI, Security, Installer tests, Area tests, Benchmark, Apply pull request labels, Review noted]
     types: [completed]
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] -- reviewed: never runs PR code
     types: [opened, reopened, ready_for_review, synchronize, edited, closed]
-  issue_comment:
+  issue_comment: # zizmor: ignore[dangerous-triggers] -- reviewed: never runs PR code
     types: [created, edited]
   push:
     branches: [main] # a merge can leave other pull requests in conflict
@@ -40,13 +40,7 @@ on:
         description: Pull request number
         required: true
 
-permissions:
-  contents: read
-  actions: read
-  checks: read
-  pull-requests: write
-  issues: write
-  statuses: write
+permissions: {}
 
 jobs:
   reviews:
@@ -86,6 +80,13 @@ jobs:
       github.event.workflow_run.event == 'pull_request' ||
       github.event.workflow_run.event == 'pull_request_review'
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: write
+      issues: write
+      statuses: write
     steps:
       - name: Write the status comment
         env:
@@ -364,6 +365,13 @@ jobs:
       github.event.comment.user.login != 'TonyD365-Agent' &&
       github.event.comment.user.login != 'github-actions[bot]'
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: write
+      issues: write
+      statuses: write
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -432,6 +440,13 @@ jobs:
     # longer), since nothing else runs for them then. The comment job above explains it.
     if: github.event_name == 'push'
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: write
+      issues: write
+      statuses: write
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -467,6 +482,13 @@ jobs:
        github.event.pull_request.author_association == 'FIRST_TIMER' ||
        github.event.pull_request.author_association == 'NONE')
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: write
+      issues: write
+      statuses: write
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -503,6 +525,13 @@ jobs:
       github.event_name == 'pull_request_target' && github.event.action == 'closed' &&
       github.event.pull_request.merged
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: write
+      issues: write
+      statuses: write
     timeout-minutes: 5
     steps:
       - env:
