@@ -13,22 +13,23 @@ name: Issue assistant
 on:
   issues:
     types: [opened, edited]
-  issue_comment:
+  issue_comment: # zizmor: ignore[dangerous-triggers] -- reviewed: never runs PR code
     types: [created]
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] -- reviewed: never runs PR code
     types: [closed]
   release:
     types: [published]
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: read
+permissions: {}
 
 jobs:
   triage:
     if: github.event_name == 'issues' && github.event.issue.user.login != 'TonyD365-Agent'
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -89,6 +90,10 @@ jobs:
   fixed:
     if: github.event_name == 'pull_request_target' && github.event.pull_request.merged
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -111,6 +116,10 @@ jobs:
   released:
     if: github.event_name == 'release' && !github.event.release.prerelease
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -131,6 +140,10 @@ jobs:
       startsWith(github.event.comment.body, '/') &&
       github.event.comment.user.login != 'TonyD365-Agent'
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}

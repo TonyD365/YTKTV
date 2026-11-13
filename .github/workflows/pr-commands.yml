@@ -22,18 +22,14 @@
 name: PR commands
 
 on:
-  issue_comment:
+  issue_comment: # zizmor: ignore[dangerous-triggers] -- reviewed: never runs PR code
     types: [created]
   schedule:
     - cron: "23 8 * * *" # stale pull requests
     - cron: "41 * * * *" # reminders
   workflow_dispatch:
 
-permissions:
-  contents: read
-  actions: write
-  pull-requests: write
-  issues: write
+permissions: {}
 
 jobs:
   command:
@@ -42,6 +38,11 @@ jobs:
       startsWith(github.event.comment.body, '/') &&
       github.event.comment.user.login != 'TonyD365-Agent'
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: write
+      issues: write
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}
@@ -198,6 +199,10 @@ jobs:
   reminders:
     if: github.event_name == 'schedule' && github.event.schedule == '41 * * * *'
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
     timeout-minutes: 10
     steps:
       - env:
@@ -230,6 +235,10 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'schedule' && github.event.schedule == '23 8 * * *')
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
     steps:
       - env:
           GH_TOKEN: ${{ secrets.AGENT_TOKEN || github.token }}

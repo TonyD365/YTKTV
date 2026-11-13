@@ -421,7 +421,7 @@ $("search-form").addEventListener("submit", (e) => {
   if (q) { $("q").blur(); searchFor(q); }
 });
 
-const orderQty = {};
+const orderQty = Object.create(null); // no prototype: product ids come from the server
 function renderService() {
   const service = state.service;
   $("service").style.display = service ? "" : "none";

@@ -98,6 +98,8 @@ jobs:
       YTKTV_LIVE: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.13"
@@ -123,6 +125,8 @@ jobs:
       YTKTV_MODEL_DIR: ${{ github.workspace }}/.models
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.13"
@@ -146,6 +150,6 @@ jobs:
     if: needs.decide.outputs.packaging == 'true'
     permissions:
       contents: write # asked for by the release's jobs; release-only steps do not run here
-    uses: ./.github/workflows/release.yml
+    uses: ./.github/workflows/release.yml # zizmor: ignore[self-repository]
     # No secrets: this builds a pull request's code, and the build needs none (unsigned
     # builds; publishing steps only run for a real release).
