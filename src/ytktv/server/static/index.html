@@ -421,7 +421,7 @@ $("search-form").addEventListener("submit", (e) => {
   if (q) { $("q").blur(); searchFor(q); }
 });
 
-const orderQty = Object.create(null); // no prototype: product ids come from the server
+const orderQty = new Map(); // product id -> quantity
 function renderService() {
   const service = state.service;
   $("service").style.display = service ? "" : "none";
@@ -461,9 +461,9 @@ function renderService() {
       }
       const count = document.createElement("span");
       count.style.cssText = "min-width:24px;text-align:center;font-weight:700";
-      count.textContent = orderQty[p.product_id] || 0;
+      count.textContent = orderQty.get(p.product_id) || 0;
       const step = (d) => () => {
-        orderQty[p.product_id] = Math.max(0, Math.min(20, (orderQty[p.product_id] || 0) + d));
+        orderQty.set(p.product_id, Math.max(0, Math.min(20, (orderQty.get(p.product_id) || 0) + d)));
         renderService();
       };
       const minus = document.createElement("button"); minus.textContent = "−"; minus.onclick = step(-1);
@@ -473,7 +473,7 @@ function renderService() {
     }
   }
   menu.replaceChildren(...rows);
-  $("send-order").style.display = Object.values(orderQty).some((q) => q > 0) ? "" : "none";
+  $("send-order").style.display = [...orderQty.values()].some((q) => q > 0) ? "" : "none";
 }
 
 function render() {
@@ -615,10 +615,10 @@ document.querySelectorAll("[data-call]").forEach((b) => b.addEventListener("clic
   b.textContent = "✓ Sent";
 }));
 $("send-order").addEventListener("click", async () => {
-  const items = Object.entries(orderQty).filter(([, q]) => q > 0)
+  const items = [...orderQty.entries()].filter(([, q]) => q > 0)
     .map(([id, q]) => ({product_id: Number(id), qty: q}));
   await api("/api/service", "POST", {items}).catch(() => {});
-  for (const id of Object.keys(orderQty)) delete orderQty[id];
+  orderQty.clear();
   renderService();
   $("send-order").style.display = "none";
 });
