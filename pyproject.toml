@@ -20,7 +20,7 @@ dependencies = [
     "sounddevice>=0.5.6",
     "numpy>=2.4.6",
     "scipy>=1.17.1",
-    "fastapi>=0.162.2",
+    "fastapi>=0.162.5",
     "uvicorn[standard]>=0.54.0",
     "qrcode>=8.2",
     "platformdirs>=4.14.5",
@@ -47,10 +47,10 @@ dev = [
     "pytest-qt>=4.5.0",
     "pytest-benchmark>=5.3.1",
     "httpx>=0.28.1",
-    "ruff>=0.17.4",
+    "ruff>=0.17.5",
     "mypy>=2.4.1",
 ]
-package = ["pyinstaller>=6.22.3", "uv>=0.13.7"]
+package = ["pyinstaller>=6.22.3", "uv>=0.13.8"]
 
 [project.scripts]
 ytktv = "ytktv.__main__:main"
