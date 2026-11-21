@@ -38,6 +38,7 @@ from ytktv.ui import feedback, theme
 from ytktv.ui.diagnostics_dialog import save_diagnostics
 from ytktv.ui.front_desk_card import FrontDeskCard
 from ytktv.ui.local_songs_card import LocalSongsCard
+from ytktv.ui.plugins_card import PluginsCard
 from ytktv.ui.remote_keys import key_help
 from ytktv.ui.smart_lights_card import SmartLightsCard
 from ytktv.ui.song_list import STEM_TAGS, Action, SongList, SongRow, tag
@@ -386,7 +387,13 @@ class SearchPage(Page):
                 local, "No songs on this computer match. This room plays local songs only."
             )
             return
-        run_async(lambda: self.ctx.youtube.search(query), done, failed)
+        plugins = controller.plugins
+
+        def find() -> list[Song]:
+            songs = self.ctx.youtube.search(query)
+            return songs + plugins.search(query) if plugins is not None else songs
+
+        run_async(find, done, failed)
 
 
 class HotPage(Page):
@@ -1114,6 +1121,10 @@ class SettingsPage(Page):
         lights = SmartLightsCard(ctx.controller)
         column.addWidget(lights)
         self.admin_cards += [self.local_card, lights]
+        if ctx.controller.plugins is not None:
+            plugins_card = PluginsCard(ctx.controller.plugins)
+            column.addWidget(plugins_card)
+            self.admin_cards.append(plugins_card)
 
         remote = card("Keyboard and Remote")
         keys = QLabel(

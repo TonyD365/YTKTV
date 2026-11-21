@@ -103,6 +103,7 @@ class KTVController:
         self.preloader = preloader
         self.offline = offline
         self.local = local
+        self.plugins: Any = None  # ytktv.plugins.PluginManager, set by the app
         self.ai_lyrics: Any = None  # lyrics_ai.AiLyrics, set by the app when available
         if local is not None:
             local.on_change = lambda: self.bus.emit("local", None)  # a scan finished
