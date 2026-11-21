@@ -23,7 +23,7 @@ def setup(api):
     api.on("state", on_state)
 ```
 
-A fuller example is in [examples/plugins/hello_plugin.py](../examples/plugins/hello_plugin.py).
+A fuller example is in [examples/plugins/hello_plugin.py](../../examples/plugins/hello_plugin.py).
 
 ## Installing
 
