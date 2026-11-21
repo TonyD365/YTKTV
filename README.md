@@ -249,6 +249,9 @@ If YTKTV makes your party better, a ⭐ on GitHub helps other people find it.
 - **Setup wizard.** The first start walks through the sound output, the MV screen and a
   microphone check. Run it again from Settings.
 - **Automatic updates.** Installed builds update themselves from the latest GitHub release.
+- **Plugins.** Add-ons from other developers can add themes, add songs to search and react
+  to what happens in the room. They stay off until you turn them on in Settings. Write your own
+  with the [plugin guide](docs/guide/plugins.md).
 
 ## Install
 

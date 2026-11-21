@@ -3,6 +3,13 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.5.0
+
+### 🧩 Plugins
+- YTKTV now takes plugins: small Python add-ons that can add colour themes, add songs to search results, show messages on the TV and react to what happens in the room. Install one with pip, or drop a `.py` file into the plugins folder.
+- Plugins stay off until you turn them on in **Settings → Plugins**, after seeing what each one asks for. A plugin that breaks is switched off, and YTKTV keeps going. Only turn on plugins you trust.
+- Developers: see [Writing YTKTV plugins](docs/guide/plugins.md) and the example in `examples/plugins`.
+
 ## 4.4.0
 
 **Update YTKTV Desk and every room's YTKTV to 4.4.0 together** to get the birthday party and members' songs in the rooms.

@@ -26,6 +26,7 @@ PAGES = {
     "front-desk.md": ("YTKTV-Desk", "YTKTV Desk"),
     "more-features.md": ("More-features", "More features"),
     "troubleshooting.md": ("Troubleshooting", "Troubleshooting"),
+    "plugins.md": ("Plugins", "Plugins"),
 }
 
 SIDEBAR_TAIL = """
