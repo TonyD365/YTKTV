@@ -289,6 +289,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if low_power.first_start(settings):  # a Raspberry Pi or an old computer
         store.save()
+    from ytktv.plugins import PluginManager
+
+    # Plugins the venue turned on start first, so their themes can be the current one.
+    plugins = PluginManager(data_dir())
+    plugins.discover()
+    plugins.start()
     theme.apply(settings.theme, settings.accent_color)
     theme.logo = theme.logo_file(settings.venue_logo, data_dir())
     app.setStyleSheet(theme.stylesheet(settings.text_size))
@@ -312,6 +318,7 @@ def main(argv: list[str] | None = None) -> int:
     if unlock.supported():
         youtube.hd_unlock = unlock
     bus = EventBus()
+    plugins.attach(bus)
     audio = None
     if not args.no_mic:
         from ytktv.audio.engine import AudioEngine
@@ -390,6 +397,8 @@ def main(argv: list[str] | None = None) -> int:
         local=local,
         audio=audio,
     )
+    controller.plugins = plugins
+    plugins.controller = controller
     from ytktv import lyrics_ai
     from ytktv.core.local import is_local
 

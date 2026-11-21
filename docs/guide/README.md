@@ -10,6 +10,7 @@ Everything you need to run a karaoke night with YTKTV.
 | [YTKTV Desk](front-desk.md) | Running several rooms from a staff terminal: pairing, opening rooms, calls and orders, the till, members, receipts, bookings, stock alerts, records and CSV export, shift reports, staff terminals and the log, updates |
 | [More features](more-features.md) | Voice effects, Spotify and Apple Music playlists, AI lyrics, lyrics size and colours, kids mode, low-power mode, reporting a problem, service charge and tax, Admin Settings |
 | [Troubleshooting](troubleshooting.md) | Delay, silence, songs that will not play, getting a log for a bug report |
+| [Plugins](../plugins.md) | Turning plugins on in Settings, and writing your own |
 
 Short answers to common questions are in the [FAQ](../../README.md#faq). Something missing or
 wrong in this guide? [Open an issue](https://github.com/TonyD365/YTKTV/issues/new/choose) or a
