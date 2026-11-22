@@ -38,7 +38,9 @@ def test_metrics_count_requests_and_errors():
     app = create_desk_app(DeskStore(), Hub(), metrics=metrics)
     client = TestClient(app)
     assert client.get("/api/desk").status_code == 200
-    assert client.post("/api/pair", json={"code": "000000"}).status_code == 403
+    assert (
+        client.post("/api/pair", json={"code": "000000", "identity": "ab" * 64}).status_code == 403
+    )
     assert metrics.per_minute() == 2 and metrics.errors_last_hour() == 1
     now[0] += 120
     assert metrics.per_minute() == 0 and metrics.errors_last_hour() == 1

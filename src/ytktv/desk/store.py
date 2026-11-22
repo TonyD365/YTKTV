@@ -7,6 +7,7 @@ import hashlib
 import json
 import secrets
 import sqlite3
+import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -14,7 +15,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ytktv.rooms import crypto
+from lanpair import PublicIdentity
+
+from ytktv.rooms import crypto, secure
 
 CODE_SECONDS = 300  # a pairing code works for five minutes, once
 MAX_PICTURE = 60_000  # base64 characters: plenty for a 160-pixel JPEG
@@ -175,7 +178,16 @@ class DeskStore:
                 self._db.execute("INSERT INTO meta VALUES ('private_key', ?)", row)
             self._db.commit()
         self.private_key: str = row[0]
+        # The desk's lanpair identity grows from the same Ed25519 seed, so its ID and the
+        # security code (fingerprint) stay what they were.
+        self.identity = secure.identity(self.private_key)
+        self.identity_hex = secure.public_hex(self.identity)
         self.public_key = crypto.public_key(self.private_key)
+        # The last message number taken from each room, so none is ever accepted twice.
+        if self.path == ":memory:":
+            self.seq_file = Path(tempfile.mkdtemp()) / "room-seq.json"
+        else:
+            self.seq_file = Path(self.path).with_name(Path(self.path).stem + "-room-seq.json")
         self.desk_id = crypto.desk_id(self.public_key)
         self.fingerprint = crypto.fingerprint(self.public_key)
 
@@ -267,14 +279,19 @@ class DeskStore:
             self._codes[code] = now + CODE_SECONDS
         return code
 
-    def pair(self, code: str, name: str, now: float | None = None) -> tuple[Room, str]:
-        """Use up *code* and add a room. Raises KeyError for a wrong or expired code."""
+    def pair(
+        self, code: str, name: str, now: float | None = None, *, identity: str = ""
+    ) -> tuple[Room, str]:
+        """Use up *code* and add the room whose public lanpair *identity* (hex) this is.
+
+        Returns the room and that identity. Raises KeyError for a wrong or expired code.
+        """
         now = time.time() if now is None else now
         with self._lock:
             expires = self._codes.pop(code, 0.0)
             if expires <= now:
                 raise KeyError(code)
-            room_id, key = secrets.token_hex(8), secrets.token_urlsafe(24)
+            room_id, key = secrets.token_hex(8), identity
             name = (
                 name or f"Room {self._db.execute('SELECT COUNT(*) FROM rooms').fetchone()[0] + 1}"
             )
@@ -286,9 +303,18 @@ class DeskStore:
         return Room(room_id, name, now), key
 
     def key(self, room_id: str) -> str | None:
+        """The room's public lanpair identity (hex); None for an unknown room."""
         with self._lock:
             row = self._db.execute("SELECT key FROM rooms WHERE id=?", (room_id,)).fetchone()
         return None if row is None else str(row[0])
+
+    def room_identity(self, room_id: str) -> PublicIdentity | None:
+        """The room's public identity; None for an unknown room, or one paired before 4.6
+        (a shared secret, not a lanpair identity), which has to be paired again."""
+        key = self.key(room_id)
+        if key is None or not secure.valid_public(key):
+            return None
+        return secure.public(key)
 
     def sign(self, data: bytes) -> str:
         return crypto.sign(self.private_key, data)

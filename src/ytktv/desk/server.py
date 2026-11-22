@@ -10,45 +10,43 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import hmac
 import json
+import logging
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from lanpair import EnvelopeError, PublicIdentity, Sealer
 from pydantic import BaseModel
 
 from ytktv.desk.guard import PairingGuard
 from ytktv.desk.metrics import Metrics
 from ytktv.desk.store import DeskStore, Room
-from ytktv.rooms import crypto
+from ytktv.rooms import secure
 
+log = logging.getLogger(__name__)
 DESK_PORT = 8770
 
 
 class PairIn(BaseModel):
     code: str
     name: str = ""
+    identity: str = ""  # the room's public lanpair identity (hex)
 
 
 class Channel:
-    """One room's authenticated connection; messages are signed and numbered."""
+    """One room's connection; every message is a lanpair envelope sealed to that room."""
 
-    def __init__(self, ws: WebSocket, store: DeskStore, room_nonce: str, room_id: str = "") -> None:
-        self.ws, self.store, self.room_nonce, self.room_id, self.seq = (
-            ws,
-            store,
-            room_nonce,
-            room_id,
-            0,
-        )
+    def __init__(
+        self, ws: WebSocket, sealer: Sealer, room: PublicIdentity, room_id: str = ""
+    ) -> None:
+        self.ws, self.sealer, self.room, self.room_id = ws, sealer, room, room_id
+        self.session: bytes | None = None  # the room's key for this connection
 
     async def send(self, message: dict[str, Any]) -> None:
-        self.seq += 1
-        # Naming the room in the signed body keeps a message for one room (an unbind for an
+        # Naming the room in the sealed body keeps a message for one room (an unbind for an
         # id the desk does not know) from being passed on to another.
-        body = json.dumps({**message, "seq": self.seq, "room": self.room_id}, sort_keys=True)
-        signature = self.store.sign(f"{self.room_nonce}|{body}".encode())
-        await self.ws.send_text(json.dumps({"body": body, "sig": signature}))
+        body = {**message, "room": self.room_id}
+        await self.ws.send_bytes(self.sealer.seal(self.room, body, box_key=self.session))
 
 
 class Hub:
@@ -92,6 +90,8 @@ def create_desk_app(
 
     hub = hub or Hub()
     guard = PairingGuard(store.forget_codes)
+    sealer = Sealer(store.identity)
+    opener = secure.opener(store.identity, store.seq_file)
     app = FastAPI(title="YTKTV Desk")
     app.state.guard = guard
     app.state.hub = hub
@@ -121,25 +121,32 @@ def create_desk_app(
 
     @app.get("/api/desk")
     def desk() -> dict[str, str]:
-        return {"desk_id": store.desk_id, "desk_key": store.public_key}
+        return {
+            "desk_id": store.desk_id,
+            "desk_key": store.public_key,
+            "desk_identity": store.identity_hex,
+        }
 
     @app.post("/api/pair")
     def pair(body: PairIn, request: Request) -> dict[str, str]:
         address = request.client.host if request.client else "?"
         if not guard.allowed(address):
             raise HTTPException(429, "too many wrong codes; wait five minutes")
+        if not secure.valid_public(body.identity.strip()):
+            raise HTTPException(426, "update this room's YTKTV to pair with this Desk")
         try:
-            room, key = store.pair(body.code.strip(), body.name.strip())
+            room, _identity = store.pair(
+                body.code.strip(), body.name.strip(), identity=body.identity.strip()
+            )
             guard.succeeded()
         except KeyError as exc:
             guard.missed(address)
             raise HTTPException(403, "wrong or expired code") from exc
         return {
             "room_id": room.room_id,
-            "key": key,
             "name": room.name,
             "desk_id": store.desk_id,
-            "desk_key": store.public_key,
+            "desk_identity": store.identity_hex,
         }
 
     @app.websocket("/ws/room")
@@ -151,26 +158,42 @@ def create_desk_app(
     async def _room_socket(ws: WebSocket) -> None:
         await ws.accept()
         hub.loop = asyncio.get_running_loop()
-        hello = json.loads(await ws.receive_text())
-        room_id, room_nonce = str(hello.get("room_id", "")), str(hello.get("nonce", ""))
-        channel = Channel(ws, store, room_nonce, room_id)
-        key = store.key(room_id)
-        if key is None or len(room_nonce) < 16:
-            await channel.send({"type": "unbind"})  # signed, so the room can trust it
+        try:
+            hello = json.loads(await ws.receive_text())
+            room_id = str(hello.get("room_id", ""))
+            claimed = secure.public(str(hello.get("identity", "")))
+        except (ValueError, TypeError, AttributeError):
+            await ws.close(code=4400)  # not a room of this version
+            return
+        known = store.room_identity(room_id)
+        channel = Channel(ws, sealer, claimed, room_id)
+        if known is None:
+            # Sealed to the identity the room gave: only that room can read it, and it can
+            # check that this desk sent it.
+            await channel.send({"type": "unbind"})
             await ws.close()
             return
-        desk_nonce = crypto.nonce()
-        await channel.send({"type": "challenge", "nonce": desk_nonce})
-        answer = json.loads(await ws.receive_text())
-        expected = crypto.mac(key, f"room|{room_id}|{desk_nonce}".encode())
-        if not hmac.compare_digest(str(answer.get("mac", "")), expected):
+        if known != claimed:
             await ws.close(code=4401)
             return
+        opener.add_peer(known)
+        try:
+            sender, auth = opener.open(await _receive(ws))
+            if sender != known or not isinstance(auth, dict) or auth.get("room") != room_id:
+                raise EnvelopeError("not this room")
+            session = bytes.fromhex(str(auth.get("session", "")))
+            if auth.get("type") != "auth" or len(session) != 32:
+                raise EnvelopeError("no session key")
+        except (EnvelopeError, ValueError):
+            await ws.close(code=4401)
+            return
+        mine = secure.session_key(opener)
+        await channel.send({"type": "ack", "session": mine.hex()})
+        channel.session = session
         hub.channels[room_id] = channel
         store.seen(room_id)
         if metrics is not None:
             metrics.event("room", f"{_room_name(store, room_id)} connected")
-        await channel.send({"type": "ack"})
         room = store.room(room_id)
         if room is not None:  # a room that restarted learns whether it is open
             await channel.send(room.message())
@@ -182,7 +205,13 @@ def create_desk_app(
             await channel.send(folders_message(room))
         try:
             while True:
-                message = json.loads(await ws.receive_text())
+                try:
+                    sender, message = opener.open(await _receive(ws))
+                except EnvelopeError:
+                    log.warning("ignored a message for room %s that it did not seal", room_id)
+                    continue
+                if sender != known:
+                    continue
                 store.seen(room_id)
                 if isinstance(message, dict) and message.get("type") == "admin_report":
                     hub.reports[room_id] = clean_report(message)
@@ -191,12 +220,24 @@ def create_desk_app(
         except WebSocketDisconnect:
             pass
         finally:
+            opener.remove_session_key(mine)
             if hub.channels.get(room_id) is channel:
                 del hub.channels[room_id]
                 if metrics is not None:
                     metrics.event("room", f"{_room_name(store, room_id)} disconnected")
 
     return app
+
+
+async def _receive(ws: WebSocket) -> bytes:
+    """One frame from the room, text or bytes."""
+    message = await ws.receive()
+    if message.get("type") == "websocket.disconnect":
+        raise WebSocketDisconnect(int(message.get("code", 1000)))
+    data = message.get("bytes")
+    if data is None:
+        data = str(message.get("text", "")).encode()
+    return bytes(data)
 
 
 def _room_name(store: DeskStore, room_id: str) -> str:

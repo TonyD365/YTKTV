@@ -30,6 +30,7 @@ dependencies = [
     # No wheels for Intel Macs or Windows on ARM: release.yml builds it there (Rust, and
     # OpenSSL linked in statically so it cannot clash with Python's own).
     "cryptography>=50.0.2",
+    "lanpair>=1.3.0",
     # Finds the front desk on the local network even when its IP address changes.
     "zeroconf>=0.154.0",
     # Pinyin initials for the song book: "yldb" finds 月亮代表我的心.

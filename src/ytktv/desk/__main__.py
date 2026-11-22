@@ -33,7 +33,7 @@ def self_test() -> int:
         certificate=ensure_certificate(folder, "127.0.0.1"),
     )
     server.start()
-    announcer = Announcer(store.desk_id, "YTKTV Desk", "127.0.0.1", port)
+    announcer = Announcer(store.identity.public, "YTKTV Desk", "127.0.0.1", port)
     context = ssl.create_default_context()
     context.check_hostname, context.verify_mode = False, ssl.CERT_NONE
     try:
@@ -119,7 +119,7 @@ def main() -> int:
     server.start()
     try:
         announcer: Announcer | None = Announcer(
-            store.desk_id, staff.machine_name(store), ip, DESK_PORT
+            store.identity.public, staff.machine_name(store), ip, DESK_PORT
         )
     except Exception:  # no multicast here; rooms can still type the address
         announcer = None

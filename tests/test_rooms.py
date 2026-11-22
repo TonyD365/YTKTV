@@ -1,13 +1,14 @@
-import json
 import time
 
 import pytest
 from fastapi.testclient import TestClient
+from lanpair import Sealer
 
+from tests.helpers import room_handshake, room_identity
 from ytktv.config import Settings
 from ytktv.desk.server import create_desk_app
 from ytktv.desk.store import CODE_SECONDS, DeskStore
-from ytktv.rooms import binding, crypto
+from ytktv.rooms import binding, secure
 from ytktv.rooms.protocol import DeskImpostor, RoomSession
 
 
@@ -31,8 +32,13 @@ def test_the_desk_keeps_its_identity(tmp_path):
 
 
 def test_a_room_may_unbind_itself_only_after_a_week_without_the_desk():
+    desk = DeskStore()
     settings = Settings(
-        desk_url="https://desk", room_id="r", room_key="k", desk_key="ab", desk_last_seen=0
+        desk_url="https://desk",
+        room_id="r",
+        room_key=secure.new_seed(),
+        desk_key=desk.identity_hex,
+        desk_last_seen=0,
     )
     day = 24 * 3600
     assert not binding.can_unbind(settings, now=6 * day)
@@ -42,61 +48,82 @@ def test_a_room_may_unbind_itself_only_after_a_week_without_the_desk():
     assert not binding.is_bound(settings)
 
 
-def handshake(ws, session):
-    """The room's side of the handshake; returns the first message after it."""
-    ws.send_text(session.hello())
-    first = session.open(ws.receive_text())
-    if first["type"] == "challenge":
-        ws.send_text(session.answer(first))
-        first = session.open(ws.receive_text())
-    return first
+def test_a_pairing_from_before_lanpair_must_be_redone():
+    old = Settings(desk_url="https://desk", room_id="r", room_key="k" * 32, desk_key="ab" * 32)
+    assert not binding.is_bound(old)
+    desk = DeskStore()
+    room, _ = desk.pair(desk.new_code(), "Old")  # no identity: as an old room was stored
+    assert desk.room_identity(room.room_id) is None
 
 
-def test_rooms_and_the_desk_prove_who_they_are():
+def test_rooms_and_the_desk_prove_who_they_are(tmp_path):
     from starlette.websockets import WebSocketDisconnect
 
     store = DeskStore()
     app = create_desk_app(store)
+    seed = secure.new_seed()
+    me = room_identity(seed)
     with TestClient(app) as http:
-        assert http.post("/api/pair", json={"code": "000000"}).status_code == 403
-        reply = http.post("/api/pair", json={"code": store.new_code(), "name": "Adults"}).json()
-        assert reply["desk_id"] == crypto.desk_id(reply["desk_key"])
+        assert http.post("/api/pair", json={"code": "000000", "identity": me}).status_code == 403
+        # A room from before lanpair is told to update.
+        assert http.post("/api/pair", json={"code": store.new_code()}).status_code == 426
+        reply = http.post(
+            "/api/pair", json={"code": store.new_code(), "name": "Adults", "identity": me}
+        ).json()
+        assert reply["desk_id"] == secure.public(reply["desk_identity"]).device_id
+        assert reply["desk_id"] == store.desk_id and "key" not in reply
+        room_id = reply["room_id"]
         with http.websocket_connect("/ws/room") as ws:
-            session = RoomSession(reply["room_id"], reply["key"], store.public_key)
-            assert handshake(ws, session)["type"] == "ack"
-            assert app.state.hub.online() == {reply["room_id"]}
+            session = RoomSession(room_id, seed, reply["desk_identity"], tmp_path / "a.json")
+            assert room_handshake(ws, session)["type"] == "ack"
+            assert app.state.hub.online() == {room_id}
 
-        # A room with the wrong key is refused.
+        # A room with another identity is refused.
         with http.websocket_connect("/ws/room") as ws:
-            session = RoomSession(reply["room_id"], "wrong", store.public_key)
-            with pytest.raises(WebSocketDisconnect):
-                handshake(ws, session)
-
-        # A desk with another key cannot talk to the room, so it cannot unbind it.
-        with http.websocket_connect("/ws/room") as ws:
-            session = RoomSession(reply["room_id"], reply["key"], DeskStore().public_key)
+            session = RoomSession(room_id, secure.new_seed(), store.identity_hex, tmp_path / "b")
             ws.send_text(session.hello())
-            with pytest.raises(DeskImpostor):
-                session.open(ws.receive_text())
+            ws.send_text(session.auth())
+            with pytest.raises(WebSocketDisconnect):
+                ws.receive_bytes()
 
-        # An unknown room gets a signed unbind it can trust.
-        store.remove(reply["room_id"])
+        # A room that trusts another desk seals to that desk, so this one cannot read it.
         with http.websocket_connect("/ws/room") as ws:
-            session = RoomSession(reply["room_id"], reply["key"], store.public_key)
-            assert handshake(ws, session)["type"] == "unbind"
+            other = DeskStore().identity_hex
+            session = RoomSession(room_id, seed, other, tmp_path / "c.json")
+            ws.send_text(session.hello())
+            ws.send_text(session.auth())
+            with pytest.raises(WebSocketDisconnect):
+                ws.receive_bytes()
+
+        # An unknown room gets a sealed unbind it can trust.
+        store.remove(room_id)
+        with http.websocket_connect("/ws/room") as ws:
+            session = RoomSession(room_id, seed, store.identity_hex, tmp_path / "d.json")
+            assert room_handshake(ws, session)["type"] == "unbind"
 
 
-def test_room_messages_must_be_signed_and_fresh():
+def test_room_messages_must_be_sealed_and_fresh(tmp_path):
     store = DeskStore()
-    session = RoomSession("r", "k", store.public_key)
-    body = json.dumps({"type": "unbind", "seq": 1, "room": "r"}, sort_keys=True)
-    good = json.dumps({"body": body, "sig": store.sign(f"{session.nonce}|{body}".encode())})
+    seed = secure.new_seed()
+    session = RoomSession("r", seed, store.identity_hex, tmp_path / "seq.json")
+    room = secure.public(room_identity(seed))
+    good = Sealer(store.identity).seal(room, {"type": "unbind", "room": "r"})
     assert session.open(good)["type"] == "unbind"
     with pytest.raises(DeskImpostor):
         session.open(good)  # replayed
-    forged = json.dumps({"body": body, "sig": DeskStore().sign(b"x")})
+    forged = Sealer(DeskStore().identity).seal(room, {"type": "unbind", "room": "r"})
     with pytest.raises(DeskImpostor):
-        RoomSession("r", "k", store.public_key).open(forged)
+        RoomSession("r", seed, store.identity_hex, tmp_path / "other.json").open(forged)
+
+
+def test_a_replayed_message_stays_refused_after_a_restart(tmp_path):
+    store = DeskStore()
+    seed = secure.new_seed()
+    room = secure.public(room_identity(seed))
+    sealed = Sealer(store.identity).seal(room, {"type": "close", "room": "r"})
+    RoomSession("r", seed, store.identity_hex, tmp_path / "seq.json").open(sealed)
+    with pytest.raises(DeskImpostor):
+        RoomSession("r", seed, store.identity_hex, tmp_path / "seq.json").open(sealed)
 
 
 def test_front_desk_card_and_desk_window(qtbot, tmp_path):
@@ -110,7 +137,9 @@ def test_front_desk_card_and_desk_window(qtbot, tmp_path):
     qtbot.addWidget(card)
     assert not card.form.isHidden() and card.bound_row.isHidden()
     desk = DeskStore()
-    pairing = binding.Pairing("https://desk:8770", "r1", "k", "Kids", desk.desk_id, desk.public_key)
+    pairing = binding.Pairing(
+        "https://desk:8770", "r1", secure.new_seed(), "Kids", desk.desk_id, desk.identity_hex
+    )
     assert pairing.fingerprint == desk.fingerprint
     binding.apply(store.settings, pairing)
     card.refresh()
@@ -808,9 +837,11 @@ def test_guessing_pairing_codes_is_stopped():
     http = TestClient(create_desk_app(store, Hub()))
     wrong = "000000" if code != "000000" else "111111"
     for _ in range(desk_guard.PER_ADDRESS):
-        assert http.post("/api/pair", json={"code": wrong, "name": "x"}).status_code == 403
+        body = {"code": wrong, "name": "x", "identity": store.identity_hex}
+        assert http.post("/api/pair", json=body).status_code == 403
     # Locked out now, even with the right code.
-    assert http.post("/api/pair", json={"code": code, "name": "x"}).status_code == 429
+    body = {"code": code, "name": "x", "identity": store.identity_hex}
+    assert http.post("/api/pair", json=body).status_code == 429
 
     flooded: list[bool] = []
     guard = desk_guard.PairingGuard(lambda: flooded.append(True))
@@ -824,15 +855,13 @@ def test_guessing_pairing_codes_is_stopped():
         store.pair(code, "late")
 
 
-def test_a_signed_unbind_for_another_room_is_refused():
+def test_a_sealed_unbind_for_another_room_is_refused(tmp_path):
     store = DeskStore()
-    session = RoomSession("r", "k", store.public_key)
-
-    def signed(message):
-        body = json.dumps(message, sort_keys=True)
-        return json.dumps({"body": body, "sig": store.sign(f"{session.nonce}|{body}".encode())})
-
-    for message in ({"type": "unbind", "seq": 1, "room": "other"}, {"type": "unbind", "seq": 1}):
+    seed = secure.new_seed()
+    session = RoomSession("r", seed, store.identity_hex, tmp_path / "seq.json")
+    room = secure.public(room_identity(seed))
+    sealer = Sealer(store.identity)
+    for message in ({"type": "unbind", "room": "other"}, {"type": "unbind"}):
         with pytest.raises(DeskImpostor):
-            session.open(signed(message))
-    assert session.open(signed({"type": "unbind", "seq": 1, "room": "r"}))["type"] == "unbind"
+            session.open(sealer.seal(room, message))
+    assert session.open(sealer.seal(room, {"type": "unbind", "room": "r"}))["type"] == "unbind"
