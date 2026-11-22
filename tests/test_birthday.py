@@ -2,7 +2,9 @@ import asyncio
 import datetime as dt
 
 import pytest
+from lanpair import Sealer
 
+from tests.helpers import pair_room
 from ytktv.desk import birthday
 from ytktv.desk.store import DeskStore
 from ytktv.rooms.protocol import DeskImpostor, RoomSession
@@ -58,24 +60,23 @@ def test_opening_a_members_room_on_their_birthday_throws_a_party():
     assert birthday.birthday_member(store, "Bob", today) is None
 
 
-def test_the_birthday_message_is_signed_for_one_room():
+def test_the_birthday_message_is_sealed_for_one_room(tmp_path):
     from ytktv.desk.server import Channel
 
     store = DeskStore()
-    room, key = store.pair(store.new_code(), "Party")
-    session = RoomSession(room.room_id, key, store.public_key)
+    room, seed = pair_room(store, "Party")
+    session = RoomSession(room.room_id, seed, store.identity_hex, tmp_path / "a.json")
     sent = []
 
     class WS:
-        async def send_text(self, text):
-            sent.append(text)
+        async def send_bytes(self, data):
+            sent.append(data)
 
-    channel = Channel(WS(), store, session.nonce, room.room_id)
+    channel = Channel(WS(), Sealer(store.identity), session.me.public, room.room_id)
     asyncio.run(channel.send(birthday.message("Amy Chen")))
     message = session.open(sent[0])
     assert message["type"] == "birthday" and message["name"] == "Amy"
-    other = RoomSession("other-room", key, store.public_key)
-    other.nonce = session.nonce
+    other = RoomSession("other-room", seed, store.identity_hex, tmp_path / "b.json")
     with pytest.raises(DeskImpostor):
         other.open(sent[0])
 

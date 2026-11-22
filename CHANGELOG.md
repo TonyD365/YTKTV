@@ -3,7 +3,16 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
-## 4.5.0
+## 4.6.0
+
+**⚠️ Not compatible with 4.5 and older.** Rooms and YTKTV Desk now talk in a new, encrypted way, so a 4.6 room cannot connect to an older Desk, or the other way round. Update YTKTV Desk and every room's YTKTV to 4.6 together, then pair each room again: on the Desk, unbind the room in **Settings → Room settings** and add it again. Rooms that are not bound to a Desk are not affected.
+
+### 🔒 Encrypted rooms (YTKTV Desk)
+- Every message between the rooms and the Desk is now sealed with [lanpair](https://github.com/TonyD365/lanpair): encrypted to the other side's own key, signed and numbered. Before, the connection's encryption (TLS) was not tied to the Desk, so a machine placed in the middle of the network could read it; now only the room and its Desk can read, send or replay anything.
+- Each connection uses fresh keys (forward secrecy): traffic recorded today stays unreadable even if a key leaks later.
+- Messages from a room to the Desk (calls, orders, scores) are now signed too, not just the Desk's messages to the room.
+- The Desk keeps its ID and its four-picture security code.
+
 
 ### 🧩 Plugins
 - YTKTV now takes plugins: small Python add-ons that can add colour themes, add songs to search results, show messages on the TV and react to what happens in the room. Install one with pip, or drop a `.py` file into the plugins folder.

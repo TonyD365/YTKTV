@@ -116,8 +116,10 @@ way a real KTV's staff terminal runs its rooms: the adults in one room, the kids
   last 7, 30 or 90 days.
 - **Stock alerts**: a product running low shows in the service bar ("Cola: 2 left").
 - **Updates**: Settings → Updates checks for a new Desk on its own or when you ask.
-- **Safe by design**: rooms bind with a one-time code and a four-picture security code, obey only
-  what the desk signs, and find it by its ID even when its IP address changes. A binding is
+- **Safe by design**: rooms bind with a one-time code and a four-picture security code, and
+  everything between them and the desk is encrypted, signed and numbered with
+  [lanpair](https://github.com/TonyD365/lanpair). Rooms find the desk by its ID even when its IP
+  address changes. A binding is
   permanent unless the desk has been gone for 7 days. The desk can have a password.
 
 Download `YTKTV-Desk-<version>-…` from the [latest release](https://github.com/TonyD365/YTKTV/releases/latest),

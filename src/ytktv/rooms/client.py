@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import threading
 import time
@@ -12,7 +11,7 @@ from typing import Any
 
 import websockets
 
-from ytktv.config import SettingsStore
+from ytktv.config import SettingsStore, data_dir
 from ytktv.rooms import binding, discovery
 from ytktv.rooms.protocol import DeskImpostor, RoomSession
 from ytktv.rooms.state import RoomState
@@ -116,17 +115,17 @@ class RoomClient:
         settings = self.store.settings
         if not self.online:
             await asyncio.to_thread(self._locate)
-        session = RoomSession(settings.room_id, settings.room_key, settings.desk_key)
+        session = RoomSession(
+            settings.room_id, settings.room_key, settings.desk_key, data_dir() / "desk-seq.json"
+        )
         url = settings.desk_url.replace("http", "ws", 1) + "/ws/room"
         ssl_context = binding.tls_context() if url.startswith("wss") else None
         async with websockets.connect(url, open_timeout=5, ssl=ssl_context) as ws:
             await ws.send(session.hello())
+            await ws.send(session.auth())
             try:
                 async with asyncio.timeout(10):
-                    first = session.open(str(await ws.recv()))
-                    if first.get("type") == "challenge":
-                        await ws.send(session.answer(first))
-                        first = session.open(str(await ws.recv()))
+                    first = session.open(await ws.recv())
             except DeskImpostor:
                 log.warning("ignored a machine pretending to be the staff terminal")
                 return
@@ -139,23 +138,23 @@ class RoomClient:
                 if now - self.store.settings.desk_last_seen >= HEARTBEAT:
                     self.store.settings.desk_last_seen = now
                     self.store.save()
-                    await ws.send(json.dumps({"type": "heartbeat", "song": self.now_singing()}))
+                    await ws.send(session.seal({"type": "heartbeat", "song": self.now_singing()}))
                     report = self.admin_report() if self.admin_report else None
                     if report is not None and report != self._reported:
                         # The staff terminal's Admin Settings show what this room has now.
-                        await ws.send(json.dumps(report))
+                        await ws.send(session.seal(report))
                         self._reported = report
                 with self._outbox_lock:
                     outbox, self._outbox = self._outbox, []
                 for message in outbox:
-                    await ws.send(json.dumps(message))
+                    await ws.send(session.seal(message))
                 try:
                     async with asyncio.timeout(POLL):
                         raw = await ws.recv()
                 except TimeoutError:
                     continue
                 try:
-                    self._handle(session.open(str(raw)))
+                    self._handle(session.open(raw))
                 except DeskImpostor:
                     log.warning("ignored a message the desk did not sign")
 

@@ -11,7 +11,6 @@ Requests and downloads are signed with the room's key, so only paired rooms can 
 
 from __future__ import annotations
 
-import hmac
 import logging
 import threading
 import time
@@ -21,11 +20,12 @@ from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
+from lanpair import PublicIdentity
 from pydantic import BaseModel
 
 from ytktv.core.models import StemStatus
 from ytktv.desk.store import DeskStore
-from ytktv.rooms import crypto
+from ytktv.rooms.processing import request_data
 
 log = logging.getLogger(__name__)
 
@@ -35,9 +35,15 @@ CLOCK_SLACK = 120  # seconds a signed request may be old (rooms' clocks drift a 
 UPLOAD_LIMIT = 300 * 2**20  # a song's audio, sent by a room when the Desk cannot download it
 
 
-def signature(key: str, room_id: str, at: str, method: str, path: str) -> str:
-    """What a room puts in X-YTKTV-Mac: proves the request is from that paired room."""
-    return crypto.mac(key, f"process|{room_id}|{at}|{method}|{path}".encode())
+def signed_by(
+    room: PublicIdentity, room_id: str, at: str, method: str, path: str, sig: str
+) -> bool:
+    """Whether X-YTKTV-Sig proves the request is from that paired room."""
+    try:
+        signature = bytes.fromhex(sig)
+    except ValueError:
+        return False
+    return room.verify(request_data(room_id, at, method, path), signature)
 
 
 def merged_order(orders: dict[str, list[str]]) -> list[str]:
@@ -145,15 +151,14 @@ def add_processing_routes(
     """Rooms ask for songs and fetch the results here. *processor* is None while off."""
 
     def room_of(request: Request, room: str, at: str, mac: str) -> str:
-        key = store.key(room)
+        key = store.room_identity(room)
         if key is None:
             raise HTTPException(401, "not a room of this Desk")
         try:
             age = abs(time.time() - float(at))
         except ValueError:
             age = CLOCK_SLACK + 1
-        expected = signature(key, room, at, request.method, request.url.path)
-        if age > CLOCK_SLACK or not hmac.compare_digest(mac, expected):
+        if age > CLOCK_SLACK or not signed_by(key, room, at, request.method, request.url.path, mac):
             raise HTTPException(401, "bad signature")
         return room
 
@@ -169,9 +174,9 @@ def add_processing_routes(
         request: Request,
         x_ytktv_room: str = Header(""),
         x_ytktv_time: str = Header(""),
-        x_ytktv_mac: str = Header(""),
+        x_ytktv_sig: str = Header(""),
     ) -> dict[str, Any]:
-        room = room_of(request, x_ytktv_room, x_ytktv_time, x_ytktv_mac)
+        room = room_of(request, x_ytktv_room, x_ytktv_time, x_ytktv_sig)
         return {"songs": running().ask(room, body.songs)}
 
     @app.get("/api/process/{video_id}/{kind}")
@@ -181,9 +186,9 @@ def add_processing_routes(
         request: Request,
         x_ytktv_room: str = Header(""),
         x_ytktv_time: str = Header(""),
-        x_ytktv_mac: str = Header(""),
+        x_ytktv_sig: str = Header(""),
     ) -> FileResponse:
-        room_of(request, x_ytktv_room, x_ytktv_time, x_ytktv_mac)
+        room_of(request, x_ytktv_room, x_ytktv_time, x_ytktv_sig)
         if kind not in KINDS or not video_id.replace("-", "").replace("_", "").isalnum():
             raise HTTPException(404, "no such file")
         path = running().file(video_id, kind)
@@ -197,9 +202,9 @@ def add_processing_routes(
         request: Request,
         x_ytktv_room: str = Header(""),
         x_ytktv_time: str = Header(""),
-        x_ytktv_mac: str = Header(""),
+        x_ytktv_sig: str = Header(""),
     ) -> dict[str, bool]:
-        room_of(request, x_ytktv_room, x_ytktv_time, x_ytktv_mac)
+        room_of(request, x_ytktv_room, x_ytktv_time, x_ytktv_sig)
         if not video_id.replace("-", "").replace("_", "").isalnum():
             raise HTTPException(404, "no such song")
         data = await request.body()

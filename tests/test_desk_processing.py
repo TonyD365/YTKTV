@@ -9,13 +9,14 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.helpers import wait_for
+from tests.helpers import pair_room, wait_for
 from ytktv.config import SettingsStore
 from ytktv.core.models import StemStatus
 from ytktv.desk import processing
 from ytktv.desk.server import Hub, create_desk_app
 from ytktv.desk.store import DeskStore
 from ytktv.rooms import processing as room_processing
+from ytktv.rooms import secure
 from ytktv.rooms.processing import DeskOff, DeskStems
 from ytktv.separation.cache import StemCache
 
@@ -82,7 +83,7 @@ def test_every_room_s_first_song_comes_before_anyone_s_second():
 @pytest.fixture
 def desk(tmp_path):
     store = DeskStore()
-    room, key = store.pair(store.new_code(), "Room 1")
+    room, key = pair_room(store, "Room 1")
     stems = FakeStems(tmp_path)
     lyrics = FakeLyrics(tmp_path)
     processor = processing.SongProcessor(stems, lyrics, tmp_path / "uploads")
@@ -90,7 +91,8 @@ def desk(tmp_path):
     client = TestClient(app)
     settings = SettingsStore(tmp_path / "room.json")
     s = settings.settings
-    s.desk_url, s.room_id, s.room_key, s.desk_key = "https://desk", room.room_id, key, "k"
+    s.desk_url, s.room_id, s.room_key = "https://desk", room.room_id, key
+    s.desk_key = store.identity_hex
     return client, processor, stems, lyrics, settings, app
 
 
@@ -114,7 +116,7 @@ def test_only_paired_rooms_with_a_good_signature_get_in(desk):
     client, _processor, _stems, _lyrics, settings, app = desk
     headers = room_processing.signed_headers(settings.settings, "POST", "/api/process")
     assert client.post("/api/process", json={"songs": []}, headers=headers).status_code == 200
-    bad = {**headers, "X-YTKTV-Mac": "0" * 64}
+    bad = {**headers, "X-YTKTV-Sig": "0" * 128}
     assert client.post("/api/process", json={"songs": []}, headers=bad).status_code == 401
     old = room_processing.signed_headers(settings.settings, "POST", "/api/other")
     assert client.post("/api/process", json={"songs": []}, headers=old).status_code == 401
@@ -149,7 +151,8 @@ def test_a_room_gets_the_desk_s_instrumental_melody_and_lyrics(desk, tmp_path):
 def test_without_the_desk_the_room_does_it_itself(tmp_path):
     settings = SettingsStore(tmp_path / "room.json")
     s = settings.settings
-    s.desk_url, s.room_id, s.room_key, s.desk_key = "https://desk", "r", "key", "k"
+    s.desk_url, s.room_id, s.room_key = "https://desk", "r", secure.new_seed()
+    s.desk_key = DeskStore().identity_hex
 
     class Local(FakeStems):
         pass

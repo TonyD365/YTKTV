@@ -22,7 +22,7 @@ from typing import Any
 from ytktv.config import SettingsStore
 from ytktv.core.local import is_local
 from ytktv.core.models import StemStatus
-from ytktv.rooms import binding, crypto
+from ytktv.rooms import binding, secure
 from ytktv.separation.cache import StemCache
 
 log = logging.getLogger(__name__)
@@ -34,8 +34,14 @@ FORWARDED = ("on_change", "order", "pinned", "want_pitch", "on_chunk")
 
 def signed_headers(settings: Any, method: str, path: str) -> dict[str, str]:
     at = str(int(time.time()))
-    mac = crypto.mac(settings.room_key, f"process|{settings.room_id}|{at}|{method}|{path}".encode())
-    return {"X-YTKTV-Room": settings.room_id, "X-YTKTV-Time": at, "X-YTKTV-Mac": mac}
+    data = request_data(settings.room_id, at, method, path)
+    signature = secure.identity(settings.room_key).sign(data).hex()
+    return {"X-YTKTV-Room": settings.room_id, "X-YTKTV-Time": at, "X-YTKTV-Sig": signature}
+
+
+def request_data(room_id: str, at: str, method: str, path: str) -> bytes:
+    """What a room signs for one request to the Desk's song processing."""
+    return f"ytktv-process|{room_id}|{at}|{method}|{path}".encode()
 
 
 def content_type(path: str) -> str:

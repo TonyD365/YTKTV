@@ -37,6 +37,15 @@ days, and even then someone has to press **Unbind** in its settings. The Desk ca
 at any time in **Settings → Room settings**. Rooms find the Desk by its ID, so a new IP address
 for the Desk does not matter, and they only obey messages the Desk has signed.
 
+Everything between the rooms and the Desk is encrypted, signed and numbered with
+[lanpair](https://github.com/TonyD365/lanpair), so nobody else on the network can read it, fake
+it or play it back. Each connection uses fresh keys, so recorded traffic stays unreadable even if
+a key leaks later.
+
+**Coming from YTKTV 4.5 or older?** Rooms and the Desk talk in a new way since 4.6, so update the
+Desk and every room to 4.6 or later together, then pair each room again: on the Desk, unbind the
+room in **Settings → Room settings**, then add it again as above.
+
 ## Open, extend and close a room
 
 Pick a room on the board, then in the sidebar:

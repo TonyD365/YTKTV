@@ -6,6 +6,7 @@ import json
 
 from fastapi.testclient import TestClient
 
+from tests.helpers import pair_room, room_handshake
 from ytktv.config import Settings, SettingsStore
 from ytktv.desk import store as desk_store
 from ytktv.desk.server import create_desk_app, member_message, receive
@@ -19,7 +20,7 @@ def song(n: int) -> dict:
 
 
 def opened_for_member(store: DeskStore) -> tuple[str, int, str]:
-    room, key = store.pair(store.new_code(), "Kids")
+    room, key = pair_room(store, "Kids")
     member_id = store.add_member("Kim", "5550100")
     store.open_room(room.room_id, "Kim", 60)
     store.set_session_member(room.room_id, member_id)
@@ -57,19 +58,18 @@ def test_songs_are_saved_per_member_and_capped():
     assert all(s["video_id"] != "v500" for s in store.member_songs(member_id, "sung"))
 
 
-def test_the_list_goes_only_to_the_members_room_signed():
+def test_the_list_goes_only_to_the_members_room_sealed(tmp_path):
     store = DeskStore()
     room_id, member_id, key = opened_for_member(store)
-    other, other_key = store.pair(store.new_code(), "Adults")
+    other, other_key = pair_room(store, "Adults")
     store.open_room(other.room_id, "Lee", 60)
     store.add_member_song(member_id, "favourite", song(7))
     with TestClient(create_desk_app(store)) as http:
         for rid, k, expect in ((room_id, key, True), (other.room_id, other_key, False)):
             with http.websocket_connect("/ws/room") as ws:
-                session = RoomSession(rid, k, store.public_key)
-                ws.send_text(session.hello())
-                ws.send_text(session.answer(session.open(ws.receive_text())))
-                kinds = [session.open(ws.receive_text()) for _ in range(3)]
+                session = RoomSession(rid, k, store.identity_hex, tmp_path / f"{rid}.json")
+                kinds = [room_handshake(ws, session)]
+                kinds += [session.open(ws.receive_bytes()) for _ in range(2)]
                 types = [m["type"] for m in kinds]
                 assert types[:2] == ["ack", "open"]
                 assert (types[2] == "member_songs") is expect

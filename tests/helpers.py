@@ -73,3 +73,25 @@ def wait_for(condition: Callable[[], bool], timeout: float = 3.0) -> None:
         if time.monotonic() > deadline:
             raise AssertionError("condition not met in time")
         time.sleep(0.005)
+
+
+def pair_room(store, name: str = "Kids"):
+    """Pair a room with a lanpair identity of its own; returns (room, the room's seed)."""
+    from ytktv.rooms import secure
+
+    seed = secure.new_seed()
+    room, _ = store.pair(store.new_code(), name, identity=secure.public_hex(secure.identity(seed)))
+    return room, seed
+
+
+def room_identity(seed: str) -> str:
+    from ytktv.rooms import secure
+
+    return secure.public_hex(secure.identity(seed))
+
+
+def room_handshake(ws, session):
+    """The room's side of the handshake over a TestClient socket; returns the first reply."""
+    ws.send_text(session.hello())
+    ws.send_text(session.auth())
+    return session.open(ws.receive_bytes())
