@@ -208,7 +208,7 @@ def create_desk_app(
                 try:
                     sender, message = opener.open(await _receive(ws))
                 except EnvelopeError:
-                    log.warning("ignored a message for room %s that it did not seal", room_id)
+                    log.warning("ignored a room message that its room did not seal")
                     continue
                 if sender != known:
                     continue
