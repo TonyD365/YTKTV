@@ -3,6 +3,13 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.7.1
+
+### 🛠 Fixes
+- Instrumentals work again. Songs could fail with **No instrumental** when YTKTV's temporary folder had been removed.
+- Writing lyrics and separating songs now leave more of the computer to the music and microphones, to avoid sudden crackles.
+- The buttons in the bottom bar no longer overlap at the window's smallest width.
+
 ## 4.7.0
 
 ### 🌏 简体中文
