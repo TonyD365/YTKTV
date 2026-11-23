@@ -527,7 +527,7 @@ function T(s, v) {
     for (const [re, names, p] of PATS) {
       if (z) break;
       const m = re.exec(k);
-      if (m) { z = p; names.forEach((n, i) => { z = z.split("{" + n + "}").join(T(m[i + 1])); }); }
+      if (m) { z = p; names.forEach((n, i) => { z = z.split("{" + n + "}").join(m[i + 1]); }); }
     }
     if (z) r = s.replace(/^(\s*[^\p{L}\p{N}]*)[\s\S]*?(\s*)$/u, (_, a, b) => (ZH[k] ? "" : a) + z + b);
   }
@@ -537,15 +537,17 @@ function T(s, v) {
 (function () {  // translate the page's own words, including what the script adds later
   if (LANG !== "zh_CN") return;
   const SKIP = new Set(["SCRIPT", "STYLE", "TEXTAREA"]);
-  const song = (p) => p && (p.id === "now-title" || (p.classList && (p.classList.contains("t") || p.classList.contains("s"))));
+  // Anything the server sent (songs, singers, names, categories) is never translated.
+  const data = (e) => !!(e && e.closest && e.closest("[data-raw], #now-title, .t, .s, .tag"));
   function text(n) {
     const p = n.parentNode;
     if (!p || SKIP.has(p.nodeName)) return;
-    if (song(p) && n.nodeValue.trim() !== "Nothing yet. Pick a song!") return;
+    if (data(p) && n.nodeValue.trim() !== "Nothing yet. Pick a song!") return;
     const v = T(n.nodeValue);
     if (v !== n.nodeValue) n.nodeValue = v;
   }
   function attrs(e) {
+    if (data(e)) return;
     for (const a of ["placeholder", "title"]) {
       const o = e.getAttribute(a);
       if (o) { const v = T(o); if (v !== o) e.setAttribute(a, v); }
@@ -568,6 +570,15 @@ const enc = encodeURIComponent;
 let state = null;
 let dragging = {};
 const SLIDERS = [["music", "music_volume"], ["mic", "mic_volume"], ["guide", "guide_vocal"]];
+
+// Marks text from the server, so the translator leaves it exactly as it is.
+const raw = (text) => {
+  if (text === undefined || text === null || text === "") return "";
+  const node = document.createElement("span");
+  node.dataset.raw = "";
+  node.textContent = text;
+  return node;
+};
 
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
@@ -710,6 +721,7 @@ function renderService() {
     head.className = "menu-category";
     head.style.cssText = "margin:14px 0 2px;font-size:12px;letter-spacing:1.5px;color:var(--cyan);text-transform:uppercase;font-weight:700";
     head.textContent = category;
+    head.dataset.raw = "";
     rows.push(head);
     for (const p of groups.get(category)) {
       const row = document.createElement("div");
@@ -718,6 +730,7 @@ function renderService() {
       const name = document.createElement("span");
       name.style.flex = "1";
       name.textContent = `${p.name} · ${service.currency}${p.price}`;
+      name.dataset.raw = "";
       if (p.picture) {
         const pic = document.createElement("img");
         pic.src = "data:image/jpeg;base64," + p.picture;
@@ -791,7 +804,7 @@ function render() {
   board.replaceChildren();
   for (const entry of state.scoreboard || []) {
     const who = entry.singer ? `${entry.singer} · ${entry.title}` : entry.title;
-    board.append(el("div", {class: "turn"}, el("b", {}, `${entry.rank}.  ${who}`), el("span", {}, String(entry.points))));
+    board.append(el("div", {class: "turn"}, el("b", {}, raw(`${entry.rank}.  ${who}`)), el("span", {}, String(entry.points))));
   }
   $("board-box").hidden = !board.children.length;
 
@@ -838,11 +851,11 @@ function renderQueue() {
   mine.replaceChildren();
   const cur = state.current;
   if (me && cur && cur.owner === me) {
-    mine.append(el("div", {class: "turn"}, el("b", {}, cur.song.title), el("span", {}, "On now")));
+    mine.append(el("div", {class: "turn"}, el("b", {}, raw(cur.song.title)), el("span", {}, "On now")));
   }
   state.queue.forEach((item, i) => {
     if (me && item.owner === me) {
-      mine.append(el("div", {class: "turn"}, el("b", {}, item.song.title), el("span", {}, waitText(item, i))));
+      mine.append(el("div", {class: "turn"}, el("b", {}, raw(item.song.title)), el("span", {}, waitText(item, i))));
     }
   });
   $("mine-box").hidden = !mine.children.length;
@@ -931,7 +944,7 @@ function flash(frames, done, every = 80) {
 const rollFrames = (n, label = "Rolling…") =>
   Array.from({length: 12}, () => [Array.from({length: n}, () => DICE_FACES[Math.floor(Math.random() * 6)]).join(" "), label]);
 const gameButton = (text, onclick) => el("button", {onclick}, text);
-const showResult = (r, size = 54) => gameStage(r.text, r.detail || "", size);
+const showResult = (r, size = 54) => gameStage(raw(r.text), raw(r.detail), size);
 const GAMES = [
   {key: "dice", icon: "🎲", title: "Roll the Dice", color: "#d4537e", blurb: "Roll and add them up",
    rules: "Pick how many dice to roll.", start: "Roll!",
@@ -942,7 +955,7 @@ const GAMES = [
    async go() {
      const r = await playGame("spin");
      const names = [...new Set((state?.queue || []).map((i) => i.singer).filter(Boolean))];
-     flash(Array.from({length: 18}, (_, i) => [names.length ? names[i % names.length] : "🎡", "Spinning…", 40]), () => showResult(r, 48), 90);
+     flash(Array.from({length: 18}, (_, i) => [names.length ? raw(names[i % names.length]) : "🎡", "Spinning…", 40]), () => showResult(r, 48), 90);
    }},
   {key: "truthdare", icon: "💬", title: "Truth or Dare", color: "#1d9e75", blurb: "Answer, or do the dare",
    rules: "Pick Truth or Dare, then read the card out loud.", start: "Random",
@@ -958,11 +971,11 @@ const GAMES = [
        if (!(value >= 1 && value <= 100)) return;
        const r = await playGame("bomb_guess", {value});
        if (r.title.includes("BOOM")) flash([["💥", ""], ["", ""], ["💥", ""], ["", ""]], () => showResult(r, 60), 150);
-       else gameStage(r.text, r.detail || "Safe… next player!", 56);
+       else gameStage(raw(r.text), raw(r.detail) || "Safe… next player!", 56);
      });
      return [input, guess];
    },
-   async go() { const r = await playGame("bomb"); gameStage(r.text, "Guess a number in between", 56); }},
+   async go() { const r = await playGame("bomb"); gameStage(raw(r.text), "Guess a number in between", 56); }},
   {key: "liar", icon: "🎲", title: "Liar's Dice", color: "#5b3fa0", blurb: "Roll in secret, then bluff",
    rules: "Everyone rolls five dice only they can see. Bid, e.g. \"four 5s\"; ones are wild. Call liar, then Reveal.", start: "Roll My Dice",
    setup() {
@@ -972,7 +985,7 @@ const GAMES = [
      peek.addEventListener("pointerdown", showHand);
      ["pointerup", "pointerleave"].forEach((e) => peek.addEventListener(e, hide));
      this.hide = hide;
-     return [peek, gameButton("👀 Reveal all", async () => { const r = await playGame("liar_reveal"); this.hand = ""; gameStage(r.text, r.detail, 18); })];
+     return [peek, gameButton("👀 Reveal all", async () => { const r = await playGame("liar_reveal"); this.hand = ""; gameStage(raw(r.text), raw(r.detail), 18); })];
    },
    async go() { const r = await playGame("liar_roll"); this.hand = r.mine; flash(rollFrames(5), () => this.hide()); }},
   {key: "random", icon: "🎰", title: "Random Song", color: "#0e7490", blurb: "A slot machine picks your song",
@@ -989,7 +1002,7 @@ const GAMES = [
   {key: "sevens", icon: "7️⃣", title: "Sevens", color: "#1e40af", blurb: "Say PASS on sevens",
    rules: "Count up together. Any number with a 7 or divisible by 7 is \"PASS\".", start: "Next Number",
    setup() { return [gameButton("↺ Start over", async () => { await playGame("sevens_reset"); gameStage("1", "Press Next Number", 80); })]; },
-   async go() { const r = await playGame("sevens"); gameStage(r.text, r.detail || "", 90); }},
+   async go() { const r = await playGame("sevens"); gameStage(raw(r.text), raw(r.detail) || "", 90); }},
   {key: "countdown", icon: "⏱", title: "Countdown", color: "#9d174d", blurb: "A big timer on the TV",
    rules: "10 seconds on the TV for any race.", start: "Start Countdown",
    async go() { await playGame("countdown"); let n = 10; gameStage(n, "", 100); const t = setInterval(() => { n -= 1; gameStage(n > 0 ? n : "Time!", "", 100); if (n <= 0) clearInterval(t); }, 1000); }},
@@ -998,8 +1011,8 @@ const GAMES = [
    async go() { const r = await playGame("coin"); flash(Array.from({length: 12}, (_, i) => ["🪙", i % 2 ? "Tails" : "Heads", 80]), () => showResult(r, 64), 90); }},
   {key: "tournament", icon: "👑", title: "King of Singers", color: "#b45309", blurb: "Knockout rounds",
    rules: "Everyone in the queue, two per match. Sing a song with your name on it: the score card decides who goes through.", start: "Start Tournament",
-   setup() { return [gameButton("🔄 Bracket", async () => { const r = await playGame("tournament_status"); gameStage(r.text, r.detail, 30); })]; },
-   async go() { const r = await playGame("tournament"); flash(Array(6).fill(["👑", "Drawing the matches…", 80]), () => gameStage(r.text, r.detail, 30)); }},
+   setup() { return [gameButton("🔄 Bracket", async () => { const r = await playGame("tournament_status"); gameStage(raw(r.text), raw(r.detail), 30); })]; },
+   async go() { const r = await playGame("tournament"); flash(Array(6).fill(["👑", "Drawing the matches…", 80]), () => gameStage(raw(r.text), raw(r.detail), 30)); }},
   {key: "birthday", icon: "🎂", title: "Birthday", color: "#db2777", blurb: "Name on the TV, then the song",
    rules: "Type whose birthday it is: their name goes up on the TV and the birthday song plays next.", start: "Celebrate!",
    setup() { this.input = el("input", {placeholder: "Whose birthday?", maxlength: "30"}); return [this.input]; },
@@ -1092,7 +1105,7 @@ function renderMixer(mixer) {
   const presets = $("presets");
   presets.replaceChildren();
   for (const preset of mixer.presets) {
-    const chip = el("button", {class: "chip", onclick: () => api(`/api/mixer/presets/${enc(preset.name)}/apply`, "POST").then(renderMixer)}, preset.name);
+    const chip = el("button", {class: "chip", onclick: () => api(`/api/mixer/presets/${enc(preset.name)}/apply`, "POST").then(renderMixer)}, raw(preset.name));
     if (preset.name === mixer.preset) chip.style.cssText = "background: var(--purple); border-color: var(--purple)";
     presets.append(chip);
   }
