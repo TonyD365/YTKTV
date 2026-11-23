@@ -32,13 +32,14 @@ from PySide6.QtWidgets import (
 
 from ytktv.desk import reports
 from ytktv.desk.store import Booking, DeskStore, Member, Visit
+from ytktv.i18n import N_, t
 
-LENGTHS = {"1 hour": 60, "2 hours": 120, "3 hours": 180, "No time limit": None}
+LENGTHS = {N_("1 hour"): 60, N_("2 hours"): 120, N_("3 hours"): 180, N_("No time limit"): None}
 STATUS_TEXT = {
-    "booked": "Booked",
-    "arrived": "Arrived",
-    "cancelled": "Cancelled",
-    "no_show": "No-show",
+    "booked": N_("Booked"),
+    "arrived": N_("Arrived"),
+    "cancelled": N_("Cancelled"),
+    "no_show": N_("No-show"),
 }
 
 # Bill lines that pay for the room itself, not for items.
@@ -93,7 +94,7 @@ class Timeline(QWidget):
                 p.drawText(
                     QRectF(x0 + 6, y, max(6.0, x1 - x0) - 8, row_h),
                     Qt.AlignmentFlag.AlignVCenter,
-                    b.guest or "Booked",
+                    b.guest or t("Booked"),
                 )
         p.end()
 
@@ -102,7 +103,7 @@ class BookingDialog(QDialog):
     def __init__(self, store: DeskStore, day: QDate, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.store = store
-        self.setWindowTitle("New booking")
+        self.setWindowTitle(t("New booking"))
         form = QFormLayout(self)
         self.room = QComboBox()
         for room in store.rooms():
@@ -111,19 +112,20 @@ class BookingDialog(QDialog):
         self.when.setDisplayFormat("yyyy-MM-dd HH:mm")
         self.when.setCalendarPopup(True)
         self.length = QComboBox()
-        self.length.addItems(list(LENGTHS))
+        for key in LENGTHS:
+            self.length.addItem(t(key), key)
         self.length.setCurrentIndex(1)
         self.guest, self.contact, self.note = QLineEdit(), QLineEdit(), QLineEdit()
         for label, widget in (
-            ("Room", self.room),
-            ("Starts", self.when),
-            ("Length", self.length),
-            ("Guest", self.guest),
-            ("Contact", self.contact),
-            ("Note", self.note),
+            (t("Room"), self.room),
+            (t("Starts"), self.when),
+            (t("Length"), self.length),
+            (t("Guest"), self.guest),
+            (t("Contact"), self.contact),
+            (t("Note"), self.note),
         ):
             form.addRow(label, widget)
-        save = QPushButton("Save Booking")
+        save = QPushButton(t("Save Booking"))
         save.setObjectName("accent")
         save.clicked.connect(lambda: self.save())
         form.addRow(save)
@@ -133,7 +135,7 @@ class BookingDialog(QDialog):
             0,
             str(self.room.currentData()),
             float(self.when.dateTime().toSecsSinceEpoch()),
-            LENGTHS[self.length.currentText()],
+            LENGTHS[self.length.currentData()],
             self.guest.text().strip(),
             self.contact.text().strip(),
             self.note.text().strip(),
@@ -147,7 +149,9 @@ class BookingDialog(QDialog):
         if clashes and confirm_clash:
             when = ", ".join(time.strftime("%H:%M", time.localtime(c.starts)) for c in clashes)
             answer = QMessageBox.question(
-                self, "Room already booked", f"This room is booked at {when}. Book it anyway?"
+                self,
+                t("Room already booked"),
+                t("This room is booked at {when}. Book it anyway?", when=when),
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return 0
@@ -157,7 +161,15 @@ class BookingDialog(QDialog):
 
 
 class BookingsPage(QWidget):
-    COLUMNS = ("Time", "Room", "Guest", "Length", "Contact", "Note", "Status")
+    COLUMNS = (
+        N_("Time"),
+        N_("Room"),
+        N_("Guest"),
+        N_("Length"),
+        N_("Contact"),
+        N_("Note"),
+        N_("Status"),
+    )
 
     def __init__(self, store: DeskStore, check_in: Callable[[Booking], None]) -> None:
         super().__init__()
@@ -169,7 +181,7 @@ class BookingsPage(QWidget):
         self.calendar.setGridVisible(False)
         self.calendar.selectionChanged.connect(self.refresh)
         left.addWidget(self.calendar)
-        new = QPushButton("＋ New Booking")
+        new = QPushButton(t("＋ New Booking"))
         new.setObjectName("accent")
         new.clicked.connect(self.new_booking)
         left.addWidget(new)
@@ -179,7 +191,7 @@ class BookingsPage(QWidget):
         self.timeline = Timeline(store)
         right.addWidget(self.timeline, stretch=1)
         self.table = QTableWidget(0, len(self.COLUMNS))
-        self.table.setHorizontalHeaderLabels(self.COLUMNS)
+        self.table.setHorizontalHeaderLabels([t(c) for c in self.COLUMNS])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -220,7 +232,7 @@ class BookingsPage(QWidget):
                     length,
                     b.contact,
                     b.note,
-                    STATUS_TEXT.get(b.status, b.status),
+                    t(STATUS_TEXT.get(b.status, b.status)),
                 )
             ):
                 self.table.setItem(row, column, QTableWidgetItem(text))
@@ -325,7 +337,7 @@ class HeatMap(QWidget):
 
 
 class RecordsPage(QWidget):
-    COLUMNS = ("Closed", "Room", "Guest", "Time", "Songs", "Total")
+    COLUMNS = (N_("Closed"), N_("Room"), N_("Guest"), N_("Time"), N_("Songs"), N_("Total"))
 
     def __init__(self, store: DeskStore) -> None:
         super().__init__()
@@ -341,8 +353,8 @@ class RecordsPage(QWidget):
         self.day.dateChanged.connect(self.refresh)
         self.summary = QLabel()
         self.summary.setStyleSheet("color: white; font-size: 18px; font-weight: 700;")
-        export = QPushButton("Export CSV")
-        export.setToolTip("Every session in this period, as a spreadsheet Excel can open")
+        export = QPushButton(t("Export CSV"))
+        export.setToolTip(t("Every session in this period, as a spreadsheet Excel can open"))
         export.clicked.connect(self.export)
         top.addWidget(self.period)
         top.addWidget(self.day)
@@ -353,7 +365,7 @@ class RecordsPage(QWidget):
         self.chart = TakingsChart()
         column.addWidget(self.chart)
         self.table = QTableWidget(0, len(self.COLUMNS))
-        self.table.setHorizontalHeaderLabels(self.COLUMNS)
+        self.table.setHorizontalHeaderLabels([t(c) for c in self.COLUMNS])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         column.addWidget(self.table, stretch=1)
@@ -374,7 +386,7 @@ class RecordsPage(QWidget):
         if path is None:
             day = self.day.date().toString("yyyy-MM-dd")
             name = f"ytktv-{self.period.currentText().lower()}-{day}.csv"
-            path, _ = QFileDialog.getSaveFileName(self, "Export CSV", name, "CSV (*.csv)")
+            path, _ = QFileDialog.getSaveFileName(self, t("Export CSV"), name, "CSV (*.csv)")
         if path:
             reports.export_csv(self.visits(), path)
 
@@ -388,7 +400,13 @@ class RecordsPage(QWidget):
         hours = sum(v.closed_at - v.opened_at for v in visits) / 3600
         revenue = sum(v.total for v in visits)
         self.summary.setText(
-            f"{len(visits)} sessions  ·  {hours:.1f} hours  ·  {currency}{revenue:.2f}"
+            t(
+                "{len} sessions  ·  {hours:.1f} hours  ·  {currency}{revenue:.2f}",
+                len=len(visits),
+                hours=hours,
+                currency=currency,
+                revenue=revenue,
+            )
         )
         self.table.setRowCount(0)
         stamp = "%H:%M" if period == "Day" else "%m-%d %H:%M"
@@ -473,7 +491,7 @@ class ShiftDialog(QDialog):
 
         super().__init__(parent)
         self.store = store
-        self.setWindowTitle("Shift report")
+        self.setWindowTitle(t("Shift report"))
         self.resize(480, 600)
         column = QVBoxLayout(self)
         self.view = QTextBrowser()
@@ -481,13 +499,13 @@ class ShiftDialog(QDialog):
         self.view.setHtml(shift_report(store))
         column.addWidget(self.view, stretch=1)
         buttons = QHBoxLayout()
-        print_button = QPushButton("Print…")
+        print_button = QPushButton(t("Print…"))
         print_button.clicked.connect(self.print_report)
-        hand_over = QPushButton("Hand Over")
+        hand_over = QPushButton(t("Hand Over"))
         hand_over.setObjectName("accent")
-        hand_over.setToolTip("End this shift: the next report starts from now")
+        hand_over.setToolTip(t("End this shift: the next report starts from now"))
         hand_over.clicked.connect(self.hand_over)
-        close = QPushButton("Close")
+        close = QPushButton(t("Close"))
         close.clicked.connect(self.reject)
         buttons.addWidget(print_button)
         buttons.addStretch()
@@ -513,7 +531,7 @@ class ShiftDialog(QDialog):
 class MembersPage(QWidget):
     """Members: their stored balance and points. Members save at the till."""
 
-    COLUMNS = ("Name", "Phone", "Balance", "Points", "Birthday")
+    COLUMNS = (N_("Name"), N_("Phone"), N_("Balance"), N_("Points"), N_("Birthday"))
 
     def __init__(self, store: DeskStore) -> None:
         super().__init__()
@@ -522,7 +540,7 @@ class MembersPage(QWidget):
         column.setContentsMargins(24, 18, 24, 18)
         top = QHBoxLayout()
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Find a member by name or phone")
+        self.search.setPlaceholderText(t("Find a member by name or phone"))
         self.search.textChanged.connect(self.refresh)
         top.addWidget(self.search, stretch=1)
         for text, handler in (
@@ -535,7 +553,7 @@ class MembersPage(QWidget):
             top.addWidget(button)
         column.addLayout(top)
         self.table = QTableWidget(0, len(self.COLUMNS))
-        self.table.setHorizontalHeaderLabels(self.COLUMNS)
+        self.table.setHorizontalHeaderLabels([t(c) for c in self.COLUMNS])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -559,7 +577,9 @@ class MembersPage(QWidget):
             ):
                 self.table.setItem(row, col, QTableWidgetItem(text))
         off = self.store.setting("member_discount", "10")
-        self.note.setText(f"{len(self._shown)} members · members save {off}% at the till")
+        self.note.setText(
+            t("{len} members · members save {off}% at the till", len=len(self._shown), off=off)
+        )
 
     def selected(self) -> Member | None:
         row = self.table.currentRow()
@@ -569,17 +589,17 @@ class MembersPage(QWidget):
         self, _checked: bool = False, name: str | None = None, phone: str | None = None
     ) -> int:
         if name is None:
-            name, ok = QInputDialog.getText(self, "New member", "Name:")
+            name, ok = QInputDialog.getText(self, t("New member"), t("Name:"))
             if not ok:
                 return 0
         if phone is None:
-            phone, ok = QInputDialog.getText(self, "New member", "Phone number:")
+            phone, ok = QInputDialog.getText(self, t("New member"), t("Phone number:"))
             if not ok:
                 return 0
         try:
             member_id = self.store.add_member(name, phone)
         except ValueError as exc:
-            QMessageBox.warning(self, "New member", str(exc).capitalize() + ".")
+            QMessageBox.warning(self, t("New member"), str(exc).capitalize() + ".")
             return 0
         self.refresh()
         return member_id
@@ -590,7 +610,7 @@ class MembersPage(QWidget):
             return
         if birthday is None:
             birthday, ok = QInputDialog.getText(
-                self, "Birthday", f"{member.name}'s birthday, as MM-DD (e.g. 07-21):",
+                self, t("Birthday"), t("{name}'s birthday, as MM-DD (e.g. 07-21):", name=member.name),
                 text=member.birthday,
             )  # fmt: skip
             if not ok:
@@ -598,7 +618,7 @@ class MembersPage(QWidget):
         try:
             self.store.set_birthday(member.member_id, birthday)
         except ValueError as exc:
-            QMessageBox.warning(self, "Birthday", str(exc).capitalize() + ".")
+            QMessageBox.warning(self, t("Birthday"), str(exc).capitalize() + ".")
             return
         self.refresh()
 
@@ -608,7 +628,13 @@ class MembersPage(QWidget):
             return
         if amount is None:
             amount, ok = QInputDialog.getDouble(
-                self, "Top up", f"Add to {member.name}'s balance:", 100, 0.01, 99_999_999, 2
+                self,
+                t("Top up"),
+                t("Add to {name}'s balance:", name=member.name),
+                100,
+                0.01,
+                99_999_999,
+                2,
             )
             if not ok:
                 return
@@ -619,7 +645,7 @@ class MembersPage(QWidget):
 class LogPage(QWidget):
     """Who did what, on which machine: this Desk and every staff terminal working on it."""
 
-    COLUMNS = ("Time", "Machine", "Action")
+    COLUMNS = (N_("Time"), N_("Machine"), N_("Action"))
 
     def __init__(self, store: DeskStore) -> None:
         super().__init__()
@@ -634,16 +660,16 @@ class LogPage(QWidget):
         self.machine.currentIndexChanged.connect(self.refresh)
         self.summary = QLabel()
         self.summary.setObjectName("muted")
-        top.addWidget(QLabel("Day"))
+        top.addWidget(QLabel(t("Day")))
         top.addWidget(self.day)
         top.addSpacing(16)
-        top.addWidget(QLabel("Machine"))
+        top.addWidget(QLabel(t("Machine")))
         top.addWidget(self.machine)
         top.addSpacing(16)
         top.addWidget(self.summary, stretch=1)
         column.addLayout(top)
         self.table = QTableWidget(0, len(self.COLUMNS))
-        self.table.setHorizontalHeaderLabels(self.COLUMNS)
+        self.table.setHorizontalHeaderLabels([t(c) for c in self.COLUMNS])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         column.addWidget(self.table, stretch=1)
@@ -659,7 +685,7 @@ class LogPage(QWidget):
         self.machine.blockSignals(False)
         if self.machine.currentIndex() > 0:
             entries = [e for e in entries if e.machine == self.machine.currentText()]
-        self.summary.setText(f"{len(entries)} actions")
+        self.summary.setText(t("{len} actions", len=len(entries)))
         self.table.setRowCount(0)
         for entry in entries:
             row = self.table.rowCount()
@@ -691,19 +717,19 @@ class InsightsPage(QWidget):
         for picker in (self.first, self.last):
             picker.setCalendarPopup(True)
             picker.dateChanged.connect(self.refresh)
-        export = QPushButton("Export CSV")
-        export.setToolTip("The songs, items, rooms and busy hours below, as a spreadsheet")
+        export = QPushButton(t("Export CSV"))
+        export.setToolTip(t("The songs, items, rooms and busy hours below, as a spreadsheet"))
         export.clicked.connect(self.export)
         top.addWidget(self.range)
         top.addWidget(self.first)
-        top.addWidget(QLabel("to"))
+        top.addWidget(QLabel(t("to")))
         top.addWidget(self.last)
         top.addStretch()
         top.addWidget(export)
         column.addLayout(top)
         tiles = QHBoxLayout()
         self.tiles: dict[str, QLabel] = {}
-        for name in ("Takings", "Sessions", "Per session", "Hours sung"):
+        for name in (N_("Takings"), N_("Sessions"), N_("Per session"), N_("Hours sung")):
             box = QVBoxLayout()
             value = QLabel("0")
             value.setStyleSheet("color: white; font-size: 26px; font-weight: 800;")
@@ -765,7 +791,7 @@ class InsightsPage(QWidget):
     def export(self, _checked: bool = False, path: str | None = None) -> None:
         if path is None:
             name = f"ytktv-insights-{date.today().isoformat()}.csv"
-            path, _ = QFileDialog.getSaveFileName(self, "Export CSV", name, "CSV (*.csv)")
+            path, _ = QFileDialog.getSaveFileName(self, t("Export CSV"), name, "CSV (*.csv)")
         if path:
             reports.export_dashboard_csv(*self.gather(), path)
 

@@ -8,6 +8,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
+from ytktv.i18n import t
+
 ICON = Path(__file__).parent / "assets" / "icon.png"
 
 
@@ -32,10 +34,10 @@ class RoomClosed(QWidget):
             )
         )
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.message = QLabel("This room is closed")
+        self.message = QLabel(t("This room is closed"))
         self.message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.message.setStyleSheet("color: white; font-size: 30px; font-weight: 700;")
-        self.detail = QLabel("Please ask the staff.")
+        self.detail = QLabel(t("Please ask the staff."))
         self.detail.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.detail.setStyleSheet("color: #9a93b8; font-size: 16px;")
         layout.addWidget(icon)
@@ -43,7 +45,7 @@ class RoomClosed(QWidget):
         layout.addWidget(self.message)
         layout.addWidget(self.detail)
         layout.addStretch()
-        settings = QPushButton("Settings")
+        settings = QPushButton(t("Settings"))
         settings.clicked.connect(self.open_settings.emit)
         layout.addWidget(settings, alignment=Qt.AlignmentFlag.AlignRight)
         self.hide()

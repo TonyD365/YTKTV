@@ -18,19 +18,20 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ytktv.i18n import N_, t
 from ytktv.ui import icons, theme
 from ytktv.ui.pages import Context, Page
 
 # (page, label, icon, colour): one tile each, in reading order.
 TILES = (
-    ("search", "Search", "search", "#d4537e"),
-    ("artists", "Artists", "star", "#7f77dd"),
-    ("hot", "Hot Songs", "fire", "#1d9e75"),
-    ("playlists", "Playlists", "list", "#ba7517"),
-    ("favorites", "Favorites", "heart", "#b0365f"),
-    ("queue", "Selected", "mic", "#534ab7"),
-    ("history", "Sung", "check", "#378add"),
-    ("mixer", "Mixer", "sliders", "#5f5e5a"),
+    ("search", N_("Search"), "search", "#d4537e"),
+    ("artists", N_("Artists"), "star", "#7f77dd"),
+    ("hot", N_("Hot Songs"), "fire", "#1d9e75"),
+    ("playlists", N_("Playlists"), "list", "#ba7517"),
+    ("favorites", N_("Favorites"), "heart", "#b0365f"),
+    ("queue", N_("Selected"), "mic", "#534ab7"),
+    ("history", N_("Sung"), "check", "#378add"),
+    ("mixer", N_("Mixer"), "sliders", "#5f5e5a"),
 )
 
 
@@ -94,10 +95,10 @@ class HomePage(Page):
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cover.setScaledContents(True)
         now_box.addWidget(self.cover, stretch=1)
-        caption = QLabel("NOW PLAYING")
+        caption = QLabel(t("NOW PLAYING"))
         caption.setObjectName("caption")
         now_box.addWidget(caption)
-        self.now_title = QLabel("Pick a song to start the party")
+        self.now_title = QLabel(t("Pick a song to start the party"))
         self.now_title.setObjectName("homeTitle")
         self.now_title.setWordWrap(True)
         self.now_title.setTextFormat(Qt.TextFormat.PlainText)
@@ -107,7 +108,7 @@ class HomePage(Page):
         now_box.addWidget(self.now_singer)
         room.addWidget(now, stretch=1)
 
-        up_next = QLabel("UP NEXT")
+        up_next = QLabel(t("UP NEXT"))
         up_next.setObjectName("caption")
         room.addWidget(up_next)
         self.next_rows: list[QLabel] = []
@@ -117,7 +118,7 @@ class HomePage(Page):
             row.setTextFormat(Qt.TextFormat.PlainText)
             room.addWidget(row)
             self.next_rows.append(row)
-        self.more = QPushButton("See the whole queue")
+        self.more = QPushButton(t("See the whole queue"))
         self.more.setCursor(Qt.CursorShape.PointingHandCursor)
         self.more.clicked.connect(lambda: open_page("queue"))
         room.addWidget(self.more)
@@ -130,7 +131,7 @@ class HomePage(Page):
         grid.setSpacing(14)
         self.tiles: dict[str, Tile] = {}
         for index, (key, label, icon, colour) in enumerate(TILES):
-            tile = Tile(icon, label)
+            tile = Tile(icon, t(label))
             tile.setObjectName("tile")
             tile.setCursor(Qt.CursorShape.PointingHandCursor)
             tile.setMinimumSize(150, 120)
@@ -178,8 +179,8 @@ class HomePage(Page):
                 self._cover_url = url
                 self.ctx.thumbnails.load(url, self._set_cover)
         else:
-            self.now_title.setText("Pick a song to start the party")
-            self.now_singer.setText("Scan the QR code to queue songs from a phone")
+            self.now_title.setText(t("Pick a song to start the party"))
+            self.now_singer.setText(t("Scan the QR code to queue songs from a phone"))
             self._cover_url = ""
             self.cover.clear()
         queue = state.get("queue") or []
@@ -192,10 +193,16 @@ class HomePage(Page):
             row.setText(item["song"]["title"] + singer)
             row.setVisible(True)
         if not queue:
-            self.next_rows[0].setText("Nothing queued yet")
+            self.next_rows[0].setText(t("Nothing queued yet"))
             self.next_rows[0].setVisible(True)
-        self.more.setText(f"See the whole queue ({len(queue)})" if queue else "See the whole queue")
-        self.tiles["queue"].setText(f"Selected ({len(queue)})" if queue else "Selected")
+        self.more.setText(
+            t("See the whole queue ({count})", count=len(queue))
+            if queue
+            else t("See the whole queue")
+        )
+        self.tiles["queue"].setText(
+            t("Selected ({count})", count=len(queue)) if queue else t("Selected")
+        )
 
     def _set_cover(self, pixmap: QPixmap) -> None:
         self.cover.setPixmap(pixmap)

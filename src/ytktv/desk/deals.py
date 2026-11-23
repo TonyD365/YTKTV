@@ -39,6 +39,7 @@ from ytktv.desk.pricing import (
     rules_to_json,
 )
 from ytktv.desk.store import Coupon, DeskStore, Package
+from ytktv.i18n import t
 
 MAX_PRICE = 99_999_999
 
@@ -51,10 +52,10 @@ def end_of_day(day: QDate) -> float:
 class PackageDialog(QDialog):
     def __init__(self, package: Package, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Package")
+        self.setWindowTitle(t("Package"))
         form = QFormLayout(self)
         self.name = QLineEdit(package.name)
-        self.name.setPlaceholderText("e.g. Party 3 hours")
+        self.name.setPlaceholderText(t("e.g. Party 3 hours"))
         self.price = QDoubleSpinBox()
         self.price.setRange(0, MAX_PRICE)
         self.price.setValue(package.price)
@@ -64,13 +65,13 @@ class PackageDialog(QDialog):
         self.hours.setSuffix(" h")
         self.hours.setValue(package.minutes / 60 or 3)
         self.includes = QLineEdit(package.includes)
-        self.includes.setPlaceholderText("e.g. 1 × Beer tower, 1 × Fruit plate")
-        self.active = QCheckBox("Offered when a room opens")
+        self.includes.setPlaceholderText(t("e.g. 1 × Beer tower, 1 × Fruit plate"))
+        self.active = QCheckBox(t("Offered when a room opens"))
         self.active.setChecked(package.active)
-        form.addRow("Name", self.name)
-        form.addRow("Price", self.price)
-        form.addRow("Room time", self.hours)
-        form.addRow("Comes with", self.includes)
+        form.addRow(t("Name"), self.name)
+        form.addRow(t("Price"), self.price)
+        form.addRow(t("Room time"), self.hours)
+        form.addRow(t("Comes with"), self.includes)
         form.addRow("", self.active)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -94,37 +95,37 @@ class PackageDialog(QDialog):
 class CouponDialog(QDialog):
     def __init__(self, coupon: Coupon, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Coupon")
+        self.setWindowTitle(t("Coupon"))
         form = QFormLayout(self)
         self.code = QLineEdit(coupon.code)
-        self.code.setPlaceholderText("e.g. SUMMER20")
+        self.code.setPlaceholderText(t("e.g. SUMMER20"))
         self.kind = QComboBox()
-        self.kind.addItem("Percent off the bill", "percent")
-        self.kind.addItem("Amount off the bill", "amount")
+        self.kind.addItem(t("Percent off the bill"), "percent")
+        self.kind.addItem(t("Amount off the bill"), "amount")
         self.kind.setCurrentIndex(0 if coupon.kind == "percent" else 1)
         self.value = QDoubleSpinBox()
         self.value.setRange(0.01, MAX_PRICE)
         self.value.setValue(coupon.value or 10)
         self.uses = QSpinBox()
         self.uses.setRange(0, 100_000)
-        self.uses.setSpecialValueText("Any number")
+        self.uses.setSpecialValueText(t("Any number"))
         self.uses.setValue(coupon.uses_left or 0)
-        self.expires = QCheckBox("Expires after")
+        self.expires = QCheckBox(t("Expires after"))
         self.until = QDateEdit(QDate.currentDate().addMonths(1))
         self.until.setCalendarPopup(True)
         if coupon.expires is not None:
             self.expires.setChecked(True)
             day = time.localtime(coupon.expires)
             self.until.setDate(QDate(day.tm_year, day.tm_mon, day.tm_mday))
-        self.active = QCheckBox("Can be used")
+        self.active = QCheckBox(t("Can be used"))
         self.active.setChecked(coupon.active)
         expiry = QHBoxLayout()
         expiry.addWidget(self.expires)
         expiry.addWidget(self.until)
-        form.addRow("Code", self.code)
-        form.addRow("Type", self.kind)
-        form.addRow("Value", self.value)
-        form.addRow("Uses left", self.uses)
+        form.addRow(t("Code"), self.code)
+        form.addRow(t("Type"), self.kind)
+        form.addRow(t("Value"), self.value)
+        form.addRow(t("Uses left"), self.uses)
         form.addRow("", expiry)
         form.addRow("", self.active)
         buttons = QDialogButtonBox(
@@ -150,10 +151,10 @@ class PriceRuleDialog(QDialog):
         from ytktv.desk.window import ROOM_TYPES
 
         super().__init__(parent)
-        self.setWindowTitle("Time price")
+        self.setWindowTitle(t("Time price"))
         form = QFormLayout(self)
         self.name = QLineEdit(rule.name)
-        self.name.setPlaceholderText("e.g. Happy hour")
+        self.name.setPlaceholderText(t("e.g. Happy hour"))
         days = QHBoxLayout()
         self.days: list[QCheckBox] = []
         for index, day in enumerate(DAY_NAMES):
@@ -167,9 +168,9 @@ class PriceRuleDialog(QDialog):
             edit.setDisplayFormat("HH:mm")
         hours = QHBoxLayout()
         hours.addWidget(self.start)
-        hours.addWidget(QLabel("to"))
+        hours.addWidget(QLabel(t("to")))
         hours.addWidget(self.end)
-        hours.addWidget(QLabel("(an earlier end runs past midnight)"))
+        hours.addWidget(QLabel(t("(an earlier end runs past midnight)")))
         self.kind = QComboBox()
         for kind, text in KINDS.items():
             self.kind.addItem(text, kind)
@@ -177,7 +178,7 @@ class PriceRuleDialog(QDialog):
         self.value = QDoubleSpinBox()
         self.value.setRange(-100, MAX_PRICE)
         self.value.setValue(rule.value)
-        self.value.setToolTip("Percent: −30 is 30% off, 20 is a 20% surcharge.")
+        self.value.setToolTip(t("Percent: −30 is 30% off, 20 is a 20% surcharge."))
         types = QHBoxLayout()
         self.types: list[QCheckBox] = []
         for room_type in ROOM_TYPES:
@@ -185,14 +186,14 @@ class PriceRuleDialog(QDialog):
             box.setChecked(room_type in rule.room_types)
             self.types.append(box)
             types.addWidget(box)
-        self.active = QCheckBox("In use")
+        self.active = QCheckBox(t("In use"))
         self.active.setChecked(rule.active)
-        form.addRow("Name", self.name)
-        form.addRow("Days", days)
-        form.addRow("Hours", hours)
-        form.addRow("Price", self.kind)
-        form.addRow("Value", self.value)
-        form.addRow("Room types (none = all)", types)
+        form.addRow(t("Name"), self.name)
+        form.addRow(t("Days"), days)
+        form.addRow(t("Hours"), hours)
+        form.addRow(t("Price"), self.kind)
+        form.addRow(t("Value"), self.value)
+        form.addRow(t("Room types (none = all)"), types)
         form.addRow("", self.active)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -224,13 +225,13 @@ class DealsSettings(QFrame):
         self.setObjectName("panel")
         column = QVBoxLayout(self)
         column.setContentsMargins(24, 20, 24, 20)
-        head = QLabel("PACKAGES AND COUPONS")
+        head = QLabel(t("PACKAGES AND COUPONS"))
         head.setObjectName("panelHead")
         column.addWidget(head)
         note = QLabel(
-            "A package sells room time and items at one price; pick it when you open a room."
-            " Time beyond it is charged by the hour. Coupons are typed in at the till."
-            " Time prices change the hourly rate by weekday and hour; the first match wins."
+            t(
+                "A package sells room time and items at one price; pick it when you open a room. Time beyond it is charged by the hour. Coupons are typed in at the till. Time prices change the hourly rate by weekday and hour; the first match wins."
+            )
         )
         note.setObjectName("muted")
         note.setWordWrap(True)
@@ -240,10 +241,10 @@ class DealsSettings(QFrame):
         self.coupon_list = QListWidget()
         self.rule_list = QListWidget()
         for title, widget, add, edit, remove in (
-            ("Packages", self.package_list, self.add_package, self.edit_package,
+            (t("Packages"), self.package_list, self.add_package, self.edit_package,
              self.remove_package),
-            ("Coupons", self.coupon_list, self.add_coupon, self.edit_coupon, self.remove_coupon),
-            ("Time prices", self.rule_list, self.add_rule, self.edit_rule, self.remove_rule),
+            (t("Coupons"), self.coupon_list, self.add_coupon, self.edit_coupon, self.remove_coupon),
+            (t("Time prices"), self.rule_list, self.add_rule, self.edit_rule, self.remove_rule),
         ):  # fmt: skip
             box = QVBoxLayout()
             box.addWidget(QLabel(title))
@@ -251,7 +252,7 @@ class DealsSettings(QFrame):
             widget.itemDoubleClicked.connect(lambda _item, e=edit: e())
             box.addWidget(widget)
             row = QHBoxLayout()
-            for text, action in (("Add…", add), ("Edit…", edit), ("Remove", remove)):
+            for text, action in ((t("Add…"), add), (t("Edit…"), edit), (t("Remove"), remove)):
                 button = QPushButton(text)
                 button.clicked.connect(lambda _c=False, a=action: a())
                 row.addWidget(button)
@@ -263,25 +264,25 @@ class DealsSettings(QFrame):
         self.birthday = QSpinBox()
         self.birthday.setRange(0, 100)
         self.birthday.setSuffix(" %")
-        self.birthday.setSpecialValueText("None")
+        self.birthday.setSpecialValueText(t("None"))
         self.birthday.setValue(int(float(store.setting("birthday_discount", "0"))))
         self.birthday.valueChanged.connect(lambda v: store.set_setting("birthday_discount", str(v)))
-        form.addRow("Members' birthday discount", self.birthday)
-        self.party = QCheckBox("Birthday party on the room's TV when a member's room opens")
+        form.addRow(t("Members' birthday discount"), self.birthday)
+        self.party = QCheckBox(t("Birthday party on the room's TV when a member's room opens"))
         self.party.setChecked(birthday.enabled(store))
         self.party.toggled.connect(
             lambda on: store.set_setting(birthday.ENABLED_SETTING, "1" if on else "0")
         )
-        form.addRow("Birthday party", self.party)
+        form.addRow(t("Birthday party"), self.party)
         self.party_days = QSpinBox()
         self.party_days.setRange(0, 31)
-        self.party_days.setSpecialValueText("Only on the day")
-        self.party_days.setSuffix(" days either side")
+        self.party_days.setSpecialValueText(t("Only on the day"))
+        self.party_days.setSuffix(t(" days either side"))
         self.party_days.setValue(birthday.window_days(store))
         self.party_days.valueChanged.connect(
             lambda v: store.set_setting(birthday.WINDOW_SETTING, str(v))
         )
-        form.addRow("Counts as the birthday", self.party_days)
+        form.addRow(t("Counts as the birthday"), self.party_days)
         column.addLayout(form)
         self.load()
 
@@ -289,7 +290,7 @@ class DealsSettings(QFrame):
         currency = self.store.setting("currency", "$")
         self.package_list.clear()
         for package in self.store.packages():
-            off = "" if package.active else "  (off)"
+            off = "" if package.active else t("  (off)")
             item = QListWidgetItem(
                 f"{package.name} · {package.minutes / 60:g} h · {currency}{package.price:g}{off}"
             )
@@ -297,20 +298,24 @@ class DealsSettings(QFrame):
             self.package_list.addItem(item)
         self.coupon_list.clear()
         for coupon in self.store.coupons():
-            uses = "any uses" if coupon.uses_left is None else f"{coupon.uses_left} left"
+            uses = (
+                t("any uses")
+                if coupon.uses_left is None
+                else t("{count} left", count=coupon.uses_left)
+            )
             until = (
-                time.strftime(" · until %Y-%m-%d", time.localtime(coupon.expires))
+                t(" · until {date}", date=time.strftime("%Y-%m-%d", time.localtime(coupon.expires)))
                 if coupon.expires
                 else ""
             )
-            off = "" if coupon.active else "  (off)"
+            off = "" if coupon.active else t("  (off)")
             item = QListWidgetItem(f"{coupon.code} · {coupon.label(currency)} · {uses}{until}{off}")
             item.setData(Qt.ItemDataRole.UserRole, coupon)
             self.coupon_list.addItem(item)
 
         self.rule_list.clear()
         for rule in self.rules():
-            off = "" if rule.active else "  (off)"
+            off = "" if rule.active else t("  (off)")
             self.rule_list.addItem(rule.label(currency) + off)
 
     def rules(self) -> list[PriceRule]:
@@ -382,7 +387,7 @@ class DealsSettings(QFrame):
         try:
             self.store.save_coupon(coupon)
         except ValueError as exc:
-            QMessageBox.warning(self, "Coupon", str(exc))
+            QMessageBox.warning(self, t("Coupon"), str(exc))
         self.load()
 
     def edit_coupon(self) -> None:

@@ -33,6 +33,7 @@ from ytktv.desk import birthday, lock
 from ytktv.desk.admin_dialog import AdminSettingsDialog
 from ytktv.desk.billing import bill
 from ytktv.desk.deals import DealsSettings
+from ytktv.desk.language import LanguageSettings
 from ytktv.desk.lobby import Lobby, LobbySettings, ThemeSettings
 from ytktv.desk.pages import (
     BookingsPage,
@@ -58,21 +59,22 @@ from ytktv.desk.server import Hub, folders_message, tell, tell_all_products, unb
 from ytktv.desk.store import CODE_SECONDS, Booking, DeskStore, Room
 from ytktv.desk.terminals import TerminalSettings
 from ytktv.desk.update import DeskUpdater
+from ytktv.i18n import N_, t
 from ytktv.rooms.state import format_left
 from ytktv.ui import backdrop, icons
 
 COLUMNS = 4
 ICON = Path(__file__).parent / "assets" / "icon.png"
 TIPS = (
-    "Skip the song",
-    "Pause or resume",
-    "Music volume",
-    "Send a message",
-    "Lock or unlock",
-    "Birthday party on the room's TV",
+    N_("Skip the song"),
+    N_("Pause or resume"),
+    N_("Music volume"),
+    N_("Send a message"),
+    N_("Lock or unlock"),
+    N_("Birthday party on the room's TV"),
 )
-LENGTHS = {"1 hour": 60, "2 hours": 120, "3 hours": 180, "No time limit": None}
-EXTRA = {"30 minutes": 30, "1 hour": 60}
+LENGTHS = {N_("1 hour"): 60, N_("2 hours"): 120, N_("3 hours"): 180, N_("No time limit"): None}
+EXTRA = {N_("30 minutes"): 30, N_("1 hour"): 60}
 STYLE = """
 #deskTop { background: rgba(10, 6, 24, 0.85); border-bottom: 1px solid #3a2a5c; }
 #deskLogo { color: #ff3d9a; font-size: 30px; font-weight: 900; letter-spacing: 4px; }
@@ -124,18 +126,18 @@ QAbstractSpinBox QLineEdit { padding: 0; margin: 0; border: 0; border-radius: 0;
   background: transparent; font-size: 16px; }
 """
 STATUS = {  # status: (label, tile colour, icon)
-    "free": ("Free", "#24506b", "check"),
-    "booked": ("Booked", "#5b3fa0", "calendar"),
-    "in_use": ("In use", "#1d7a55", "mic"),
-    "ending": ("Ending soon", "#a8781a", "timer"),
-    "over": ("Time's up", "#9c2f45", "timer"),
-    "calling": ("Calling", "#c2185b", "bell"),
-    "cleaning": ("Cleaning", "#6b5a2a", "broom"),
-    "maintenance": ("Maintenance", "#4a4a52", "wrench"),
-    "offline": ("Offline", "#14111f", "close"),
+    "free": (N_("Free"), "#24506b", "check"),
+    "booked": (N_("Booked"), "#5b3fa0", "calendar"),
+    "in_use": (N_("In use"), "#1d7a55", "mic"),
+    "ending": (N_("Ending soon"), "#a8781a", "timer"),
+    "over": (N_("Time's up"), "#9c2f45", "timer"),
+    "calling": (N_("Calling"), "#c2185b", "bell"),
+    "cleaning": (N_("Cleaning"), "#6b5a2a", "broom"),
+    "maintenance": (N_("Maintenance"), "#4a4a52", "wrench"),
+    "offline": (N_("Offline"), "#14111f", "close"),
 }
 LEGEND = ("free", "booked", "in_use", "ending", "calling", "cleaning", "maintenance", "offline")
-ROOM_TYPES = ("Small", "Medium", "Large", "VIP", "Party")
+ROOM_TYPES = (N_("Small"), N_("Medium"), N_("Large"), N_("VIP"), N_("Party"))
 
 
 def stat(value_label: QLabel, title: str) -> QFrame:
@@ -166,7 +168,7 @@ class DeskWindow(QMainWindow):
         self._reminded: set[int] = set()
         self._calls_shown: list[object] = []
         self._code_until = 0.0
-        self.setWindowTitle("YTKTV Desk")
+        self.setWindowTitle(t("YTKTV Desk"))
         self.setWindowIcon(QIcon(str(ICON)))
         self.setStyleSheet(STYLE)
         self.resize(1280, 820)
@@ -183,9 +185,9 @@ class DeskWindow(QMainWindow):
         brand = QVBoxLayout()
         brand.setContentsMargins(0, 0, 0, 14)  # keep the subtitle off the bottom line
         brand.setSpacing(2)
-        logo = QLabel("YTKTV")
+        logo = QLabel(t("YTKTV"))
         logo.setObjectName("deskLogo")
-        sub = QLabel("KARAOKE SYSTEM  ·  STAFF TERMINAL")
+        sub = QLabel(t("KARAOKE SYSTEM  ·  STAFF TERMINAL"))
         sub.setObjectName("deskSub")
         brand.addWidget(logo)
         brand.addWidget(sub)
@@ -196,6 +198,7 @@ class DeskWindow(QMainWindow):
         self.legend: dict[str, QLabel] = {}
         for key in LEGEND:
             label, colour, _ = STATUS[key]
+            label = t(label)
             chip = QLabel()
             chip.setObjectName("legend")
             chip.setToolTip(label)
@@ -206,13 +209,13 @@ class DeskWindow(QMainWindow):
         money = QVBoxLayout()
         self.stat_today = QLabel("0")
         self.stat_today.setObjectName("deskClock")
-        today_label = QLabel("TODAY")
+        today_label = QLabel(t("TODAY"))
         today_label.setObjectName("statLabel")
         money.addWidget(self.stat_today, alignment=Qt.AlignmentFlag.AlignRight)
         money.addWidget(today_label, alignment=Qt.AlignmentFlag.AlignRight)
         bar.addLayout(money)
         bar.addSpacing(16)
-        self.offline_label = QLabel("Main Desk offline: reconnecting…")
+        self.offline_label = QLabel(t("Main Desk offline: reconnecting…"))
         self.offline_label.setStyleSheet("color: #ff6b81; font-weight: 700;")
         self.offline_label.hide()
         bar.addWidget(self.offline_label)
@@ -256,14 +259,14 @@ class DeskWindow(QMainWindow):
         calls.setObjectName("callBar")
         call_row = QHBoxLayout(calls)
         call_row.setContentsMargins(24, 10, 24, 10)
-        head = QLabel("SERVICE CALLS")
+        head = QLabel(t("SERVICE CALLS"))
         head.setObjectName("panelHead")
-        self.calls_label = QLabel("No calls right now")
+        self.calls_label = QLabel(t("No calls right now"))
         self.calls_label.setObjectName("muted")
         where = (
-            f"Staff terminal of {address}"
+            t("Staff terminal of {address}", address=address)
             if terminal is not None
-            else f"Rooms connect to this desk at {address}"
+            else t("Rooms connect to this desk at {address}", address=address)
         )
         hint = QLabel(f"{where} · {store.fingerprint}")
         hint.setObjectName("muted")
@@ -315,7 +318,7 @@ class DeskWindow(QMainWindow):
         side = QVBoxLayout(panel)
         side.setContentsMargins(24, 20, 24, 20)
         side.setSpacing(10)
-        self.panel_head = QLabel("ROOM")
+        self.panel_head = QLabel(t("ROOM"))
         self.panel_head.setObjectName("panelHead")
         self.panel_name = QLabel()
         self.panel_name.setObjectName("bigName")
@@ -348,7 +351,7 @@ class DeskWindow(QMainWindow):
             button.clicked.connect(handler)
             button.setEnabled(False)
             button.setMinimumHeight(40)
-            button.setToolTip(TIPS[len(self.remote_buttons)])
+            button.setToolTip(t(TIPS[len(self.remote_buttons)]))
             remote.addWidget(button, 0, len(self.remote_buttons))
             self.remote_buttons.append(button)
         side.addLayout(remote)
@@ -364,25 +367,25 @@ class DeskWindow(QMainWindow):
         panel.setObjectName("panel")
         box = QVBoxLayout(panel)
         box.setContentsMargins(24, 20, 24, 20)
-        head = QLabel("ROOM SETTINGS")
+        head = QLabel(t("ROOM SETTINGS"))
         head.setObjectName("panelHead")
         note = QLabel(
-            "Rename a room, or unbind it. An unbound room turns back into a stand-alone YTKTV."
+            t("Rename a room, or unbind it. An unbound room turns back into a stand-alone YTKTV.")
         )
         note.setObjectName("muted")
         self.room_list = QListWidget()
         buttons = QHBoxLayout()
-        rename = QPushButton("Rename")
+        rename = QPushButton(t("Rename"))
         rename.clicked.connect(self.rename_room)
-        self.unbind_button = QPushButton("Unbind")
+        self.unbind_button = QPushButton(t("Unbind"))
         self.unbind_button.clicked.connect(self.unbind_room)
-        price = QPushButton("Set Price")
+        price = QPushButton(t("Set Price"))
         price.clicked.connect(self.set_room_rate)
-        kind = QPushButton("Room Type")
+        kind = QPushButton(t("Room Type"))
         kind.clicked.connect(self.set_room_type)
-        local_only = QPushButton("Local Songs Only")
+        local_only = QPushButton(t("Local Songs Only"))
         local_only.setToolTip(
-            "On or off: the room may sing only video files from its own computer, not YouTube"
+            t("On or off: the room may sing only video files from its own computer, not YouTube")
         )
         local_only.clicked.connect(self.toggle_local_only)
         buttons.addWidget(rename)
@@ -419,6 +422,8 @@ class DeskWindow(QMainWindow):
         column.addWidget(self.lobby_settings)
         self.theme_settings = ThemeSettings(self.store)
         column.addWidget(self.theme_settings)
+        self.language_settings = LanguageSettings(self.store, local=self.terminal is not None)
+        column.addWidget(self.language_settings)
         return tab
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt)
@@ -434,12 +439,12 @@ class DeskWindow(QMainWindow):
         """Offer a downloaded update in the top bar; installing quits the desk."""
 
         def ready(version: str) -> None:
-            icons.set_text(self.update_button, f"⬆  Update to {version}")
-            self.update_button.setToolTip("Install the new version and restart the desk")
+            icons.set_text(self.update_button, t("⬆  Update to {version}", version=version))
+            self.update_button.setToolTip(t("Install the new version and restart the desk"))
             self.update_button.show()
 
         def available(version: str, page: str) -> None:
-            icons.set_text(self.update_button, f"⬆  {version} is out")
+            icons.set_text(self.update_button, t("⬆  {version} is out", version=version))
             self.update_button.setToolTip(page)
             self.update_button.show()
 
@@ -447,7 +452,9 @@ class DeskWindow(QMainWindow):
             if updates.installer is not None and updater.password_needed(updates.installer):
                 note = updater.PASSWORD_NOTE.format(app="YTKTV Desk")
                 answer = QMessageBox.question(
-                    self, "Install the update", f"YTKTV Desk will close and reopen.\n\n{note}"
+                    self,
+                    t("Install the update"),
+                    t("YTKTV Desk will close and reopen.\n\n{note}", note=note),
                 )
                 if answer != QMessageBox.StandardButton.Yes:
                     return
@@ -483,40 +490,46 @@ class DeskWindow(QMainWindow):
             column.addWidget(item)
             return item
 
-        head("VIEW")
+        head(t("VIEW"))
         self.nav: dict[str, QPushButton] = {}
         for index, (name, icon) in enumerate(
             (
-                ("Rooms", "🏠"),
-                ("Bookings", "📅"),
-                ("Records", "📊"),
-                ("Members", "💳"),
-                ("Insights", "📈"),
-                ("Log", "📜"),
-                ("Settings", "⚙️"),
+                (N_("Rooms"), "🏠"),
+                (N_("Bookings"), "📅"),
+                (N_("Records"), "📊"),
+                (N_("Members"), "💳"),
+                (N_("Insights"), "📈"),
+                (N_("Log"), "📜"),
+                (N_("Settings"), "⚙️"),
             )
         ):
-            self.nav[name] = button(f"{icon}  {name}", lambda _c=False, i=index: self.show_tab(i))
+            self.nav[name] = button(
+                f"{icon}  {t(name)}", lambda _c=False, i=index: self.show_tab(i)
+            )
             self.nav[name].setCheckable(True)
-        head("SELECTED ROOM")
+        head(t("SELECTED ROOM"))
         self.room_actions = {
-            "open": button("🔑  Open Room", self.open_room),
-            "extend": button("⏱  Extend Time", self.extend_room),
-            "change": button("🔁  Change Room", self.change_room, "Move the party to another room"),
-            "add_item": button("🛒  Add Item", lambda: self.orders.add_item()),
-            "close": button("💳  Check Out", self.close_room, "Show the bill and close the room"),
-            "cleaned": button("🧹  Cleaned", self.mark_cleaned, "The room is ready again"),
-            "repair": button("🔧  Maintenance", self.toggle_maintenance),
+            "open": button(t("🔑  Open Room"), self.open_room),
+            "extend": button(t("⏱  Extend Time"), self.extend_room),
+            "change": button(
+                t("🔁  Change Room"), self.change_room, t("Move the party to another room")
+            ),
+            "add_item": button(t("🛒  Add Item"), lambda: self.orders.add_item()),
+            "close": button(
+                t("💳  Check Out"), self.close_room, t("Show the bill and close the room")
+            ),
+            "cleaned": button(t("🧹  Cleaned"), self.mark_cleaned, t("The room is ready again")),
+            "repair": button(t("🔧  Maintenance"), self.toggle_maintenance),
             "admin": button(
-                "⚙  Admin Settings",
+                t("⚙  Admin Settings"),
                 lambda: self.admin_settings(),
-                "The room's video, sound, vocal separation, local songs, lights and updates",
+                t("The room's video, sound, vocal separation, local songs, lights and updates"),
             ),
         }
-        head("STAFF TERMINAL")
-        button("📢  Broadcast", self.broadcast)
-        button("＋  Add Room", self.add_room)
-        button("📋  Shift Report", self.shift_report)
+        head(t("STAFF TERMINAL"))
+        button(t("📢  Broadcast"), self.broadcast)
+        button(t("＋  Add Room"), self.add_room)
+        button(t("📋  Shift Report"), self.shift_report)
         column.addStretch()
         return bar
 
@@ -553,7 +566,7 @@ class DeskWindow(QMainWindow):
             self.offline_label.show()
             return False
         except DeskOffline:
-            self.offline_label.setText("Main Desk offline: reconnecting…")
+            self.offline_label.setText(t("Main Desk offline: reconnecting…"))
             self.offline_label.show()
             return False
         self.offline_label.hide()
@@ -575,7 +588,15 @@ class DeskWindow(QMainWindow):
             counts["in_use" if status == "over" else status] += 1
         for key, chip in self.legend.items():
             label, colour, _ = STATUS[key]
-            chip.setText(f"<span style='color:{colour}'>●</span> {label} <b>{counts[key]}</b>")
+            label = t(label)
+            chip.setText(
+                t(
+                    "<span style='color:{colour}'>●</span> {label} <b>{value}</b>",
+                    colour=colour,
+                    label=label,
+                    value=counts[key],
+                )
+            )
         self._fill_wall(rooms, online)
         self._fill_panel(rooms, online)
         self._fill_settings(rooms)
@@ -613,19 +634,21 @@ class DeskWindow(QMainWindow):
         names = {r.room_id: r.name for r in rooms}
         self.calls_label.setVisible(not calls and not low)
         for call in calls[:6]:
-            note = f": {call.note}" if call.note else ""
+            note = f": {call.note}" if call.note else ""  # the guest's own words
             late = call.call_id in overdue
-            waited = f"  ⚠ {int(now - call.created) // 60} min" if late else ""
-            chip = QPushButton(f"🛎 {names.get(call.room_id, '?')} · {call.kind}{note}{waited}  ✓")
-            chip.setToolTip("Mark as handled; the room is told staff is on the way")
+            waited = t("  ⚠ {minutes} min", minutes=int(now - call.created) // 60) if late else ""
+            chip = QPushButton(
+                f"🛎 {names.get(call.room_id, '?')} · {t(call.kind)}{note}{waited}  ✓"
+            )
+            chip.setToolTip(t("Mark as handled; the room is told staff is on the way"))
             colour = "#ff1744; font-weight: 800" if late else "#9c2f45"
             chip.setStyleSheet(f"background: {colour}; color: white; border-radius: 14px;")
             chip.clicked.connect(lambda _c=False, c=call.call_id: self.finish_call(c))
             self.call_chips.addWidget(chip)
         for product in low[:4]:
-            left = "sold out" if product.stock == 0 else f"{product.stock} left"
+            left = t("sold out") if product.stock == 0 else t("{stock} left", stock=product.stock)
             chip = QPushButton(f"📦 {product.name}: {left}")
-            chip.setToolTip("Running low: open Settings to restock it")
+            chip.setToolTip(t("Running low: open Settings to restock it"))
             chip.setStyleSheet("background: #8a6a1c; color: white; border-radius: 14px;")
             chip.clicked.connect(lambda: self.show_tab(self.stack.count() - 1))
             self.call_chips.addWidget(chip)
@@ -637,7 +660,7 @@ class DeskWindow(QMainWindow):
             self.hub.send_soon(self.selected, {"type": "control", "action": action, "value": value})
 
     def _volume(self) -> None:
-        value, ok = QInputDialog.getInt(self, "Music volume", "Volume (0–100):", 60, 0, 100)
+        value, ok = QInputDialog.getInt(self, t("Music volume"), t("Volume (0–100):"), 60, 0, 100)
         if ok:
             self._control("volume", value)
 
@@ -653,7 +676,10 @@ class DeskWindow(QMainWindow):
         if name is None:
             member = birthday.member_for_guest(self.store, room.guest)
             name, ok = QInputDialog.getText(
-                self, "Birthday", "Whose birthday?", text=member.name if member else room.guest
+                self,
+                t("Birthday"),
+                t("Whose birthday?"),
+                text=member.name if member else room.guest,
             )
             if not ok:
                 return
@@ -682,8 +708,8 @@ class DeskWindow(QMainWindow):
         if room_id:
             rate, ok = QInputDialog.getDouble(
                 self,
-                "Price per hour",
-                "This room's price per hour (0 = desk default):",
+                t("Price per hour"),
+                t("This room's price per hour (0 = desk default):"),
                 0,
                 0,
                 MAX_PRICE,
@@ -700,10 +726,9 @@ class DeskWindow(QMainWindow):
                 widget.deleteLater()
         if not rooms:
             empty = QLabel(
-                "<div style='font-size:64px'>🎤</div>"
-                "<div style='font-size:22px;font-weight:700;color:white'>No rooms yet</div>"
-                "<div style='color:#9a93b8'>Press “Add Room”, then open Settings → Staff Terminal"
-                " on a YTKTV and enter the code.</div>"
+                t(
+                    "<div style='font-size:64px'>🎤</div><div style='font-size:22px;font-weight:700;color:white'>No rooms yet</div><div style='color:#9a93b8'>Press “Add Room”, then open Settings → Staff Terminal on a YTKTV and enter the code.</div>"
+                )
             )
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty.setMinimumHeight(360)
@@ -718,6 +743,7 @@ class DeskWindow(QMainWindow):
                 QApplication.beep()  # a booked guest is due within 15 minutes
         for n, room in enumerate(rooms):
             label, colour, dot = STATUS[self._status(room, online)]
+            label = t(label)
             left = room.ends_at - time.time() if room.is_open and room.ends_at else None
             tile = QPushButton()
             tile.setObjectName("roomTile")
@@ -728,7 +754,7 @@ class DeskWindow(QMainWindow):
                 spend = bill(self.store, room.room_id)
                 extra += f"\n{spend.currency}{spend.total:.2f}"
             if left is not None and left > 0:
-                extra += f"\n{format_left(left)} left"
+                extra += "\n" + t("{time} left", time=format_left(left))
             singing = self.store.now_singing(room.room_id) if room.is_open else ""
             if singing:
                 extra += f"\n{singing[:28]}"
@@ -736,7 +762,11 @@ class DeskWindow(QMainWindow):
             if booked is not None and not room.is_open:
                 at = time.strftime("%H:%M", time.localtime(booked.starts))
                 extra += f"\n{at} · {booked.guest}"
-            text = f"{room.name}\n{room.room_type} · {room.capacity} seats\n\n{label}{extra}"
+            text = (
+                f"{room.name}\n"
+                + t("{type} · {capacity} seats", type=t(room.room_type), capacity=room.capacity)
+                + f"\n\n{label}{extra}"
+            )
             tile.setText(text.replace("&", "&&"))  # a lone & would become a shortcut
             tile.setIcon(icons.icon(dot))
             tile.setIconSize(QSize(26, 26))
@@ -753,41 +783,49 @@ class DeskWindow(QMainWindow):
     def _fill_panel(self, rooms: list[Room], online: set[str]) -> None:
         left = self._code_until - time.monotonic()
         if left > 0:
-            self.panel_head.setText("PAIR A NEW ROOM")
-            self.panel_name.setText("Enter this code on the room")
+            self.panel_head.setText(t("PAIR A NEW ROOM"))
+            self.panel_name.setText(t("Enter this code on the room"))
             self.panel_info.setText(
-                f"On the YTKTV in that room: Settings → Staff Terminal.\n"
-                f"Desk address: {self.address}\n\n"
-                f"Security code: {self.store.fingerprint}\n"
-                "The room must show the same four pictures; if not, do not confirm.\n\n"
-                f"The code works once and expires in {int(left) // 60}:{int(left) % 60:02d}."
+                t(
+                    "On the YTKTV in that room: Settings → Staff Terminal.\nDesk address: {address}\n\nSecurity code: {fingerprint}\nThe room must show the same four pictures; if not, do not confirm.\n\nThe code works once and expires in {value}:{value2:02d}.",
+                    address=self.address,
+                    fingerprint=self.store.fingerprint,
+                    value=int(left) // 60,
+                    value2=int(left) % 60,
+                )
             )
             self.code_label.show()
             return
         self.code_label.hide()
         room = next((r for r in rooms if r.room_id == self.selected), None)
         if room is None:
-            self.panel_head.setText("ROOM")
-            self.panel_name.setText("Select a room")
-            self.panel_info.setText("Click a room on the left to see it here.")
+            self.panel_head.setText(t("ROOM"))
+            self.panel_name.setText(t("Select a room"))
+            self.panel_info.setText(t("Click a room on the left to see it here."))
             for action in self.room_actions.values():
                 action.setEnabled(False)
             self.orders.show_room(None)
             return
         up = room.room_id in online
         seen = (
-            "now"
+            t("now")
             if up
             else time.strftime("%Y-%m-%d %H:%M", time.localtime(room.last_seen))
             if room.last_seen
-            else "never"
+            else t("never")
         )
         self.panel_name.setText(room.name)
-        self.panel_head.setText(f"{room.room_type.upper()} ROOM · {room.capacity} SEATS")
-        label = STATUS[self._status(room, online)][0]
-        lines = [label + ("" if up else " · offline"), f"Last seen: {seen}"]
+        self.panel_head.setText(
+            t(
+                "{upper} ROOM · {capacity} SEATS",
+                upper=t(room.room_type).upper(),
+                capacity=room.capacity,
+            )
+        )
+        label = t(STATUS[self._status(room, online)][0])
+        lines = [label + ("" if up else t(" · offline")), t("Last seen: {seen}", seen=seen)]
         if room.is_open:
-            lines.append(f"Guest: {room.guest or '—'}")
+            lines.append(t("Guest: {guest}", guest=room.guest or "—"))
             lines.append(
                 "No time limit"
                 if room.ends_at is None
@@ -809,7 +847,7 @@ class DeskWindow(QMainWindow):
             action.setEnabled(enabled[key])
         icons.set_text(
             self.room_actions["repair"],
-            "✅  Back in Service" if room.state == "maintenance" else "🔧  Maintenance",
+            t("✅  Back in Service") if room.state == "maintenance" else t("🔧  Maintenance"),
         )
         self.orders.show_room(room.room_id if room.is_open else None)
         for button in self.remote_buttons:
@@ -848,40 +886,52 @@ class DeskWindow(QMainWindow):
         if self.selected is None:
             return
         if guest is None:
-            guest, ok = QInputDialog.getText(self, "Open room", "Guest name (optional):")
+            guest, ok = QInputDialog.getText(self, t("Open room"), t("Guest name (optional):"))
             if not ok:
                 return
         elif member_phone is None:
             member_phone = ""  # answered in code (tests): no member unless given
         if member_phone is None:
             member_phone, ok = QInputDialog.getText(
-                self, "Open room", "Member phone (optional, brings their songs):"
+                self, t("Open room"), t("Member phone (optional, brings their songs):")
             )
             if not ok:
                 return
         member = self.store.member_by_phone(member_phone) if member_phone.strip() else None
         if member_phone.strip() and member is None:
-            QMessageBox.information(self, "Open room", "No member has that phone number.")
+            QMessageBox.information(self, t("Open room"), t("No member has that phone number."))
             return
         if member is not None and not guest.strip():
             guest = member.name
         currency = self.store.setting("currency", "$")
         packages = {
-            f"Package · {p.name} ({p.minutes / 60:g} h, {currency}{p.price:g})": p
+            t(
+                "Package · {name} ({hours:g} h, {currency}{price:g})",
+                name=p.name,
+                hours=p.minutes / 60,
+                currency=currency,
+                price=p.price,
+            ): p
             for p in self.store.packages(active_only=True)
         }
         if length is None:
             length, ok = QInputDialog.getItem(
-                self, "Open room", "How long?", [*LENGTHS, *packages], 1, False
+                self,
+                t("Open room"),
+                t("How long?"),
+                [*(t(k) for k in LENGTHS), *packages],
+                1,
+                False,
             )
             if not ok:
                 return
+        shown = {t(k): k for k in LENGTHS}
         package = packages.get(length)
-        minutes = package.minutes if package is not None else LENGTHS[length]
+        minutes = package.minutes if package is not None else LENGTHS[shown.get(length, length)]
         room = self.store.room(self.selected)
         if room is not None and room.state == "cleaning":
             answer = QMessageBox.question(
-                self, "Not cleaned yet", "This room has not been cleaned. Open it anyway?"
+                self, t("Not cleaned yet"), t("This room has not been cleaned. Open it anyway?")
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return
@@ -911,10 +961,12 @@ class DeskWindow(QMainWindow):
         if self.selected is None:
             return
         if length is None:
-            length, ok = QInputDialog.getItem(self, "Extend time", "Add:", list(EXTRA), 0, False)
+            length, ok = QInputDialog.getItem(
+                self, t("Extend time"), t("Add:"), [t(k) for k in EXTRA], 0, False
+            )
             if not ok:
                 return
-        self.store.extend(self.selected, EXTRA[length])
+        self.store.extend(self.selected, EXTRA[{t(k): k for k in EXTRA}.get(length, length)])
         tell(self.store, self.hub, self.selected)
         self.refresh()
 
@@ -941,10 +993,22 @@ class DeskWindow(QMainWindow):
         ]
         if target is None:
             if not free:
-                QMessageBox.information(self, "Change room", "No other room is free and clean.")
+                QMessageBox.information(
+                    self, t("Change room"), t("No other room is free and clean.")
+                )
                 return
-            names = [f"{r.name} · {r.room_type}, {r.capacity} seats" for r in free]
-            choice, ok = QInputDialog.getItem(self, "Change room", "Move to:", names, 0, False)
+            names = [
+                t(
+                    "{name} · {type}, {capacity} seats",
+                    name=r.name,
+                    type=t(r.room_type),
+                    capacity=r.capacity,
+                )
+                for r in free
+            ]
+            choice, ok = QInputDialog.getItem(
+                self, t("Change room"), t("Move to:"), names, 0, False
+            )
             if not ok:
                 return
             target = free[names.index(choice)].room_id
@@ -978,15 +1042,16 @@ class DeskWindow(QMainWindow):
             return
         kind, ok = QInputDialog.getItem(
             self,
-            "Room type",
-            "Type:",
-            list(ROOM_TYPES),
+            t("Room type"),
+            t("Type:"),
+            [t(k) for k in ROOM_TYPES],
             ROOM_TYPES.index(room.room_type) if room.room_type in ROOM_TYPES else 1,
             False,
         )
         if not ok:
             return
-        seats, ok = QInputDialog.getInt(self, "Room type", "Seats:", room.capacity, 1, 99)
+        kind = {t(k): k for k in ROOM_TYPES}.get(kind, kind)
+        seats, ok = QInputDialog.getInt(self, t("Room type"), t("Seats:"), room.capacity, 1, 99)
         if ok:
             self.store.set_type(room.room_id, kind, seats)
             self.refresh()
@@ -1001,8 +1066,7 @@ class DeskWindow(QMainWindow):
             if values is not None:  # called with the values already (no one to tell)
                 return False
             QMessageBox.information(
-                self, "Admin Settings", f"{room.name} is offline. Its settings can be changed"
-                " while it is connected."
+                self, t("Admin Settings"), t("{name} is offline. Its settings can be changed while it is connected.", name=room.name)
             )  # fmt: skip
             return False
         if values is None:
@@ -1025,9 +1089,11 @@ class DeskWindow(QMainWindow):
         if folders is None:
             text, ok = QInputDialog.getMultiLineText(
                 self,
-                "Local folders",
-                f"Folders of video files on {room.name}'s computer, one per line\n"
-                "(e.g. /Users/ktv/Songs or D:\\Karaoke):",
+                t("Local folders"),
+                t(
+                    "Folders of video files on {name}'s computer, one per line\n(e.g. /Users/ktv/Songs or D:\\Karaoke):",
+                    name=room.name,
+                ),
                 "\n".join(room.local_folders),
             )
             if not ok:
@@ -1053,7 +1119,7 @@ class DeskWindow(QMainWindow):
         self.room_list.clear()
         for room in rooms:
             entry = QListWidgetItem(
-                room.name + ("  ·  local songs only" if room.local_only else "")
+                room.name + (t("  ·  local songs only") if room.local_only else "")
             )
             entry.setData(Qt.ItemDataRole.UserRole, room.room_id)
             self.room_list.addItem(entry)
@@ -1066,7 +1132,7 @@ class DeskWindow(QMainWindow):
     def rename_room(self) -> None:
         room_id = self._selected_setting()
         if room_id:
-            name, ok = QInputDialog.getText(self, "Rename room", "New name:")
+            name, ok = QInputDialog.getText(self, t("Rename room"), t("New name:"))
             if ok and name.strip():
                 self.store.rename(room_id, name.strip())
                 self.refresh()
@@ -1076,12 +1142,12 @@ class DeskWindow(QMainWindow):
         if room_id and lock.has_password(self.store):
             if password is None:
                 password, ok = QInputDialog.getText(
-                    self, "Unbind room", "Desk password:", QLineEdit.EchoMode.Password
+                    self, t("Unbind room"), t("Desk password:"), QLineEdit.EchoMode.Password
                 )
                 if not ok:
                     return
             if not lock.check(self.store, password):
-                QMessageBox.warning(self, "Unbind room", "Wrong password.")
+                QMessageBox.warning(self, t("Unbind room"), t("Wrong password."))
                 return
         if room_id:
             unbind(self.store, self.hub, room_id)
@@ -1092,6 +1158,6 @@ def _checked_clash(parent: QWidget, clashes: list[Booking]) -> bool:
     """Ask before opening a room that is booked soon; True to open anyway."""
     when = ", ".join(time.strftime("%H:%M", time.localtime(c.starts)) for c in clashes)
     answer = QMessageBox.question(
-        parent, "Room is booked", f"This room is booked at {when}. Open it anyway?"
+        parent, t("Room is booked"), t("This room is booked at {when}. Open it anyway?", when=when)
     )
     return answer == QMessageBox.StandardButton.Yes

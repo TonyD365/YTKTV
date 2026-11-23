@@ -27,6 +27,7 @@ from ytktv import __version__
 from ytktv.core import games
 from ytktv.core.controller import PITCH_RANGE, SPEEDS, KTVController
 from ytktv.core.models import PlayStatus, VocalMode
+from ytktv.i18n import N_, t
 from ytktv.rooms import admin, binding
 from ytktv.rooms.client import RoomClient
 from ytktv.rooms.state import WARN_AT, format_left
@@ -66,31 +67,31 @@ from ytktv.ui.support import (
 from ytktv.youtube.search import YouTube
 
 NAV = (
-    ("home", "⌂  Home"),
-    ("search", "Search"),
-    ("hot", "Hot Songs"),
-    ("artists", "Artists"),
-    ("favorites", "Favorites"),
-    ("downloads", "Downloads"),
-    ("local", "Local"),
-    ("playlists", "Playlists"),
-    ("queue", "Selected"),
-    ("history", "Sung"),
-    ("party", "Party"),
-    ("games", "Games"),
-    ("mixer", "Mixer"),
-    ("settings", "Settings"),
+    ("home", N_("⌂  Home")),
+    ("search", N_("Search")),
+    ("hot", N_("Hot Songs")),
+    ("artists", N_("Artists")),
+    ("favorites", N_("Favorites")),
+    ("downloads", N_("Downloads")),
+    ("local", N_("Local")),
+    ("playlists", N_("Playlists")),
+    ("queue", N_("Selected")),
+    ("history", N_("Sung")),
+    ("party", N_("Party")),
+    ("games", N_("Games")),
+    ("mixer", N_("Mixer")),
+    ("settings", N_("Settings")),
 )
 
 log = logging.getLogger(__name__)
 
 
-_MORE_MODES = "More ▾"
+_MORE_MODES = N_("More ▾")
 # Vocal modes that work at once, with the label shown on the button when one is active.
 _INSTANT_MODES = {
-    VocalMode.CENTER_CUT: "Vocal Cut",
-    VocalMode.LEFT: "Left Only",
-    VocalMode.RIGHT: "Right Only",
+    VocalMode.CENTER_CUT: N_("Vocal Cut"),
+    VocalMode.LEFT: N_("Left Only"),
+    VocalMode.RIGHT: N_("Right Only"),
 }
 
 
@@ -182,7 +183,7 @@ class MainWindow(QMainWindow):
         brand.setSpacing(0)
         logo = QLabel("YTKTV")
         logo.setObjectName("logo")
-        sub = QLabel("KARAOKE SYSTEM")
+        sub = QLabel(t("KARAOKE SYSTEM"))
         sub.setObjectName("logoSub")
         brand.addWidget(logo)
         brand.addWidget(sub)
@@ -190,8 +191,8 @@ class MainWindow(QMainWindow):
 
         now = QVBoxLayout()
         now.setSpacing(3)
-        self.now_caption = _caption("NOW PLAYING")
-        self.now_title = QLabel("Pick a song to start the party")
+        self.now_caption = _caption(t("NOW PLAYING"))
+        self.now_title = QLabel(t("Pick a song to start the party"))
         self.now_title.setObjectName("nowTitle")
         self.now_title.setTextFormat(Qt.TextFormat.PlainText)
         progress_row = QHBoxLayout()
@@ -209,7 +210,7 @@ class MainWindow(QMainWindow):
 
         upcoming = QVBoxLayout()
         upcoming.setSpacing(3)
-        upcoming.addWidget(_caption("UP NEXT"))
+        upcoming.addWidget(_caption(t("UP NEXT")))
         self.next_title = QLabel("-")
         self.next_title.setObjectName("nextTitle")
         self.next_title.setTextFormat(Qt.TextFormat.PlainText)
@@ -223,7 +224,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(qr)
         hint = QVBoxLayout()
         hint.setSpacing(2)
-        hint.addWidget(_caption("PHONE REMOTE"))
+        hint.addWidget(_caption(t("PHONE REMOTE")))
         address = QLabel(self.server_url.removeprefix("http://"))
         address.setObjectName("qrHint")
         address.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -236,7 +237,7 @@ class MainWindow(QMainWindow):
         self.time_left.setStyleSheet("color: #ffc94a;")
         self.time_left.hide()
         layout.addWidget(self.time_left)
-        self.service_button = QPushButton("🛎  Service")
+        self.service_button = QPushButton(t("🛎  Service"))
         self.service_button.setObjectName("accent")
         self.service_button.clicked.connect(self.open_service)
         self.service_button.hide()
@@ -257,7 +258,7 @@ class MainWindow(QMainWindow):
         self._nav_group = QButtonGroup(self)
         self._nav_buttons: dict[str, QPushButton] = {}
         for key, text in NAV:
-            button = QPushButton(text)
+            button = QPushButton(t(text))
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.clicked.connect(lambda _checked=False, k=key: self.show_page(k))
@@ -265,7 +266,7 @@ class MainWindow(QMainWindow):
             self._nav_buttons[key] = button
             layout.addWidget(button)
         layout.addStretch()
-        mv = QPushButton("⛶  MV Full Screen")
+        mv = QPushButton(t("⛶  MV Full Screen"))
         mv.setCheckable(False)
         mv.clicked.connect(self._toggle_mv)
         layout.addWidget(mv)
@@ -339,66 +340,73 @@ class MainWindow(QMainWindow):
         # Vocals
         self.mode_buttons: dict[VocalMode, QPushButton] = {}
         for mode, text, tip, width in (
-            (VocalMode.ORIGINAL, "Original", "Play the song with its original vocals", 76),
-            (VocalMode.INSTRUMENTAL, "Instrumental", "Play the AI-separated backing track", 100),
+            (VocalMode.ORIGINAL, t("Original"), t("Play the song with its original vocals"), 76),
+            (
+                VocalMode.INSTRUMENTAL,
+                t("Instrumental"),
+                t("Play the AI-separated backing track"),
+                100,
+            ),
         ):
             widget = button(text, lambda m=mode: self._choose_mode(m), tip, width)
             widget.setCheckable(True)
             self.mode_buttons[mode] = widget
         # The instant modes are used less often, so they share one menu button.
-        self.more_modes = QPushButton(_MORE_MODES)
+        self.more_modes = QPushButton(t(_MORE_MODES))
         self.more_modes.setFixedSize(84, 44)
         self.more_modes.setCheckable(True)
         self.more_modes.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.more_modes.setToolTip("Vocal modes that need no preparation")
+        self.more_modes.setToolTip(t("Vocal modes that need no preparation"))
         menu = QMenu(self.more_modes)
         self.mode_actions: dict[VocalMode, QAction] = {}
         for mode, text in _INSTANT_MODES.items():
-            action = menu.addAction(text, partial(self._choose_mode, mode))
+            action = menu.addAction(t(text), partial(self._choose_mode, mode))
             action.setCheckable(True)
             self.mode_actions[mode] = action
         self.more_modes.clicked.connect(self._show_more_modes)
         self._more_menu = menu
-        group("VOCALS", *self.mode_buttons.values(), self.more_modes)
+        group(t("VOCALS"), *self.mode_buttons.values(), self.more_modes)
 
         # Transport
-        self.pause_button = button("⏯", controller.toggle_pause, "Play / Pause", round=True)
-        self.score_button = QPushButton("Score")
+        self.pause_button = button("⏯", controller.toggle_pause, t("Play / Pause"), round=True)
+        self.score_button = QPushButton(t("Score"))
         self.score_button.setFixedSize(58, 44)
         self.score_button.setCheckable(True)
         self.score_button.setChecked(controller.settings.scoring)
         self.score_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.score_button.setToolTip(
-            "Score each song: the microphones are compared with the original singer's melody"
+            t("Score each song: the microphones are compared with the original singer's melody")
         )
         self.score_button.clicked.connect(controller.set_scoring)
-        self.guide_button = QPushButton("Guide")
+        self.guide_button = QPushButton(t("Guide"))
         self.guide_button.setFixedSize(58, 44)
         self.guide_button.setCheckable(True)
         self.guide_button.setChecked(controller.settings.pitch_guide)
         self.guide_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.guide_button.setToolTip(
-            "Pitch guide: while scoring, the original singer's melody on the MV screen, "
-            "with what you sing drawn on top"
+            t(
+                "Pitch guide: while scoring, the original singer's melody on the MV screen, "
+                "with what you sing drawn on top"
+            )
         )
         self.guide_button.clicked.connect(controller.set_pitch_guide)
-        self.lyrics_button = QPushButton("Lyrics")
+        self.lyrics_button = QPushButton(t("Lyrics"))
         self.lyrics_button.setFixedSize(58, 44)
         self.lyrics_button.setCheckable(True)
         self.lyrics_button.setChecked(controller.settings.show_lyrics)
         self.lyrics_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.lyrics_button.clicked.connect(controller.set_show_lyrics)
         self.lyrics_later = button(
-            "◂", lambda: controller.nudge_lyrics(-1), "Show the lyrics 0.1 s later", 24
+            "◂", lambda: controller.nudge_lyrics(-1), t("Show the lyrics 0.1 s later"), 24
         )
         self.lyrics_earlier = button(
-            "▸", lambda: controller.nudge_lyrics(1), "Show the lyrics 0.1 s earlier", 24
+            "▸", lambda: controller.nudge_lyrics(1), t("Show the lyrics 0.1 s earlier"), 24
         )
         group(
-            "PLAYBACK",
-            button("⏮", controller.replay, "Replay from the start", round=True),
+            t("PLAYBACK"),
+            button("⏮", controller.replay, t("Replay from the start"), round=True),
             self.pause_button,
-            button("⏭", controller.skip, "Skip to the next song", round=True),
+            button("⏭", controller.skip, t("Skip to the next song"), round=True),
             self.score_button,
             self.guide_button,
             self.lyrics_later,
@@ -412,13 +420,19 @@ class MainWindow(QMainWindow):
         self.key_readout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.key_readout.setFixedWidth(34)
         group(
-            "KEY",
+            t("KEY"),
             button(
-                "♭", lambda: controller.set_pitch(controller.pitch - 1), "Lower the key", round=True
+                "♭",
+                lambda: controller.set_pitch(controller.pitch - 1),
+                t("Lower the key"),
+                round=True,
             ),
             self.key_readout,
             button(
-                "♯", lambda: controller.set_pitch(controller.pitch + 1), "Raise the key", round=True
+                "♯",
+                lambda: controller.set_pitch(controller.pitch + 1),
+                t("Raise the key"),
+                round=True,
             ),
         )
         self.tempo_readout = QLabel("100%")
@@ -426,43 +440,45 @@ class MainWindow(QMainWindow):
         self.tempo_readout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.tempo_readout.setFixedWidth(52)
         group(
-            "TEMPO",
-            button("−", lambda: self._step_speed(-1), "Slower", round=True),
+            t("TEMPO"),
+            button("−", lambda: self._step_speed(-1), t("Slower"), round=True),
             self.tempo_readout,
-            button("+", lambda: self._step_speed(1), "Faster", round=True),
+            button("+", lambda: self._step_speed(1), t("Faster"), round=True),
         )
 
         # Levels: a minus and a plus key each, like a KTV remote. Every press shows the
         # level on the console and on the MV screen.
         self.level_keys: dict[str, tuple[QPushButton, QPushButton]] = {}
         for name, title, what in (
-            ("guide_vocal", "GUIDE", "the original singer in Instrumental mode"),
-            ("music_volume", "MUSIC", "the music"),
-            ("mic_volume", "MIC", "the microphones"),
+            ("guide_vocal", t("GUIDE"), t("the original singer in Instrumental mode")),
+            ("music_volume", t("MUSIC"), t("the music")),
+            ("mic_volume", t("MIC"), t("the microphones")),
         ):
-            down = button("−", partial(self._step_level, name, -1), f"Quieter: {what}", 32)
-            up = button("+", partial(self._step_level, name, 1), f"Louder: {what}", 32)
+            down = button(
+                "−", partial(self._step_level, name, -1), t("Quieter: {what}", what=what), 32
+            )
+            up = button("+", partial(self._step_level, name, 1), t("Louder: {what}", what=what), 32)
             self.level_keys[name] = (down, up)
             group(title, down, up)
 
         # Crowd
         group(
-            "CROWD",
-            button("Applause", lambda: self._sfx("applause"), "Applause", 70, gold=True),
-            button("Cheer", lambda: self._sfx("cheer"), "Crowd cheer", 54, gold=True),
-            button("📣", lambda: self._sfx("airhorn"), "Air horn", round=True),
-            button("🥁", lambda: self._sfx("drumroll"), "Drum roll", round=True),
+            t("CROWD"),
+            button(t("Applause"), lambda: self._sfx("applause"), t("Applause"), 70, gold=True),
+            button(t("Cheer"), lambda: self._sfx("cheer"), t("Crowd cheer"), 54, gold=True),
+            button("📣", lambda: self._sfx("airhorn"), t("Air horn"), round=True),
+            button("🥁", lambda: self._sfx("drumroll"), t("Drum roll"), round=True),
             self._lights_button(),
         )
         return bar
 
     def _lights_button(self) -> QPushButton:
-        self.lights_button = QPushButton("Lights")
+        self.lights_button = QPushButton(t("Lights"))
         self.lights_button.setFixedSize(56, 44)
         self.lights_button.setCheckable(True)
         self.lights_button.setChecked(self.controller.settings.lights)
         self.lights_button.setToolTip(
-            "Light effects around the MV screen that pulse with the music"
+            t("Light effects around the MV screen that pulse with the music")
         )
         self.lights_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.lights_button.clicked.connect(self.controller.set_lights)
@@ -474,7 +490,7 @@ class MainWindow(QMainWindow):
             return False
         if self.controller.send_danmaku(text):
             return True
-        self.show_toast("Too many messages at once. Try again in a moment.", error=True)
+        self.show_toast(t("Too many messages at once. Try again in a moment."), error=True)
         return False
 
     def _step_level(self, name: str, steps: int) -> None:
@@ -520,10 +536,10 @@ class MainWindow(QMainWindow):
         self.controller.set_vocal_mode(mode)
         if mode == VocalMode.INSTRUMENTAL:
             if not self._state["separation"]:
-                self.show_toast("Vocal separation is not installed. See Settings.", error=True)
+                self.show_toast(t("Vocal separation is not installed. See Settings."), error=True)
             elif self._state["current"] and self._state["current"]["stem"] != "ready":
                 self.show_toast(
-                    "Instrumental is being prepared. It switches automatically when ready."
+                    t("Instrumental is being prepared. It switches automatically when ready.")
                 )
 
     def _step_speed(self, direction: int) -> None:
@@ -533,7 +549,7 @@ class MainWindow(QMainWindow):
 
     def _sfx(self, name: str) -> None:
         if not self.controller.play_sfx(name):
-            self.show_toast("The mixer is not running. Check the Mixer page.", error=True)
+            self.show_toast(t("The mixer is not running. Check the Mixer page."), error=True)
 
     def _toggle_mv(self) -> None:
         if not self.mv_window.isVisible():
@@ -552,7 +568,7 @@ class MainWindow(QMainWindow):
     def _screen_added(self, screen: Any) -> None:
         # Wireless displays take a moment to settle their size; place the MV after that.
         QTimer.singleShot(1500, self.place_mv)
-        self.show_toast(f"TV connected: the MV moves to {screen.name()}")
+        self.show_toast(t("TV connected: the MV moves to {value}", value=screen.name()))
 
     def apply_lyrics_style(self) -> None:
         from ytktv.ui.mv_overlays import LyricsStyle
@@ -664,7 +680,7 @@ class MainWindow(QMainWindow):
             self.controller.local.scan_soon()
         self.settings_page.refresh_from_settings()
         self._admin_extra = self._admin_details()
-        self.show_toast("The staff terminal changed this room's settings")
+        self.show_toast(t("The staff terminal changed this room's settings"))
 
     def open_service(self) -> None:
         if self.room_client is None:
@@ -689,7 +705,7 @@ class MainWindow(QMainWindow):
         if kind == "unbind":
             self.room_closed_view.hide()
         elif kind == "call_done":
-            self.show_toast("Staff is on the way")
+            self.show_toast(t("Staff is on the way"))
         elif kind in ("products", "online"):
             self.controller.notify()  # the phone page's menu
         elif kind == "control":
@@ -716,16 +732,17 @@ class MainWindow(QMainWindow):
         if self.controller.room_closed:
             return
         name = name.strip() or "you"
+        shown = t("you") if name == "you" else name
 
         def party(songs: list[Any]) -> None:
             self.controller.birthday(name, songs[0] if songs else None)
             self.mv_window.show_game(
-                {"title": "🎂 Happy birthday!", "text": f"Happy birthday, {name}!",
-                 "detail": "Everyone sing along!"},
+                {"title": t("🎂 Happy birthday!"), "text": t("Happy birthday, {name}!", name=shown),
+                 "detail": t("Everyone sing along!")},
                 seconds=10.0,
             )  # fmt: skip
             self.mv_window.celebration.burst()
-            self.show_toast(f"Happy birthday, {name}!")
+            self.show_toast(t("Happy birthday, {name}!", name=shown))
 
         run_async(
             lambda: self.ctx.youtube.search(games.BIRTHDAY_SEARCH, 5),
@@ -744,14 +761,14 @@ class MainWindow(QMainWindow):
             self.controller.play_sfx("drumroll")
         seconds = message.get("seconds")
         self.mv_window.show_game(
-            {"title": "📢 From the staff", "text": text, "detail": ""},
+            {"title": t("📢 From the staff"), "text": text, "detail": ""},
             seconds=float(seconds) if isinstance(seconds, (int, float)) else None,
         )
         if isinstance(seconds, (int, float)):
-            self.show_toast(f"Staff: {text}")
+            self.show_toast(t("Staff: {text}", text=text))
             return
-        box = QMessageBox(QMessageBox.Icon.Information, "Staff", text, parent=self)
-        box.addButton("Got it", QMessageBox.ButtonRole.AcceptRole)
+        box = QMessageBox(QMessageBox.Icon.Information, t("Staff"), text, parent=self)
+        box.addButton(t("Got it"), QMessageBox.ButtonRole.AcceptRole)
         box.finished.connect(lambda _r: self.mv_window.hide_game())
         box.open()
 
@@ -778,7 +795,7 @@ class MainWindow(QMainWindow):
         self.controller.set_local_only(client.state.local_only and not closed)
         locked = client.state.locked and not closed
         self.room_closed_view.message.setText(
-            "This room is paused by the staff" if locked else "This room is closed"
+            t("This room is paused by the staff") if locked else t("This room is closed")
         )
         if (closed or locked) and self.stack.currentWidget() is not self.settings_page:
             self.room_closed_view.cover()
@@ -795,10 +812,10 @@ class MainWindow(QMainWindow):
         self.mv_window.set_time_left(None if left is None else format_left(left))
         if client is None or left is None:
             return
-        self.time_left.setText(f"{format_left(left)} left")
+        self.time_left.setText(t("{value} left", value=format_left(left)))
         if 0 < left <= WARN_AT and not self._warned:
             self._warned = True
-            self.show_toast("10 minutes left in this room")
+            self.show_toast(t("10 minutes left in this room"))
         if left <= 0:
             self._times_up(client)
 
@@ -811,9 +828,9 @@ class MainWindow(QMainWindow):
         if playing and playing == self._times_up_song:
             return  # still singing the last song
         self.mv_window.show_game(
-            {"title": "⏱", "text": "Time's up", "detail": "Thanks for singing!"}
+            {"title": "⏱", "text": t("Time's up"), "detail": t("Thanks for singing!")}
         )
-        self.show_toast("Time's up. Thanks for singing!")
+        self.show_toast(t("Time's up. Thanks for singing!"))
         client.state.closed = True
         QTimer.singleShot(5000, self.apply_room)
 
@@ -868,7 +885,13 @@ class MainWindow(QMainWindow):
                 self.ctx.room_client.score(
                     int(payload["points"]), str(payload["title"]), str(payload.get("singer") or "")
                 )
-            self.show_toast(f"Score: {payload['points']}  ·  {payload['grade']}")
+            self.show_toast(
+                t(
+                    "Score: {points}  ·  {grade}",
+                    points=payload["points"],
+                    grade=t(payload["grade"]),
+                )
+            )
         elif topic == "game":
             self.mv_window.show_game(payload)
         elif topic == "mixer":
@@ -888,22 +911,24 @@ class MainWindow(QMainWindow):
         current = state["current"]
         status = state["status"]
         captions = {
-            "idle": "NOW PLAYING",
-            "loading": "LOADING",
-            "playing": "NOW PLAYING",
-            "paused": "PAUSED",
+            "idle": t("NOW PLAYING"),
+            "loading": t("LOADING"),
+            "playing": t("NOW PLAYING"),
+            "paused": t("PAUSED"),
         }
         self.now_caption.setText((state["loading"] or captions[status]).upper())
         if current:
             singer = f"   ·   {current['singer']}" if current["singer"] else ""
             self.now_title.setText(current["song"]["title"] + singer)
         else:
-            self.now_title.setText("Pick a song to start the party")
+            self.now_title.setText(t("Pick a song to start the party"))
             self.progress.setValue(0)
             self.time_label.setText("")
         queue = state["queue"]
         self.next_title.setText(queue[0]["song"]["title"] if queue else "-")
-        self._nav_buttons["queue"].setText(f"Selected ({len(queue)})" if queue else "Selected")
+        self._nav_buttons["queue"].setText(
+            t("Selected ({count})", count=len(queue)) if queue else t("Selected")
+        )
 
         for mode, button in self.mode_buttons.items():
             button.setChecked(mode.value == state["vocal_mode"])
@@ -911,7 +936,7 @@ class MainWindow(QMainWindow):
         for mode, action in self.mode_actions.items():
             action.setChecked(mode is instant)
         self.more_modes.setChecked(instant is not None)
-        self.more_modes.setText(_INSTANT_MODES[instant] if instant else _MORE_MODES)
+        self.more_modes.setText(t(_INSTANT_MODES[instant] if instant else _MORE_MODES))
         pitch = state["pitch"]
         self.key_readout.setText(f"{pitch:+d}" if pitch else "0")
         self.key_readout.setEnabled(abs(pitch) < PITCH_RANGE)
@@ -922,25 +947,29 @@ class MainWindow(QMainWindow):
         self.guide_button.setEnabled(state["scoring"])  # the guide shows the scored melody
         self.lyrics_button.setChecked(state["show_lyrics"])
         if state["show_lyrics"] and state["current"] and not state["lyrics"]:
-            tip = "No lyrics for this song: its video has no subtitles or captions"
+            tip = t("No lyrics for this song: its video has no subtitles or captions")
         else:
-            tip = (
+            tip = t(
                 "Lyrics on the MV screen, from the video's subtitles or, without them, "
                 "YouTube's automatic captions (often inaccurate for singing)"
             )
         shift = state["lyrics_offset"]
         if shift:
-            tip += (
-                f"\nShown {abs(shift):.1f} s {'earlier' if shift > 0 else 'later'} for this song."
+            tip += "\n" + t(
+                "Shown {seconds:.1f} s {way} for this song.",
+                seconds=abs(shift),
+                way=t("earlier") if shift > 0 else t("later"),
             )
         self.lyrics_button.setToolTip(tip)
-        self.lyrics_button.setText(f"{shift:+.1f}" if shift else "Lyrics")
+        self.lyrics_button.setText(f"{shift:+.1f}" if shift else t("Lyrics"))
         if state["scoring"] and not state["separation"]:
-            tip = "Scoring needs vocal separation, which is not installed"
+            tip = t("Scoring needs vocal separation, which is not installed")
         elif state["scoring"] and state["current"] and not state["scoring_active"]:
-            tip = "No score for this song yet: its melody is still being prepared"
+            tip = t("No score for this song yet: its melody is still being prepared")
         else:
-            tip = "Score each song: the microphones are compared with the original singer's melody"
+            tip = t(
+                "Score each song: the microphones are compared with the original singer's melody"
+            )
         self.score_button.setToolTip(tip)
         # A level changed somewhere else (a phone, the mixer): show it too.
         for name in ("music_volume", "mic_volume", "guide_vocal"):

@@ -13,12 +13,13 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from ytktv import __version__, bootstrap, children
+from ytktv import __version__, bootstrap, children, i18n
 from ytktv.config import SettingsStore, cache_dir, data_dir
 from ytktv.core.controller import KTVController
 from ytktv.core.events import EventBus
 from ytktv.core.library import Library
 from ytktv.core.warmup import PLAYBACK
+from ytktv.i18n import t
 from ytktv.player.fake import FakePlayer
 from ytktv.youtube.search import YouTube
 
@@ -88,13 +89,15 @@ def _ensure_libmpv(app: Any) -> bool:
     while not bootstrap.find_libmpv():
         plan = bootstrap.install_plan()
         box = QMessageBox()
-        box.setWindowTitle("mpv is needed")
+        box.setWindowTitle(t("mpv is needed"))
         box.setIcon(QMessageBox.Icon.Information)
         if plan is not None:
-            box.setText("YTKTV plays video with mpv, a free program that is installed separately.")
-            box.setInformativeText(f"Install mpv now?\n\nYTKTV will run: {plan}")
-            install = box.addButton("Install mpv", QMessageBox.ButtonRole.AcceptRole)
-            box.addButton("Not Now", QMessageBox.ButtonRole.RejectRole)
+            box.setText(
+                t("YTKTV plays video with mpv, a free program that is installed separately.")
+            )
+            box.setInformativeText(t("Install mpv now?\n\nYTKTV will run: {plan}", plan=plan))
+            install = box.addButton(t("Install mpv"), QMessageBox.ButtonRole.AcceptRole)
+            box.addButton(t("Not Now"), QMessageBox.ButtonRole.RejectRole)
             box.setDefaultButton(install)
             box.exec()
             if box.clickedButton() is not install:
@@ -103,28 +106,38 @@ def _ensure_libmpv(app: Any) -> bool:
                 return True
             QMessageBox.warning(
                 None,
-                "mpv was not installed",
-                f"Installing mpv did not work. You can install it yourself:\n\n{plan}\n\n"
-                "Then start YTKTV again.",
+                t("mpv was not installed"),
+                t(
+                    "Installing mpv did not work. You can install it yourself:\n\n{plan}\n\n"
+                    "Then start YTKTV again.",
+                    plan=plan,
+                ),
             )
             return False
         # macOS without Homebrew (or a Linux without a known package manager).
         if platform.system() == "Darwin":
-            box.setText("YTKTV plays video with mpv, a free program that is installed separately.")
-            box.setInformativeText(
-                "The easiest way on a Mac is Homebrew. Install Homebrew from brew.sh, then press "
-                "Check Again; YTKTV installs mpv for you.\n\n"
-                "Or, in Terminal: brew install mpv"
+            box.setText(
+                t("YTKTV plays video with mpv, a free program that is installed separately.")
             )
-            website = box.addButton("Open brew.sh", QMessageBox.ButtonRole.ActionRole)
+            box.setInformativeText(
+                t(
+                    "The easiest way on a Mac is Homebrew. Install Homebrew from brew.sh, "
+                    "then press Check Again; YTKTV installs mpv for you.\n\n"
+                    "Or, in Terminal: brew install mpv"
+                )
+            )
+            website = box.addButton(t("Open brew.sh"), QMessageBox.ButtonRole.ActionRole)
         else:
-            box.setText("YTKTV plays video with mpv, which is not installed.")
+            box.setText(t("YTKTV plays video with mpv, which is not installed."))
             box.setInformativeText(
-                "Install mpv (libmpv) with your system's package manager, then press Check Again."
+                t(
+                    "Install mpv (libmpv) with your system's package manager, "
+                    "then press Check Again."
+                )
             )
-            website = box.addButton("Open mpv.io", QMessageBox.ButtonRole.ActionRole)
-        again = box.addButton("Check Again", QMessageBox.ButtonRole.AcceptRole)
-        later = box.addButton("Not Now", QMessageBox.ButtonRole.RejectRole)
+            website = box.addButton(t("Open mpv.io"), QMessageBox.ButtonRole.ActionRole)
+        again = box.addButton(t("Check Again"), QMessageBox.ButtonRole.AcceptRole)
+        later = box.addButton(t("Not Now"), QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(again)
         box.exec()
         clicked = box.clickedButton()
@@ -141,7 +154,7 @@ def _ensure_libmpv(app: Any) -> bool:
 
 
 def _install_libmpv_with_progress(app: Any, dialog_class: Any) -> bool:
-    dialog = dialog_class("Installing mpv. This can take a few minutes...", "", 0, 0)
+    dialog = dialog_class(t("Installing mpv. This can take a few minutes..."), "", 0, 0)
     dialog.setCancelButton(None)
     dialog.setWindowTitle("YTKTV")
     dialog.setMinimumDuration(0)
@@ -279,12 +292,14 @@ def main(argv: list[str] | None = None) -> int:
     app.setStyleSheet(theme.STYLESHEET)
     collect_garbage_on_gui_thread(app)
 
+    store = SettingsStore()
+    settings = store.settings
+    i18n.set_language(settings.language)  # before the first dialog or window
+
     children.start([data_dir()])
     have_mpv = _ensure_libmpv(app)
     ffmpeg = bootstrap.ensure_ffmpeg()
 
-    store = SettingsStore()
-    settings = store.settings
     from ytktv import low_power
 
     if low_power.first_start(settings):  # a Raspberry Pi or an old computer
@@ -439,7 +454,7 @@ def main(argv: list[str] | None = None) -> int:
                 label = active.start()
             except Exception as exc:
                 log.warning("separation runtime did not start: %s", exc)
-                label = "Unavailable (see Settings)"
+                label = t("Unavailable (see Settings)")
             controller.accelerator = label
             bus.emit("state", None)
 
@@ -448,7 +463,7 @@ def main(argv: list[str] | None = None) -> int:
     if separator is not None:
         describe_device(separator)
     elif runtime is None:
-        controller.accelerator = "Not installed"
+        controller.accelerator = t("Not installed")
 
     from ytktv.cast import CastStream
     from ytktv.server.app import ServerThread, create_app
@@ -550,7 +565,7 @@ def main(argv: list[str] | None = None) -> int:
     if not settings.setup_done:
         window.run_setup()
     if not have_mpv:
-        window.show_toast("Video playback is unavailable: mpv is not installed.", error=True)
+        window.show_toast(t("Video playback is unavailable: mpv is not installed."), error=True)
 
     def shutdown() -> None:
         if cast_card is not None:

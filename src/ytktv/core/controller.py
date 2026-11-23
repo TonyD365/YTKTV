@@ -26,6 +26,7 @@ from ytktv.core.queue import SongQueue
 from ytktv.core.recap import SessionRecap
 from ytktv.core.scoring import Melody, Scoreboard, ScoreKeeper, ScoringLoop
 from ytktv.core.warmup import PLAYBACK
+from ytktv.i18n import t
 from ytktv.player.base import PlayerBackend
 from ytktv.ui.theme import accent_of
 from ytktv.youtube.lyrics import LyricLine
@@ -193,7 +194,7 @@ class KTVController:
             self.skip()  # a background video gives way to the first real song at once
         else:
             self._prefetch_next()
-        self.toast(f"Added: {song.title}")
+        self.toast(t("Added: {title}", title=song.title))
         self._emit_state()
         return item
 
@@ -221,7 +222,7 @@ class KTVController:
             self._executor.submit(self._advance, None)
         else:
             self._prefetch_next()
-        self.toast(f"Added {len(songs)} songs")
+        self.toast(t("Added {count} songs", count=len(songs)))
         self._emit_state()
         return len(songs)
 
@@ -432,7 +433,7 @@ class KTVController:
                 source = self._source(video_id)
                 is_limited = getattr(self.resolver, "is_limited", None)
                 if is_limited is not None and is_limited(video_id):
-                    self.toast("YouTube limits this video to 360p. See Settings to unlock HD.")
+                    self.toast(t("YouTube limits this video to 360p. See Settings to unlock HD."))
                 self.player.set_pitch(0)
                 self.player.set_speed(1.0)
                 self._apply_vocal_mode()
@@ -447,7 +448,7 @@ class KTVController:
             except Exception as exc:
                 self._awaiting_start = False
                 log.warning("could not play %s: %s", item.song.video_id, exc)
-                self.toast(f"Could not play: {item.song.title}", error=True)
+                self.toast(t("Could not play: {title}", title=item.song.title), error=True)
                 expected_id = item.id
                 continue
             # Status stays LOADING until the player reports its first position.
@@ -541,7 +542,7 @@ class KTVController:
                 self._retries = {item.id: attempts + 1}
                 self._executor.submit(self._restart, item.id)
                 return
-            self.toast(f"Playback error: {item.song.title}", error=True)
+            self.toast(t("Playback error: {title}", title=item.song.title), error=True)
         self._executor.submit(self._advance, item.id)
 
     def _source(self, video_id: str) -> MediaSource:
@@ -574,7 +575,7 @@ class KTVController:
             )
         except Exception as exc:
             log.warning("retry failed for %s: %s", item.song.video_id, exc)
-            self.toast(f"Could not play: {item.song.title}", error=True)
+            self.toast(t("Could not play: {title}", title=item.song.title), error=True)
             self._advance(item_id)
 
     def _on_player_position(self, position: float, duration: float) -> None:
@@ -798,14 +799,18 @@ class KTVController:
     def set_pk_mode(self, enabled: bool) -> None:
         """PK battle: two singers on two microphones, the higher score wins the song."""
         self.pk_mode = bool(enabled)
-        self.toast("PK battle on: two microphones, one winner" if enabled else "PK battle off")
+        self.toast(
+            t("PK battle on: two microphones, one winner") if enabled else t("PK battle off")
+        )
         self._emit_state()
 
     def set_duet_mode(self, enabled: bool) -> None:
         """Duet: the lyrics on the TV are coloured by who sings each line."""
         self.duet_mode = bool(enabled)
         self.toast(
-            "Duet on: blue lines for one singer, pink for the other" if enabled else "Duet off"
+            t("Duet on: blue lines for one singer, pink for the other")
+            if enabled
+            else t("Duet off")
         )
         self._emit_state()
 
@@ -820,7 +825,7 @@ class KTVController:
                 self.set_lights(True)
             if scene.sound:
                 self.play_sfx(scene.sound)
-            self.toast(scene.message or scene.title)
+            self.toast(t(scene.message or scene.title))
         self._emit_state()
 
     def set_pitch_guide(self, enabled: bool) -> None:
@@ -862,10 +867,10 @@ class KTVController:
         seconds = self.set_lyrics_offset(self.lyrics_offset + 0.1 * steps)
         if self.current is not None:
             if seconds:
-                way = "earlier" if seconds > 0 else "later"
-                self.toast(f"Lyrics {abs(seconds):.1f} s {way}")
+                way = t("earlier") if seconds > 0 else t("later")
+                self.toast(t("Lyrics {value:.1f} s {way}", value=abs(seconds), way=way))
             else:
-                self.toast("Lyrics back in time with the subtitles")
+                self.toast(t("Lyrics back in time with the subtitles"))
         return seconds
 
     def set_show_lyrics(self, enabled: bool) -> None:
@@ -1348,7 +1353,7 @@ class KTVController:
             return False
         if self.stems is not None:
             self.stems.request(song.video_id)
-        self.toast(f"Downloading to keep: {song.title}")
+        self.toast(t("Downloading to keep: {title}", title=song.title))
         return True
 
     def remove_download(self, video_id: str) -> None:
@@ -1416,7 +1421,7 @@ class KTVController:
         ok = self.library.add_to_playlist(name, song)
         if ok:
             self.bus.emit("playlists", None)
-            self.toast(f"Added to {name}")
+            self.toast(t("Added to {name}", name=name))
         return ok
 
     def remove_from_playlist(self, name: str, video_id: str) -> bool:
@@ -1446,14 +1451,21 @@ class KTVController:
             if not songs:
                 raise ValueError("none of its songs were found on YouTube")
             name = self.create_playlist(self.library.unique_playlist_name(title), songs)
-            self.toast(f"Imported {len(songs)} of {len(tracks)} songs into {name}")
+            self.toast(
+                t(
+                    "Imported {count} of {count2} songs into {name}",
+                    count=len(songs),
+                    count2=len(tracks),
+                    name=name,
+                )
+            )
             return name
         fetch = getattr(self.resolver, "playlist", None)
         if fetch is None:
             raise ValueError("playlist import is not available")
         title, songs = fetch(url)
         name = self.create_playlist(self.library.unique_playlist_name(title), songs)
-        self.toast(f"Imported {len(songs)} songs into {name}")
+        self.toast(t("Imported {count} songs into {name}", count=len(songs), name=name))
         return name
 
     def import_song_list(self, text: str, title: str = "Imported songs") -> str:
@@ -1468,7 +1480,14 @@ class KTVController:
         if not songs:
             raise ValueError("none of those songs were found on YouTube")
         name = self.create_playlist(self.library.unique_playlist_name(title), songs)
-        self.toast(f"Imported {len(songs)} of {len(tracks)} songs into {name}")
+        self.toast(
+            t(
+                "Imported {count} of {count2} songs into {name}",
+                count=len(songs),
+                count2=len(tracks),
+                name=name,
+            )
+        )
         return name
 
     def enqueue_playlist(

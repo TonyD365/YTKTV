@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv.desk.store import Booking, DeskStore, Room
+from ytktv.i18n import t
 from ytktv.ui import theme
 
 # Settings key: "" = off, "-1" = the first screen that is not the main one, "0"... = that screen
@@ -69,14 +70,14 @@ class LobbyWindow(QWidget):
 
     def __init__(self) -> None:
         super().__init__(None, Qt.WindowType.FramelessWindowHint)
-        self.setWindowTitle("YTKTV Desk · Lobby")
+        self.setWindowTitle(t("YTKTV Desk · Lobby"))
         self.setObjectName("lobby")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(style())
         page = QVBoxLayout(self)
         page.setContentsMargins(48, 36, 48, 36)
         top = QHBoxLayout()
-        title = QLabel("YTKTV")
+        title = QLabel(t("YTKTV"))
         title.setObjectName("title")
         self.clock = QLabel()
         self.clock.setObjectName("clock")
@@ -87,7 +88,7 @@ class LobbyWindow(QWidget):
         row = QHBoxLayout()
         row.setSpacing(28)
         self.columns: list[QLabel] = []
-        for text in ("FREE NOW", "IN USE", "BOOKED TODAY"):
+        for text in (t("FREE NOW"), t("IN USE"), t("BOOKED TODAY")):
             card = QFrame()
             card.setObjectName("card")
             box = QVBoxLayout(card)
@@ -107,7 +108,7 @@ class LobbyWindow(QWidget):
     def fill(self, free: list[str], busy: list[str], booked: list[str]) -> None:
         # Only the rooms' state: what a room sings and its scores stay private.
         self.clock.setText(time.strftime("%H:%M"))
-        empty = ("All rooms are taken", "—", "No more bookings today")
+        empty = (t("All rooms are taken"), "—", t("No more bookings today"))
         columns = (free, busy, booked)
         for label, lines, nothing in zip(self.columns, columns, empty, strict=True):
             label.setText("<br>".join(escape(line) for line in lines[:12]) or escape(nothing))
@@ -144,16 +145,17 @@ class LobbySettings(QFrame):
         self.setObjectName("panel")
         column = QVBoxLayout(self)
         column.setContentsMargins(24, 20, 24, 20)
-        head = QLabel("LOBBY SCREEN")
+        head = QLabel(t("LOBBY SCREEN"))
         head.setObjectName("panelHead")
         note = QLabel(
-            "A TV outside the desk shows the free rooms, when busy rooms come free and today's"
-            " bookings. It goes full screen on the chosen display, like a room's MV screen."
+            t(
+                "A TV outside the desk shows the free rooms, when busy rooms come free and today's bookings. It goes full screen on the chosen display, like a room's MV screen."
+            )
         )
         note.setObjectName("muted")
         note.setWordWrap(True)
         value = store.setting(SETTING, "")
-        self.enabled = QCheckBox("Show the lobby screen")
+        self.enabled = QCheckBox(t("Show the lobby screen"))
         self.enabled.setChecked(value != "")
         self.display = QComboBox()
         self.fill_screens()
@@ -170,9 +172,11 @@ class LobbySettings(QFrame):
     def fill_screens(self) -> None:
         chosen = self.store.setting(SETTING, "") or "-1"
         self.display.clear()
-        self.display.addItem("The second display", "-1")
+        self.display.addItem(t("The second display"), "-1")
         for index, screen in enumerate(QGuiApplication.screens()):
-            self.display.addItem(f"Display {index + 1}: {screen.name()}", str(index))
+            self.display.addItem(
+                t("Display {value}: {name}", value=index + 1, name=screen.name()), str(index)
+            )
         self.display.setCurrentIndex(max(0, self.display.findData(chosen)))
 
     def save(self) -> None:
@@ -190,15 +194,20 @@ class ThemeSettings(QFrame):
         self.setObjectName("panel")
         column = QVBoxLayout(self)
         column.setContentsMargins(24, 20, 24, 20)
-        head = QLabel("THEME")
+        head = QLabel(t("THEME"))
         head.setObjectName("panelHead")
-        note = QLabel("The Desk's and the lobby screen's colours. Takes effect after a restart.")
+        note = QLabel(t("The Desk's and the lobby screen's colours. Takes effect after a restart."))
         note.setObjectName("muted")
         note.setWordWrap(True)
         self.choice = QComboBox()
-        self.choice.addItems(list(theme.THEMES))
-        self.choice.setCurrentText(store.setting("theme", theme.DEFAULT_THEME))
-        self.choice.currentTextChanged.connect(lambda name: store.set_setting("theme", name))
+        for name in theme.THEMES:
+            self.choice.addItem(t(name), name)
+        self.choice.setCurrentIndex(
+            max(0, self.choice.findData(store.setting("theme", theme.DEFAULT_THEME)))
+        )
+        self.choice.currentIndexChanged.connect(
+            lambda _i: store.set_setting("theme", str(self.choice.currentData()))
+        )
         for widget in (head, note, self.choice):
             column.addWidget(widget)
 

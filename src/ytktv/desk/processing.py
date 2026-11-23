@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from ytktv.core.models import StemStatus
 from ytktv.desk.store import DeskStore
+from ytktv.i18n import t
 from ytktv.rooms.processing import request_data
 
 log = logging.getLogger(__name__)
@@ -287,7 +288,7 @@ def runtimes_text() -> str:
     separation = separation_runtime.Runtime().installed_variant()
     lyrics = lyrics_ai.runtime().installed_variant()
     parts = [
-        f"Vocal separation: {separation or 'not downloaded'}",
-        f"AI lyrics: {lyrics or 'not downloaded'}",
+        t("Vocal separation: {state}", state=separation or t("not downloaded")),
+        t("AI lyrics: {state}", state=lyrics or t("not downloaded")),
     ]
     return " · ".join(parts)

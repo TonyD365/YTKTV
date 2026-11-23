@@ -16,11 +16,11 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from ytktv import catalog, icon_set
+from ytktv import catalog, i18n, icon_set
 from ytktv.audio.sfx import SFX_NAMES
 from ytktv.cast import CastStream
 from ytktv.core import recap
@@ -299,9 +299,17 @@ def create_app(
             raise HTTPException(404, "this recap has expired")
         return HTMLResponse(recap.page(summary), headers={"Cache-Control": "no-store"})
 
+    def _page(name: str) -> HTMLResponse:
+        text = i18n.localize_page((STATIC_DIR / name).read_text(encoding="utf-8"))
+        return HTMLResponse(text, headers={"Cache-Control": "no-cache"})
+
     @app.get("/", include_in_schema=False)
-    def index() -> FileResponse:
-        return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
+    def index() -> HTMLResponse:
+        return _page("index.html")
+
+    @app.get("/static/mic.html", include_in_schema=False)
+    def mic_page() -> HTMLResponse:
+        return _page("mic.html")
 
     @app.get("/api/state")
     def state() -> dict[str, Any]:

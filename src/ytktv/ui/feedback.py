@@ -14,6 +14,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from ytktv import __version__
+from ytktv.i18n import t
 
 ISSUES = "https://github.com/TonyD365/YTKTV/issues/new"
 BUG = f"{ISSUES}?template=bug_report.yml"
@@ -53,9 +54,11 @@ def install_crash_handler(parent: QWidget | None = None) -> None:
         asked.add(key)  # ask once per kind of error, not in a loop
         answer = QMessageBox.question(
             parent,
-            "Something went wrong",
-            "YTKTV hit an unexpected error. Report it on GitHub? A page opens with the details"
-            " filled in; you can read them and add what you were doing before sending.",
+            t("Something went wrong"),
+            t(
+                "YTKTV hit an unexpected error. Report it on GitHub? A page opens with the details"
+                " filled in; you can read them and add what you were doing before sending."
+            ),
         )
         if answer == QMessageBox.StandardButton.Yes:
             open_url(crash_report_url(kind, error, trace))

@@ -64,6 +64,76 @@
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
+const LANG = (document.documentElement.lang || "en").replace("-", "_");
+const ZH = {
+ "YTKTV Staff": "YTKTV 员工端",
+ "YTKTV STAFF": "YTKTV 员工端",
+ "Rooms": "包厢",
+ "Calls": "呼叫",
+ "Orders": "订单",
+ "Pair this phone": "配对这部手机",
+ "On the main Desk: Settings → Staff Terminals → tick “Let other Desks connect”, press Add Terminal, and type the code here.": "在主前台：设置 → 员工终端 → 勾选“允许其他前台连接”，点“添加终端”，然后在这里输入验证码。",
+ "6-digit code": "6 位验证码",
+ "Your name, e.g. Amy (shown in the log)": "你的名字，例如小王（会显示在日志里）",
+ "Pair": "配对",
+ "Cash": "现金",
+ "Card": "银行卡",
+ "WeChat Pay": "微信支付",
+ "Alipay": "支付宝",
+ "1 hour": "1 小时",
+ "2 hours": "2 小时",
+ "3 hours": "3 小时",
+ "No limit": "不限时",
+ "Not paired any more": "已取消配对",
+ "The Desk said no": "前台拒绝了请求",
+ "Wrong or expired code": "验证码错误或已过期",
+ "Phone": "手机",
+ "staff": "员工",
+ "Signed in as {name}": "当前登录：{name}",
+ "Free": "空闲",
+ "Open, no time limit": "已开房，不限时",
+ "{min} min left": "还剩 {min} 分钟",
+ "{min} min over": "已超时 {min} 分钟",
+ "ready": "空闲",
+ "cleaning": "清洁中",
+ "maintenance": "维修中",
+ "booked": "已预订",
+ "Ready": "空闲",
+ "Cleaning": "清洁中",
+ "Maintenance": "维修中",
+ "Booked": "已预订",
+ "Guest (optional)": "客人姓名（可选）",
+ "Open": "开房",
+ "+{min} min": "+{min} 分钟",
+ "Check out": "结账",
+ "Check out {room} ({pay})?": "为 {room} 结账（{pay}）？",
+ "{room}: {total}, paid by {pay}": "{room}：{total}，付款方式：{pay}",
+ "🧹 Cleaned": "🧹 已清洁",
+ "No rooms yet": "还没有包厢",
+ "No calls right now": "目前没有呼叫",
+ "On my way ✓": "马上到 ✓",
+ "Delivered ✓": "已送达 ✓",
+ "Cancel": "取消",
+ "No orders waiting": "没有待处理订单"
+};
+const T = (s, v) => {
+  let r = (LANG === "zh_CN" && ZH[s]) || s;
+  if (v) for (const k in v) r = r.split("{" + k + "}").join(v[k]);
+  return r;
+};
+function localize() {  // the page's own words, in the app's language
+  if (LANG !== "zh_CN") return;
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const k = n.nodeValue.replace(/\s+/g, " ").trim();
+    if (k && ZH[k] && n.parentNode.nodeName !== "SCRIPT") n.nodeValue = ZH[k] + (/\s$/.test(n.nodeValue) ? " " : "");
+  }
+  for (const el of document.querySelectorAll("[placeholder],[title]")) {
+    for (const a of ["placeholder", "title"]) { const v = el.getAttribute(a); if (v && ZH[v]) el.setAttribute(a, ZH[v]); }
+  }
+  if (ZH[document.title]) document.title = ZH[document.title];
+}
+localize();
 const el = (tag, attrs = {}, ...kids) => {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -86,8 +156,8 @@ async function call(target, method, ...args) {
   const r = await fetch("/api/staff/call", {method: "POST",
     headers: {"Content-Type": "application/json", "Authorization": "Bearer " + token},
     body: JSON.stringify({target, method, args})});
-  if (r.status === 401) { localStorage.removeItem("staff-token"); token = ""; showPair(); throw new Error("Not paired any more"); }
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "The Desk said no");
+  if (r.status === 401) { localStorage.removeItem("staff-token"); token = ""; showPair(); throw new Error(T("Not paired any more")); }
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || T("The Desk said no"));
   const reply = await r.json();
   if (reply.error) throw new Error(reply.message || reply.error);
   return plain(reply.result);
@@ -99,7 +169,7 @@ $("pair-go").onclick = async () => {
   const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
   const r = await fetch("/api/staff/pair", {method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({code: $("code").value.trim(), name: $("name").value.trim() || "Phone", nonce})});
-  if (!r.ok) { alertBox("Wrong or expired code"); return; }
+  if (!r.ok) { alertBox(T("Wrong or expired code")); return; }
   const reply = await r.json();
   token = reply.token; localStorage.setItem("staff-token", token);
   localStorage.setItem("staff-name", $("name").value.trim() || "Phone");
@@ -107,37 +177,37 @@ $("pair-go").onclick = async () => {
 };
 
 function timeLeft(room) {
-  if (!room.is_open) return room.state === "ready" ? "Free" : room.state[0].toUpperCase() + room.state.slice(1);
-  if (room.ends_at == null) return "Open, no time limit";
+  if (!room.is_open) return room.state === "ready" ? T("Free") : T(room.state[0].toUpperCase() + room.state.slice(1));
+  if (room.ends_at == null) return T("Open, no time limit");
   const min = Math.round((room.ends_at * 1000 - Date.now()) / 60000);
-  return min >= 0 ? `${min} min left` : `${-min} min over`;
+  return min >= 0 ? T("{min} min left", {min}) : T("{min} min over", {min: -min});
 }
 
 function roomCard(room, online) {
   const colour = !online.has(room.room_id) ? "#555" : room.is_open ? "var(--green)" : "var(--muted)";
   const buttons = [];
   if (!room.is_open && room.state === "ready") {
-    const length = el("select", {}, ...LENGTHS.map(([t], i) => el("option", {value: i}, t)));
-    const guest = el("input", {placeholder: "Guest (optional)", maxlength: "40", style: "flex:1;min-width:120px"});
+    const length = el("select", {}, ...LENGTHS.map(([t], i) => el("option", {value: i}, T(t))));
+    const guest = el("input", {placeholder: T("Guest (optional)"), maxlength: "40", style: "flex:1;min-width:120px"});
     buttons.push(guest, length, el("button", {onclick: act(async () => {
       await call("store", "open_room", room.room_id, guest.value.trim(), LENGTHS[length.value][1]);
       await call("terminal", "tell", room.room_id);
-    })}, "Open"));
+    })}, T("Open")));
   } else if (room.is_open) {
     for (const minutes of [30, 60]) {
       buttons.push(el("button", {onclick: act(async () => {
         await call("store", "extend", room.room_id, minutes);
         await call("terminal", "tell", room.room_id);
-      })}, `+${minutes} min`));
+      })}, T("+{min} min", {min: minutes})));
     }
-    const pay = el("select", {}, ...PAYMENTS.map((p) => el("option", {}, p)));
+    const pay = el("select", {}, ...PAYMENTS.map((p) => el("option", {value: p}, T(p))));
     buttons.push(pay, el("button", {style: "background:var(--pink)", onclick: act(async () => {
-      if (!confirm(`Check out ${room.name} (${pay.value})?`)) return;
+      if (!confirm(T("Check out {room} ({pay})?", {room: room.name, pay: T(pay.value)}))) return;
       const bill = await call("terminal", "checkout", room.room_id, pay.value);
-      alert(`${room.name}: ${bill.currency}${bill.total.toFixed(2)}, paid by ${bill.payment}`);
-    })}, "Check out"));
+      alert(T("{room}: {total}, paid by {pay}", {room: room.name, total: bill.currency + bill.total.toFixed(2), pay: T(bill.payment)}));
+    })}, T("Check out")));
   } else if (room.state === "cleaning") {
-    buttons.push(el("button", {onclick: act(() => call("store", "set_state", room.room_id, "ready"))}, "🧹 Cleaned"));
+    buttons.push(el("button", {onclick: act(() => call("store", "set_state", room.room_id, "ready"))}, T("🧹 Cleaned")));
   }
   return el("div", {class: "card"},
     el("h3", {}, el("span", {class: "dot", style: `background:${colour}`}), room.name),
@@ -155,28 +225,28 @@ async function refresh() {
   alertBox("");
   if (tab === "rooms") {
     const live = new Set(online);
-    $("view").replaceChildren(...(rooms.length ? rooms.map((r) => roomCard(r, live)) : [el("div", {class: "empty"}, "No rooms yet")]));
+    $("view").replaceChildren(...(rooms.length ? rooms.map((r) => roomCard(r, live)) : [el("div", {class: "empty"}, T("No rooms yet"))]));
   } else if (tab === "calls") {
     $("view").replaceChildren(...(calls.length ? calls.map((c) => el("div", {class: "card"},
-      el("h3", {}, "🛎 ", names[c.room_id] || "?"), el("div", {class: "info"}, c.kind + (c.note ? ": " + c.note : "")),
+      el("h3", {}, "🛎 ", names[c.room_id] || "?"), el("div", {class: "info"}, T(c.kind) + (c.note ? ": " + c.note : "")),
       el("div", {class: "row"}, el("button", {onclick: act(async () => {
         const room = await call("store", "finish_call", c.call_id);
         if (room) await call("hub", "send_soon", room, {type: "call_done"});
-      })}, "On my way ✓")))) : [el("div", {class: "empty"}, "No calls right now")]));
+      })}, T("On my way ✓"))))) : [el("div", {class: "empty"}, T("No calls right now"))]));
   } else {
     $("view").replaceChildren(...(pending.length ? pending.map((o) => el("div", {class: "card"},
       el("h3", {}, `${o.qty} × ${o.name}`), el("div", {class: "info"}, names[o.room_id] || "?"),
       el("div", {class: "row"},
-        el("button", {onclick: act(() => call("store", "set_order_status", o.order_id, "delivered"))}, "Delivered ✓"),
-        el("button", {onclick: act(() => call("store", "set_order_status", o.order_id, "cancelled"))}, "Cancel")))) :
-      [el("div", {class: "empty"}, "No orders waiting")]));
+        el("button", {onclick: act(() => call("store", "set_order_status", o.order_id, "delivered"))}, T("Delivered ✓")),
+        el("button", {onclick: act(() => call("store", "set_order_status", o.order_id, "cancelled"))}, T("Cancel"))))) :
+      [el("div", {class: "empty"}, T("No orders waiting"))]));
   }
 }
 
 let timer = null;
 function start() {
   $("tabs").hidden = false;
-  $("who").textContent = "Signed in as " + (localStorage.getItem("staff-name") || "staff");
+  $("who").textContent = T("Signed in as {name}", {name: localStorage.getItem("staff-name") || T("staff")});
   clearInterval(timer);
   // Keep the page fresh, but do not redraw while someone is typing a guest's name.
   timer = setInterval(() => {

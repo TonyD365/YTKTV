@@ -30,9 +30,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ytktv import __version__, catalog
+from ytktv import __version__, catalog, i18n
 from ytktv.core.controller import KTVController
 from ytktv.core.models import Song, StemStatus
+from ytktv.i18n import N_, t
 from ytktv.rooms.client import RoomClient
 from ytktv.ui import feedback, theme
 from ytktv.ui.diagnostics_dialog import save_diagnostics
@@ -62,12 +63,14 @@ class Context:
     room_client: RoomClient | None = None  # set when the app runs with a staff terminal
 
 
+RESTART_NOTE = N_("The new language applies after restarting YTKTV.")
+
 # Tags for songs downloaded to keep, by their status.
 KEPT_TAGS = {
-    "ready": ("Downloaded", "ready"),
-    "downloading": ("Downloading", "busy"),
-    "waiting": ("Waiting to download", "busy"),
-    "failed": ("Download failed", ""),
+    "ready": (N_("Downloaded"), "ready"),
+    "downloading": (N_("Downloading"), "busy"),
+    "waiting": (N_("Waiting to download"), "busy"),
+    "failed": (N_("Download failed"), ""),
 }
 
 
@@ -111,19 +114,20 @@ class Page(QWidget):
             favorite = controller.library.is_favorite(song.video_id)
             kept = controller.offline_status(song.video_id)
             actions: list[Action] = [
-                ("＋ List", "", partial(self.choose_playlist, song)),
+                (t("＋ List"), "", partial(self.choose_playlist, song)),
                 *self.keep_actions(song, kept),
                 ("♥" if favorite else "♡", "", partial(controller.toggle_favorite, song)),
-                ("Priority", "", partial(controller.enqueue, song, priority=True)),
-                ("Select", "accent", partial(controller.enqueue, song)),
+                (t("Priority"), "", partial(controller.enqueue, song, priority=True)),
+                (t("Select"), "accent", partial(controller.enqueue, song)),
             ]
             tags = []
             if song.video_id in queued:
-                tags.append(tag("Selected", "singer"))
+                tags.append(tag(t("Selected"), "singer"))
             if controller.stem_status(song.video_id) == StemStatus.READY:
-                tags.append(tag("Instrumental ready", "ready"))
+                tags.append(tag(t("Instrumental ready"), "ready"))
             if kept in KEPT_TAGS:
-                tags.append(tag(*KEPT_TAGS[kept]))
+                text, style = KEPT_TAGS[kept]
+                tags.append(tag(t(text), style))
             rows.append(SongRow(song, actions, self.ctx.thumbnails, tags))
         return rows
 
@@ -163,22 +167,22 @@ class Page(QWidget):
             menu.addAction(name, partial(self._add_to_playlist, name, song))
         if controller.library.playlist_names():
             menu.addSeparator()
-        menu.addAction("New playlist...", partial(self._add_to_new_playlist, song))
+        menu.addAction(t("New playlist..."), partial(self._add_to_new_playlist, song))
         menu.exec(QCursor.pos())
 
     def _add_to_playlist(self, name: str, song: Song) -> None:
         if not self.ctx.controller.add_to_playlist(name, song):
-            self.ctx.controller.toast(f"Already in {name}")
+            self.ctx.controller.toast(t("Already in {name}", name=name))
 
     def _add_to_new_playlist(self, song: Song) -> None:
-        name = ask_text(self, "New playlist", "Name for the new playlist:")
+        name = ask_text(self, t("New playlist"), t("Name for the new playlist:"))
         if name:
             try:
                 created = self.ctx.controller.create_playlist(name, [song])
             except ValueError as exc:
                 self.ctx.controller.toast(str(exc), error=True)
                 return
-            self.ctx.controller.toast(f"Created {created}")
+            self.ctx.controller.toast(t("Created {created}", created=created))
 
     def on_state(self, state: dict[str, Any]) -> None:
         # A song got queued, or its instrumental became ready: update the tags.
@@ -197,23 +201,23 @@ class Page(QWidget):
 
 class SearchPage(Page):
     def __init__(self, ctx: Context) -> None:
-        super().__init__("Search", ctx)
+        super().__init__(t("Search"), ctx)
         row = QHBoxLayout()
         self.input = QLineEdit()
-        self.input.setPlaceholderText("Song title, artist, or paste a YouTube link")
+        self.input.setPlaceholderText(t("Song title, artist, or paste a YouTube link"))
         self.input.setClearButtonEnabled(True)
         self.input.returnPressed.connect(self.search)
         row.addWidget(self.input, stretch=1)
-        button = QPushButton("Search")
+        button = QPushButton(t("Search"))
         button.setProperty("accent", True)
         button.setMinimumHeight(50)
         button.setMinimumWidth(120)
         button.clicked.connect(self.search)
         row.addWidget(button)
-        keys = QPushButton("Keyboard")
+        keys = QPushButton(t("Keyboard"))
         keys.setCheckable(True)
         keys.setMinimumHeight(50)
-        keys.setToolTip("An on-screen keyboard for a touch screen; initials work: yldb")
+        keys.setToolTip(t("An on-screen keyboard for a touch screen; initials work: yldb"))
         row.addWidget(keys)
         self.body.addLayout(row)
         self.keyboard = self._keyboard()
@@ -240,7 +244,7 @@ class SearchPage(Page):
 
         chips = QHBoxLayout()
         chips.setSpacing(8)
-        hint = QLabel("Add to search:")
+        hint = QLabel(t("Add to search:"))
         hint.setObjectName("songSub")
         chips.addWidget(hint)
         for word in ("karaoke", "KTV", "伴奏", "instrumental", "lyrics", "live"):
@@ -255,7 +259,7 @@ class SearchPage(Page):
         self.recent.setSpacing(8)
         self.body.addLayout(self.recent)
 
-        self.browse_list = SongList("Search YouTube for any song. Every video can be sung.")
+        self.browse_list = SongList(t("Search YouTube for any song. Every video can be sung."))
         self.body.addWidget(self.browse_list, stretch=1)
         self._request = 0
         self.on_searches()
@@ -304,7 +308,7 @@ class SearchPage(Page):
         recent = self.ctx.controller.library.searches()[:8]
         if not recent:
             return
-        label = QLabel("Recent:")
+        label = QLabel(t("Recent:"))
         label.setObjectName("songSub")
         self.recent.addWidget(label)
         for query in recent:
@@ -313,9 +317,9 @@ class SearchPage(Page):
             chip.setToolTip(query)
             chip.clicked.connect(lambda _checked=False, q=query: self.search_for(q))
             self.recent.addWidget(chip)
-        clear = QPushButton("Clear")
+        clear = QPushButton(t("Clear"))
         clear.setProperty("chip", True)
-        clear.setToolTip("Forget the recent searches")
+        clear.setToolTip(t("Forget the recent searches"))
         clear.clicked.connect(self.ctx.controller.clear_searches)
         self.recent.addWidget(clear)
         self.recent.addStretch()
@@ -339,7 +343,7 @@ class SearchPage(Page):
                 button.setMinimumHeight(44)
                 button.clicked.connect(lambda _c=False, k=key: self._type(k.lower()))
                 grid.addWidget(button, r, c + (r == 2) + (r == 3) * 2)
-        for text, action, row, column, span in (("⌫", "", 0, 10, 1), ("Space", " ", 3, 9, 2)):
+        for text, action, row, column, span in (("⌫", "", 0, 10, 1), (t("Space"), " ", 3, 9, 2)):
             button = QPushButton(text)
             button.setObjectName("key")
             button.setMinimumHeight(44)
@@ -364,7 +368,7 @@ class SearchPage(Page):
         self._request += 1
         request = self._request
         self._browse_songs = []
-        self.browse_list.show_message("Searching...")
+        self.browse_list.show_message(t("Searching..."))
         self.ctx.controller.remember_search(query)
 
         controller = self.ctx.controller
@@ -372,19 +376,19 @@ class SearchPage(Page):
 
         def done(songs: list[Song]) -> None:
             if request == self._request:
-                self.show_songs(local + songs, "No results.")
+                self.show_songs(local + songs, t("No results."))
 
         def failed(_exc: Exception) -> None:
             if request == self._request and local:
                 self.show_songs(local)
             elif request == self._request:
                 self.browse_list.show_message(
-                    "Search failed. Check the internet connection and try again."
+                    t("Search failed. Check the internet connection and try again.")
                 )
 
         if controller.local_only:
             self.show_songs(
-                local, "No songs on this computer match. This room plays local songs only."
+                local, t("No songs on this computer match. This room plays local songs only.")
             )
             return
         plugins = controller.plugins
@@ -398,20 +402,21 @@ class SearchPage(Page):
 
 class HotPage(Page):
     def __init__(self, ctx: Context) -> None:
-        super().__init__("Hot Songs", ctx)
+        super().__init__(t("Hot Songs"), ctx)
         grid = QGridLayout()
         grid.setSpacing(8)
         self._group = QButtonGroup(self)
         self._group.setExclusive(True)
         for i, name in enumerate(HOT_CATEGORIES):
-            chip = QPushButton(name)
+            chip = QPushButton(t(name))
             chip.setProperty("chip", True)
+            chip.setProperty("category", name)
             chip.setCheckable(True)
             chip.clicked.connect(lambda _checked=False, n=name: self.load(n))
             self._group.addButton(chip)
             grid.addWidget(chip, i // 5, i % 5)
         self.body.addLayout(grid)
-        self.browse_list = SongList("Pick a category.")
+        self.browse_list = SongList(t("Pick a category."))
         self.body.addWidget(self.browse_list, stretch=1)
         self._request = 0
         self._loaded = False
@@ -420,7 +425,7 @@ class HotPage(Page):
         if not self._loaded:
             first = self._group.buttons()[0]
             first.setChecked(True)
-            self.load(first.text())
+            self.load(str(first.property("category")))
         super().showEvent(event)
 
     def load(self, category: str) -> None:
@@ -428,15 +433,15 @@ class HotPage(Page):
         self._request += 1
         request = self._request
         self._browse_songs = []
-        self.browse_list.show_message("Loading...")
+        self.browse_list.show_message(t("Loading..."))
 
         def done(songs: list[Song]) -> None:
             if request == self._request:
-                self.show_songs(songs, "Nothing found in this category.")
+                self.show_songs(songs, t("Nothing found in this category."))
 
         def failed(_exc: Exception) -> None:
             if request == self._request:
-                self.browse_list.show_message("Could not load this category.")
+                self.browse_list.show_message(t("Could not load this category."))
 
         run_async(lambda: self.ctx.youtube.hot(category), done, failed)
 
@@ -446,7 +451,7 @@ class ArtistsPage(Page):
     song book; picking one searches for them."""
 
     def __init__(self, ctx: Context) -> None:
-        super().__init__("Artists", ctx)
+        super().__init__(t("Artists"), ctx)
         self.language, self.kind = "", ""
         self.filters: dict[str, QPushButton] = {}
         for options, attr in (
@@ -457,7 +462,7 @@ class ArtistsPage(Page):
             row.setSpacing(8)
             group = QButtonGroup(self)
             for option in options:
-                button = QPushButton(option or "All")
+                button = QPushButton(t(option) if option else t("All"))
                 button.setCheckable(True)
                 button.setProperty("chip", True)
                 button.setChecked(option == "")
@@ -497,7 +502,7 @@ class ArtistsPage(Page):
 
 class FavoritesPage(Page):
     def __init__(self, ctx: Context) -> None:
-        super().__init__("Favorites", ctx)
+        super().__init__(t("Favorites"), ctx)
         # The songs of the member this room was opened for, while the session lasts.
         self.member_button = QPushButton()
         self.member_button.setCheckable(True)
@@ -505,7 +510,7 @@ class FavoritesPage(Page):
         self.member_button.toggled.connect(lambda _on: self.on_favorites())
         self.member_button.hide()
         self.header.addWidget(self.member_button)
-        self.browse_list = SongList("No favorites yet. Tap ♡ on any song to keep it here.")
+        self.browse_list = SongList(t("No favorites yet. Tap ♡ on any song to keep it here."))
         self.body.addWidget(self.browse_list, stretch=1)
         self.on_favorites()
 
@@ -515,9 +520,9 @@ class FavoritesPage(Page):
         if member is None:
             self.member_button.setChecked(False)
         else:
-            self.member_button.setText(f"{member['name'] or 'Member'}'s songs")
+            self.member_button.setText(t("{value}'s songs", value=member["name"] or t("Member")))
         if member is not None and self.member_button.isChecked():
-            self.show_songs(member_song_list(member), "No songs saved for this member yet.")
+            self.show_songs(member_song_list(member), t("No songs saved for this member yet."))
             return
         self.show_songs(self.ctx.controller.library.favorites())
 
@@ -538,14 +543,14 @@ class LocalPage(Page):
     """Songs from video files on this computer (Settings → Local Songs)."""
 
     def __init__(self, ctx: Context) -> None:
-        super().__init__("Local Songs", ctx)
+        super().__init__(t("Local Songs"), ctx)
         self.filter = QLineEdit()
-        self.filter.setPlaceholderText("Filter by title or artist")
+        self.filter.setPlaceholderText(t("Filter by title or artist"))
         self.filter.setClearButtonEnabled(True)
         self.filter.textChanged.connect(lambda _text: self.on_local())
         self.body.addWidget(self.filter)
         self.browse_list = SongList(
-            "No local songs yet. Add a folder of video files in Settings → Local Songs."
+            t("No local songs yet. Add a folder of video files in Settings → Local Songs.")
         )
         self.body.addWidget(self.browse_list, stretch=1)
         self.on_local()
@@ -558,56 +563,58 @@ class DownloadsPage(Page):
     """Songs kept on this computer: they play, with lyrics and instrumental, offline."""
 
     def __init__(self, ctx: Context) -> None:
-        super().__init__("Downloads", ctx)
-        favorites = QPushButton("Download All Favorites")
+        super().__init__(t("Downloads"), ctx)
+        favorites = QPushButton(t("Download All Favorites"))
         favorites.clicked.connect(self.download_favorites)
         self.header.addWidget(favorites)
         self.size_label = QLabel()
         self.size_label.setObjectName("muted")
         self.body.addWidget(self.size_label)
         self.browse_list = SongList(
-            "Nothing downloaded yet. Press ⬇ on a song to keep it for singing without internet."
+            t("Nothing downloaded yet. Press ⬇ on a song to keep it for singing without internet.")
         )
         self.body.addWidget(self.browse_list, stretch=1)
         self.on_offline()
 
     def keep_actions(self, song: Song, kept: str) -> list[Action]:
-        return [("Remove", "", partial(self.ctx.controller.remove_download, song.video_id))]
+        return [(t("Remove"), "", partial(self.ctx.controller.remove_download, song.video_id))]
 
     def download_favorites(self) -> None:
         controller = self.ctx.controller
         added = sum(controller.download_song(song) for song in controller.library.favorites())
         if not added:
-            controller.toast("Every favorite is already downloaded")
+            controller.toast(t("Every favorite is already downloaded"))
 
     def on_offline(self) -> None:
         offline = self.ctx.controller.offline
         songs = offline.songs() if offline else []
         size = offline.size() / 1e9 if offline else 0.0
-        self.size_label.setText(f"{len(songs)} songs · {size:.1f} GB" if songs else "")
+        self.size_label.setText(
+            t("{count} songs · {size:.1f} GB", count=len(songs), size=size) if songs else ""
+        )
         self.show_songs(songs)
 
 
 class QueuePage(Page):
     def __init__(self, ctx: Context) -> None:
-        super().__init__("Selected Songs", ctx)
-        shuffle = QPushButton("Shuffle")
+        super().__init__(t("Selected Songs"), ctx)
+        shuffle = QPushButton(t("Shuffle"))
         shuffle.clicked.connect(ctx.controller.shuffle)
-        clear = QPushButton("Clear All")
+        clear = QPushButton(t("Clear All"))
         clear.setProperty("danger", True)
         clear.clicked.connect(ctx.controller.clear_queue)
-        save = QPushButton("Save as Playlist")
+        save = QPushButton(t("Save as Playlist"))
         save.clicked.connect(self._save_as_playlist)
         self.header.addWidget(save)
         self.header.addWidget(shuffle)
         self.header.addWidget(clear)
-        self.list = SongList("Nothing selected yet. Find a song and press Select.")
+        self.list = SongList(t("Nothing selected yet. Find a song and press Select."))
         self.list.on_move = ctx.controller.move
         self.body.addWidget(self.list, stretch=1)
         self._signature: Any = None
 
     def _save_as_playlist(self) -> None:
-        name = ask_text(self, "Save as playlist", "Name for the playlist:")
+        name = ask_text(self, t("Save as playlist"), t("Name for the playlist:"))
         if not name:
             return
         try:
@@ -615,7 +622,7 @@ class QueuePage(Page):
         except ValueError as exc:
             self.ctx.controller.toast(str(exc), error=True)
             return
-        self.ctx.controller.toast(f"Saved {created}")
+        self.ctx.controller.toast(t("Saved {created}", created=created))
 
     def on_state(self, state: dict[str, Any]) -> None:
         queue = state["queue"]
@@ -632,14 +639,14 @@ class QueuePage(Page):
                 tags.append(tag(item["singer"], "singer"))
             stem = STEM_TAGS.get(item["stem"])
             if stem:
-                tags.append(tag(stem[1], stem[0]))
+                tags.append(tag(t(stem[1]), stem[0]))
             if item["preload"] == "ready":
-                tags.append(tag("Video ready", "ready"))
+                tags.append(tag(t("Video ready"), "ready"))
             elif item["preload"] == "loading":
-                tags.append(tag("Loading video", "busy"))
+                tags.append(tag(t("Loading video"), "busy"))
             actions: list[Action] = [
-                ("Top", "", partial(controller.prioritize, item["id"])),
-                ("Remove", "danger", partial(controller.remove, item["id"])),
+                (t("Top"), "", partial(controller.prioritize, item["id"])),
+                (t("Remove"), "danger", partial(controller.remove, item["id"])),
             ]
             rows.append(
                 SongRow(
@@ -653,7 +660,7 @@ class PlaylistsPage(Page):
     """Saved playlists: build your own, or import one from YouTube."""
 
     def __init__(self, ctx: Context) -> None:
-        super().__init__("Playlists", ctx)
+        super().__init__(t("Playlists"), ctx)
         controller = ctx.controller
         bar = QHBoxLayout()
         bar.setSpacing(8)
@@ -662,12 +669,12 @@ class PlaylistsPage(Page):
         self.picker.currentIndexChanged.connect(lambda _index: self._show_songs())
         bar.addWidget(self.picker, stretch=1)
         for text, slot, style in (
-            ("Play All", lambda: self._enqueue(False), "accent"),
-            ("Shuffle Play", lambda: self._enqueue(True), ""),
-            ("New", self._new, ""),
-            ("Import Playlist", self._import, ""),
-            ("Import Song List", self._import_list, ""),
-            ("Delete", self._delete, "danger"),
+            (t("Play All"), lambda: self._enqueue(False), "accent"),
+            (t("Shuffle Play"), lambda: self._enqueue(True), ""),
+            (t("New"), self._new, ""),
+            (t("Import Playlist"), self._import, ""),
+            (t("Import Song List"), self._import_list, ""),
+            (t("Delete"), self._delete, "danger"),
         ):
             button = QPushButton(text)
             if style:
@@ -676,8 +683,10 @@ class PlaylistsPage(Page):
             bar.addWidget(button)
         self.body.addLayout(bar)
         self.list = SongList(
-            'No playlists yet. Press New, use "＋ List" on any song, '
-            "or import a playlist from a YouTube link."
+            t(
+                'No playlists yet. Press New, use "＋ List" on any song, '
+                "or import a playlist from a YouTube link."
+            )
         )
         self.body.addWidget(self.list, stretch=1)
         self._controller = controller
@@ -707,16 +716,20 @@ class PlaylistsPage(Page):
             self.list.show_message(
                 self.list._empty_text
                 if not name
-                else 'This playlist is empty. Add songs with "＋ List".'
+                else t('This playlist is empty. Add songs with "＋ List".')
             )
             return
         controller = self._controller
         rows = []
         for i, song in enumerate(songs):
             actions: list[Action] = [
-                ("Remove", "danger", partial(controller.remove_from_playlist, name, song.video_id)),
-                ("Priority", "", partial(controller.enqueue, song, priority=True)),
-                ("Select", "accent", partial(controller.enqueue, song)),
+                (
+                    t("Remove"),
+                    "danger",
+                    partial(controller.remove_from_playlist, name, song.video_id),
+                ),
+                (t("Priority"), "", partial(controller.enqueue, song, priority=True)),
+                (t("Select"), "accent", partial(controller.enqueue, song)),
             ]
             rows.append(SongRow(song, actions, self.ctx.thumbnails, index=i + 1))
         self.list.set_rows(rows)
@@ -727,7 +740,7 @@ class PlaylistsPage(Page):
             self._controller.enqueue_playlist(name, shuffle=shuffle)
 
     def _new(self) -> None:
-        name = ask_text(self, "New playlist", "Name for the new playlist:")
+        name = ask_text(self, t("New playlist"), t("Name for the new playlist:"))
         if not name:
             return
         try:
@@ -741,26 +754,28 @@ class PlaylistsPage(Page):
         name = self.selected()
         if not name:
             return
-        answer = QMessageBox.question(self, "Delete playlist", f'Delete the playlist "{name}"?')
+        answer = QMessageBox.question(
+            self, t("Delete playlist"), t('Delete the playlist "{name}"?', name=name)
+        )
         if answer == QMessageBox.StandardButton.Yes:
             self._controller.delete_playlist(name)
 
     def _import(self) -> None:
         url = ask_text(
             self,
-            "Import a playlist",
-            "Paste the link of a YouTube, Spotify or Apple Music playlist (public):",
+            t("Import a playlist"),
+            t("Paste the link of a YouTube, Spotify or Apple Music playlist (public):"),
         )
         if not url:
             return
-        self._controller.toast("Importing the playlist... (each song is looked up on YouTube)")
+        self._controller.toast(t("Importing the playlist... (each song is looked up on YouTube)"))
 
         def done(name: str) -> None:
             self.picker.setCurrentIndex(self.picker.findData(name))
 
         def failed(exc: Exception) -> None:
-            reason = str(exc) if isinstance(exc, ValueError) else "could not read that playlist"
-            self._controller.toast(f"Import failed: {reason}", error=True)
+            reason = str(exc) if isinstance(exc, ValueError) else t("could not read that playlist")
+            self._controller.toast(t("Import failed: {reason}", reason=reason), error=True)
 
         run_async(lambda: self._controller.import_playlist(url), done, failed)
 
@@ -769,26 +784,26 @@ class PlaylistsPage(Page):
         if text is None:
             text, ok = QInputDialog.getMultiLineText(
                 self,
-                "Import a song list",
-                'One song per line, like "Yesterday - The Beatles":',
+                t("Import a song list"),
+                t('One song per line, like "Yesterday - The Beatles":'),
             )
             if not ok or not text.strip():
                 return
-        self._controller.toast("Looking the songs up on YouTube...")
+        self._controller.toast(t("Looking the songs up on YouTube..."))
 
         def done(name: str) -> None:
             self.picker.setCurrentIndex(self.picker.findData(name))
 
         def failed(exc: Exception) -> None:
-            self._controller.toast(f"Import failed: {exc}", error=True)
+            self._controller.toast(t("Import failed: {exc}", exc=exc), error=True)
 
         run_async(lambda: self._controller.import_song_list(text), done, failed)
 
 
 class HistoryPage(Page):
     def __init__(self, ctx: Context) -> None:
-        super().__init__("Sung Songs", ctx)
-        self.browse_list = SongList("Songs you have sung will show up here.")
+        super().__init__(t("Sung Songs"), ctx)
+        self.browse_list = SongList(t("Songs you have sung will show up here."))
         self.body.addWidget(self.browse_list, stretch=1)
         self._signature: Any = None
 
@@ -821,6 +836,14 @@ class SettingsPage(Page):
             self, "YTKTV", path, settings=settings, files=[cache_dir() / "separator.log"]
         )
 
+    def _language_chosen(self, _index: int) -> None:
+        """Saved for the next start: the windows are already built in this language."""
+        code = str(self.language_choice.currentData())
+        self.ctx.controller.settings.language = code
+        self.ctx.controller.store.save()
+        self.language_note.setText(i18n.t_in(code, RESTART_NOTE))
+        self.language_note.show()
+
     def set_text_size(self, size: str) -> None:
         """Bigger text everywhere on the console, for people who read better large."""
         self.ctx.controller.settings.text_size = size
@@ -834,9 +857,9 @@ class SettingsPage(Page):
         settings = self.ctx.controller.settings
         accent = self.accent.text().strip()
         if accent and not theme.valid_accent(accent):
-            self.look_note.setText("The accent colour must look like #ff3d9a.")
+            self.look_note.setText(t("The accent colour must look like #ff3d9a."))
             return
-        settings.theme = self.theme_choice.currentText()
+        settings.theme = str(self.theme_choice.currentData())
         settings.accent_color = accent
         self.ctx.controller.store.save()
         theme.apply(settings.theme, accent)
@@ -845,14 +868,14 @@ class SettingsPage(Page):
             app.setStyleSheet(theme.stylesheet(settings.text_size))
             for widget in app.topLevelWidgets():
                 widget.update()
-        self.look_note.setText("Theme changed.")
+        self.look_note.setText(t("Theme changed."))
         self.look_changed.emit()
 
     def choose_logo(self) -> None:
         from PySide6.QtWidgets import QFileDialog
 
         path, _ = QFileDialog.getOpenFileName(
-            self, "Venue logo", "", "Pictures (*.png *.jpg *.jpeg *.webp *.gif *.bmp)"
+            self, t("Venue logo"), "", t("Pictures (*.png *.jpg *.jpeg *.webp *.gif *.bmp)")
         )
         if path:
             self.set_logo(path)
@@ -876,11 +899,11 @@ class SettingsPage(Page):
         self.ctx.controller.settings.venue_logo = name
         self.ctx.controller.store.save()
         theme.logo = theme.logo_file(name, folder)
-        self.look_note.setText("Logo saved." if name else "Logo removed.")
+        self.look_note.setText(t("Logo saved.") if name else t("Logo removed."))
         self.look_changed.emit()
 
     def __init__(self, ctx: Context, server_url: str) -> None:
-        super().__init__("Settings", ctx)
+        super().__init__(t("Settings"), ctx)
         settings = ctx.controller.settings
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -933,80 +956,86 @@ class SettingsPage(Page):
             self._checks[attr] = box
             return box
 
-        self.managed_note = card("Admin Settings")
+        self.managed_note = card(t("Admin Settings"))
         managed = QLabel(
-            "This room is bound to a staff terminal. Video, sound output, vocal separation,"
-            " local songs, smart lights and updates are set there: select this room and press"
-            " ⚙ Admin Settings."
+            t(
+                "This room is bound to a staff terminal. Video, sound output, vocal separation,"
+                " local songs, smart lights and updates are set there: select this room and press"
+                " ⚙ Admin Settings."
+            )
         )
         managed.setWordWrap(True)
         self.managed_note.addWidget(managed)
 
         # MV screen
-        display = card("MV Screen", admin=True)
+        display = card(t("MV Screen"), admin=True)
         self.screen_combo = QComboBox()
         self._fill_screens()
         self.screen_combo.activated.connect(self._screen_chosen)
-        labelled(display, "Show the MV on", self.screen_combo)
-        check(display, "Full screen on that display", "mv_fullscreen", self.display_changed.emit)
+        labelled(display, t("Show the MV on"), self.screen_combo)
+        check(display, t("Full screen on that display"), "mv_fullscreen", self.display_changed.emit)
         self.quality = QComboBox()
         for height in (720, 1080, 1440, 2160):
             self.quality.addItem(f"{height}p", height)
         self.quality.setCurrentIndex(max(0, self.quality.findData(settings.max_height)))
         self.quality.activated.connect(self._quality_chosen)
-        labelled(display, "Maximum video quality", self.quality)
+        labelled(display, t("Maximum video quality"), self.quality)
         check(
             display,
-            "Download the next songs in the queue ahead of time (smoother playback)",
+            t("Download the next songs in the queue ahead of time (smoother playback)"),
             "preload_queue",
         )
-        low = QCheckBox("Low-power mode: 720p video, no light effects (Raspberry Pi, old PCs)")
+        low = QCheckBox(t("Low-power mode: 720p video, no light effects (Raspberry Pi, old PCs)"))
         low.setChecked(settings.low_power)
         low.toggled.connect(self.set_low_power)
         display.addWidget(low)
 
-        self._build_lyrics_card(card("Lyrics on the MV"), labelled)
+        self._build_lyrics_card(card(t("Lyrics on the MV")), labelled)
         check(
             display,
-            "Show a recap of the session (and a QR code) when the desk closes the room",
+            t("Show a recap of the session (and a QR code) when the desk closes the room"),
             "session_recap",
         )
 
         # Background videos while nobody sings
-        idle_card = card("Background Videos")
+        idle_card = card(t("Background Videos"))
         idle_note = QLabel(
-            "Like a KTV room before the first song: when nobody has chosen a song, music videos"
-            " play by themselves. The first song anyone chooses takes over at once. Background"
-            " videos are not scored and are not added to Sung."
+            t(
+                "Like a KTV room before the first song: when nobody has chosen a song, music videos"
+                " play by themselves. The first song anyone chooses takes over at once. Background"
+                " videos are not scored and are not added to Sung."
+            )
         )
         idle_note.setWordWrap(True)
         idle_card.addWidget(idle_note)
-        self.idle_box = QCheckBox("Play music videos while nobody is singing")
+        self.idle_box = QCheckBox(t("Play music videos while nobody is singing"))
         self.idle_box.setChecked(settings.idle_mv)
         self.idle_box.toggled.connect(lambda on: ctx.controller.set_idle_mv(on))
         idle_card.addWidget(self.idle_box)
         self.idle_source = QComboBox()
-        self.idle_source.addItem("Favorites and sung songs", "")
+        self.idle_source.addItem(t("Favorites and sung songs"), "")
         for entry in ctx.controller.playlists():
-            self.idle_source.addItem(f"Playlist: {entry['name']}", entry["name"])
+            self.idle_source.addItem(t("Playlist: {name}", name=entry["name"]), entry["name"])
         self.idle_source.setCurrentIndex(max(0, self.idle_source.findData(settings.idle_playlist)))
         self.idle_source.activated.connect(
             lambda _i: ctx.controller.set_idle_mv(
                 settings.idle_mv, str(self.idle_source.currentData())
             )
         )
-        labelled(idle_card, "Play from", self.idle_source)
+        labelled(idle_card, t("Play from"), self.idle_source)
 
         # Kids
-        kids_card = card("Kids Mode", admin=True)
+        kids_card = card(t("Kids Mode"), admin=True)
         kids_note = QLabel(
-            "For a children's room: songs whose title or channel is not for children are left"
-            " out of search and cannot be selected, and the music cannot be turned up past the"
-            " limit. Age-restricted YouTube videos never play."
+            t(
+                "For a children's room: songs whose title or channel is not for children are left"
+                " out of search and cannot be selected, and the music cannot be turned up past the"
+                " limit. Age-restricted YouTube videos never play."
+            )
         )
         kids_note.setWordWrap(True)
         kids_card.addWidget(kids_note)
-        self.kids_box = QCheckBox("Kids mode")
+        self.kids_box = QCheckBox(t("Kids mode"))
         self.kids_box.setChecked(settings.kids_mode)
         self.kids_box.toggled.connect(lambda on: ctx.controller.set_kids_mode(on))
         kids_card.addWidget(self.kids_box)
@@ -1017,16 +1046,18 @@ class SettingsPage(Page):
         self.kids_volume.valueChanged.connect(
             lambda v: ctx.controller.set_kids_mode(settings.kids_mode, v)
         )
-        labelled(kids_card, "Highest volume", self.kids_volume)
+        labelled(kids_card, t("Highest volume"), self.kids_volume)
         # A TV without a cable
-        wireless = card("TV Without a Cable", admin=True)
+        wireless = card(t("TV Without a Cable"), admin=True)
         how = QLabel(
-            "Use the TV as a second screen over Wi-Fi; YTKTV then shows the whole MV there,"
-            " lyrics and effects included.<br><b>Mac</b>: Control Centre → Screen Mirroring →"
-            " pick the TV (AirPlay), then choose <i>Use As Separate Display</i>.<br>"
-            "<b>Windows</b>: press <b>Win + K</b> and pick the TV (Miracast).<br>"
-            "If the picture runs behind the sound, raise the delay below until the lyrics"
-            " match the singing."
+            t(
+                "Use the TV as a second screen over Wi-Fi; YTKTV then shows the whole MV there,"
+                " lyrics and effects included.<br><b>Mac</b>: Control Centre → Screen Mirroring →"
+                " pick the TV (AirPlay), then choose <i>Use As Separate Display</i>.<br>"
+                "<b>Windows</b>: press <b>Win + K</b> and pick the TV (Miracast).<br>"
+                "If the picture runs behind the sound, raise the delay below until the lyrics"
+                " match the singing."
+            )
         )
         how.setWordWrap(True)
         how.setTextFormat(Qt.TextFormat.RichText)
@@ -1034,17 +1065,17 @@ class SettingsPage(Page):
         self.screen_delay = QSpinBox()
         self.screen_delay.setRange(0, 1000)
         self.screen_delay.setSingleStep(20)
-        self.screen_delay.setSuffix(" ms")
+        self.screen_delay.setSuffix(t(" ms"))
         self.screen_delay.setValue(settings.screen_delay_ms)
         self.screen_delay.valueChanged.connect(ctx.controller.set_screen_delay)
-        labelled(wireless, "Picture delay of the TV", self.screen_delay)
-        open_displays = QPushButton("Open Display Settings")
+        labelled(wireless, t("Picture delay of the TV"), self.screen_delay)
+        open_displays = QPushButton(t("Open Display Settings"))
         open_displays.clicked.connect(open_display_settings)
         wireless.addWidget(open_displays, alignment=Qt.AlignmentFlag.AlignLeft)
         self.tv_card = wireless  # app.py adds Cast to Chromecast here
 
         # Vocals
-        vocals = card("Vocal Separation", admin=True)
+        vocals = card(t("Vocal Separation"), admin=True)
         self.separation_label = QLabel()
         self.separation_label.setWordWrap(True)
         vocals.addWidget(self.separation_label)
@@ -1057,34 +1088,38 @@ class SettingsPage(Page):
         button_row.addStretch()
         vocals.addLayout(button_row)
         self._runtime_text = ""
-        check(vocals, "Prepare an instrumental for every selected song", "auto_separate")
+        check(vocals, t("Prepare an instrumental for every selected song"), "auto_separate")
         check(
             vocals,
-            "Wait for the instrumental before a song starts (no switch in the middle of a song)",
+            t("Wait for the instrumental before a song starts (no switch in the middle of a song)"),
             "wait_for_instrumental",
         )
 
         # Lyrics written by AI
-        ai = card("AI Lyrics", admin=True)
+        ai = card(t("AI Lyrics"), admin=True)
         ai_note = QLabel(
-            "Whisper listens to the singer (separated from the band) and writes the lyrics"
-            " with their timing, so they match the video. With an NVIDIA card or Apple"
-            " Silicon it does this for every song, and shows the lyrics found online until"
-            " it is done; with only a CPU, just for songs that have none online. The first"
-            " time it downloads about 300 MB (1.3 GB with an NVIDIA card). Lyrics are kept."
+            t(
+                "Whisper listens to the singer (separated from the band) and writes the lyrics"
+                " with their timing, so they match the video. With an NVIDIA card or Apple"
+                " Silicon it does this for every song, and shows the lyrics found online until"
+                " it is done; with only a CPU, just for songs that have none online. The first"
+                " time it downloads about 300 MB (1.3 GB with an NVIDIA card). Lyrics are kept."
+            )
         )
         ai_note.setWordWrap(True)
         ai.addWidget(ai_note)
-        check(ai, "Write lyrics with AI", "ai_lyrics")
+        check(ai, t("Write lyrics with AI"), "ai_lyrics")
         check(
             ai,
-            "Use the lyrics found online to get the words right (the timing still comes"
-            " from the song)",
+            t(
+                "Use the lyrics found online to get the words right (the timing still comes"
+                " from the song)"
+            ),
             "lyrics_hint",
         )
         self.ai_status = QLabel()
         self.ai_status.setObjectName("muted")
-        self.ai_button = QPushButton("Download AI Lyrics")
+        self.ai_button = QPushButton(t("Download AI Lyrics"))
         self.ai_button.clicked.connect(lambda: self.install_ai_lyrics())
         ai_row = QHBoxLayout()
         ai_row.addWidget(self.ai_button)
@@ -1093,8 +1128,8 @@ class SettingsPage(Page):
         self._show_ai_lyrics()
 
         # HD unlock for restricted videos
-        self.hd_card = card("Restricted Videos", admin=True)
-        self.hd_label = QLabel("Not available in this build.")
+        self.hd_card = card(t("Restricted Videos"), admin=True)
+        self.hd_label = QLabel(t("Not available in this build."))
         self.hd_label.setWordWrap(True)
         self.hd_card.addWidget(self.hd_label)
         self.hd_button = QPushButton()
@@ -1107,9 +1142,12 @@ class SettingsPage(Page):
         self.hd_card.addLayout(hd_row)
 
         # Phone
-        phone = card("Phone Remote")
+        phone = card(t("Phone Remote"))
         url = QLabel(
-            f"Open {server_url} on any phone connected to the same Wi-Fi, or scan the QR code."
+            t(
+                "Open {server_url} on any phone connected to the same Wi-Fi, or scan the QR code.",
+                server_url=server_url,
+            )
         )
         url.setWordWrap(True)
         url.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -1126,65 +1164,95 @@ class SettingsPage(Page):
             column.addWidget(plugins_card)
             self.admin_cards.append(plugins_card)
 
-        remote = card("Keyboard and Remote")
+        remote = card(t("Keyboard and Remote"))
         keys = QLabel(
             "<table cellpadding='3'>"
             + "".join(f"<tr><td><b>{k}</b></td><td>{a}</td></tr>" for k, a in key_help())
-            + "</table><br>USB and Bluetooth remotes and air mice send these keys too. A TV"
-            " remote works through HDMI-CEC on a Raspberry Pi (see the guide)."
+            + "</table><br>"
+            + t(
+                "USB and Bluetooth remotes and air mice send these keys too. A TV"
+                " remote works through HDMI-CEC on a Raspberry Pi (see the guide)."
+            )
         )
         keys.setWordWrap(True)
         remote.addWidget(keys)
-        display = card("Text Size")
-        self.text_size = QComboBox()
-        self.text_size.addItems(list(theme.TEXT_SIZES))
-        self.text_size.setCurrentText(ctx.controller.settings.text_size)
-        self.text_size.currentTextChanged.connect(self.set_text_size)
-        labelled(display, "Text on the console", self.text_size)
+        # Not an admin card: guests keep it when the room is bound to a Desk.
+        language = card(t("Language"))
+        self.language_choice = QComboBox()
+        for code, name in i18n.LANGUAGES.items():  # each in its own language
+            self.language_choice.addItem(name, code)
+        self.language_choice.setCurrentIndex(
+            max(0, self.language_choice.findData(i18n.resolve(settings.language)))
+        )
+        self.language_choice.activated.connect(self._language_chosen)
+        labelled(language, t("Language"), self.language_choice)
+        self.language_note = QLabel()
+        self.language_note.setObjectName("songSub")
+        self.language_note.setWordWrap(True)
+        self.language_note.hide()
+        language.addWidget(self.language_note)
 
-        look = card("Theme", admin=True)
+        display = card(t("Text Size"))
+        self.text_size = QComboBox()
+        for size in theme.TEXT_SIZES:
+            self.text_size.addItem(t(size), size)
+        self.text_size.setCurrentIndex(
+            max(0, self.text_size.findData(ctx.controller.settings.text_size))
+        )
+        self.text_size.currentIndexChanged.connect(
+            lambda _i: self.set_text_size(str(self.text_size.currentData()))
+        )
+        labelled(display, t("Text on the console"), self.text_size)
+
+        look = card(t("Theme"), admin=True)
         self.theme_choice = QComboBox()
-        self.theme_choice.addItems(list(theme.THEMES))
-        self.theme_choice.setCurrentText(settings.theme)
-        self.theme_choice.currentTextChanged.connect(lambda _t: self.set_look())
-        labelled(look, "Colours", self.theme_choice)
+        for name in theme.THEMES:
+            self.theme_choice.addItem(t(name), name)
+        self.theme_choice.setCurrentIndex(max(0, self.theme_choice.findData(settings.theme)))
+        self.theme_choice.currentIndexChanged.connect(lambda _i: self.set_look())
+        labelled(look, t("Colours"), self.theme_choice)
         self.accent = QLineEdit(settings.accent_color)
-        self.accent.setPlaceholderText("#rrggbb, empty for the theme's own")
+        self.accent.setPlaceholderText(t("#rrggbb, empty for the theme's own"))
         self.accent.editingFinished.connect(self.set_look)
-        labelled(look, "Venue accent colour", self.accent)
+        labelled(look, t("Venue accent colour"), self.accent)
         logo_row = QHBoxLayout()
-        choose_logo = QPushButton("Choose Logo…")
-        choose_logo.setToolTip("A PNG, JPEG, WebP, GIF or BMP picture up to 2 MB")
+        choose_logo = QPushButton(t("Choose Logo…"))
+        choose_logo.setToolTip(t("A PNG, JPEG, WebP, GIF or BMP picture up to 2 MB"))
         choose_logo.clicked.connect(lambda: self.choose_logo())
-        remove_logo = QPushButton("Remove Logo")
+        remove_logo = QPushButton(t("Remove Logo"))
         remove_logo.clicked.connect(lambda: self.set_logo(""))
         logo_row.addWidget(choose_logo)
         logo_row.addWidget(remove_logo)
         logo_row.addStretch()
         look.addLayout(logo_row)
-        self.look_note = QLabel("The venue logo shows on the home screen and between songs.")
+        self.look_note = QLabel(t("The venue logo shows on the home screen and between songs."))
         self.look_note.setObjectName("hint")
         self.look_note.setWordWrap(True)
         look.addWidget(self.look_note)
 
-        setup = card("Setup", admin=True)
-        again = QPushButton("Run Setup Again")
+        setup = card(t("Setup"), admin=True)
+        again = QPushButton(t("Run Setup Again"))
         again.setToolTip(
-            "Choose the sound output, the MV screen and the first microphone step by step"
+            t("Choose the sound output, the MV screen and the first microphone step by step")
         )
         again.clicked.connect(self.run_setup.emit)
         setup.addWidget(again, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        help_card = card("Help")
-        diagnose = QPushButton("Save Diagnostics…")
+        help_card = card(t("Help"))
+        diagnose = QPushButton(t("Save Diagnostics…"))
         diagnose.setToolTip(
-            "One zip with the recent logs, the version and the settings (keys and passwords"
-            " left out), to attach to a bug report"
+            t(
+                "One zip with the recent logs, the version and the settings (keys and passwords"
+                " left out), to attach to a bug report"
+            )
         )
         diagnose.clicked.connect(lambda: self.save_diagnostics())
         feedback_row = QHBoxLayout()
         feedback_row.addWidget(diagnose)
-        for caption, link in (("Report a Bug", feedback.BUG), ("Suggest a Feature", feedback.IDEA)):
+        for caption, link in (
+            (t("Report a Bug"), feedback.BUG),
+            (t("Suggest a Feature"), feedback.IDEA),
+        ):
             button = QPushButton(caption)
             button.clicked.connect(lambda _c=False, u=link: feedback.open_url(u))
             feedback_row.addWidget(button)
@@ -1192,16 +1260,16 @@ class SettingsPage(Page):
         help_card.addLayout(feedback_row)
 
         # Updates
-        updates = card("Updates", admin=True)
+        updates = card(t("Updates"), admin=True)
         self.update_label = QLabel(f"YTKTV {__version__}")
         updates.addWidget(self.update_label)
-        check(updates, "Install new releases automatically", "auto_update")
+        check(updates, t("Install new releases automatically"), "auto_update")
         row = QHBoxLayout()
-        check_now = QPushButton("Check Now")
+        check_now = QPushButton(t("Check Now"))
         check_now.clicked.connect(self.check_updates.emit)
-        self.release_button = QPushButton("Open Release Page")
+        self.release_button = QPushButton(t("Open Release Page"))
         self.release_button.hide()
-        self.install_button = QPushButton("Install Now")
+        self.install_button = QPushButton(t("Install Now"))
         self.install_button.setProperty("accent", True)
         self.install_button.hide()
         self.install_button.clicked.connect(self.install_update.emit)
@@ -1229,25 +1297,28 @@ class SettingsPage(Page):
         )
 
         self.lyrics_size = QComboBox()
-        self.lyrics_size.addItems(list(LYRIC_SIZES))
-        labelled(layout, "Lyrics size", self.lyrics_size)
+        for value in LYRIC_SIZES:
+            self.lyrics_size.addItem(t(value), value)
+        labelled(layout, t("Lyrics size"), self.lyrics_size)
         self.lyrics_outline = QComboBox()
-        self.lyrics_outline.addItems(list(LYRIC_OUTLINES))
-        labelled(layout, "Outline", self.lyrics_outline)
+        for value in LYRIC_OUTLINES:
+            self.lyrics_outline.addItem(t(value), value)
+        labelled(layout, t("Outline"), self.lyrics_outline)
         self.lyrics_colours = QComboBox()
-        self.lyrics_colours.addItems([*LYRIC_COLOURS, CUSTOM_COLOURS])
-        labelled(layout, "Colours", self.lyrics_colours)
-        self.lyrics_waiting_button = QPushButton("Not yet sung…")
-        self.lyrics_sung_button = QPushButton("Sung…")
+        for value in (*LYRIC_COLOURS, CUSTOM_COLOURS):
+            self.lyrics_colours.addItem(t(value), value)
+        labelled(layout, t("Colours"), self.lyrics_colours)
+        self.lyrics_waiting_button = QPushButton(t("Not yet sung…"))
+        self.lyrics_sung_button = QPushButton(t("Sung…"))
         custom_row = QHBoxLayout()
         custom_row.addWidget(self.lyrics_waiting_button)
         custom_row.addWidget(self.lyrics_sung_button)
         custom_row.addStretch()
         holder = QWidget()
         holder.setLayout(custom_row)
-        labelled(layout, "Custom colours", holder)
+        labelled(layout, t("Custom colours"), holder)
         self.lyrics_contrast = QCheckBox(
-            "High contrast: thicker black outline and a dark band behind the lyrics"
+            t("High contrast: thicker black outline and a dark band behind the lyrics")
         )
         layout.addWidget(self.lyrics_contrast)
 
@@ -1258,8 +1329,8 @@ class SettingsPage(Page):
         self.lyrics_preview = LyricsOverlay(self.lyrics_preview_frame)
         self.lyrics_preview.set_lines(
             [
-                {"start": 0.0, "end": 4.0, "text": "Sing it loud, sing it proud"},
-                {"start": 4.0, "end": 8.0, "text": "This is the next line"},
+                {"start": 0.0, "end": 4.0, "text": t("Sing it loud, sing it proud")},
+                {"start": 4.0, "end": 8.0, "text": t("This is the next line")},
             ]
         )
         self.lyrics_preview.set_time(2.0)
@@ -1267,14 +1338,14 @@ class SettingsPage(Page):
         layout.addWidget(self.lyrics_preview_frame)
 
         self.load_lyrics_style()
-        self.lyrics_size.currentTextChanged.connect(
-            lambda v: self._set_lyrics_option("lyrics_size", v)
+        self.lyrics_size.currentIndexChanged.connect(
+            lambda _i: self._set_lyrics_option("lyrics_size", self.lyrics_size.currentData())
         )
-        self.lyrics_outline.currentTextChanged.connect(
-            lambda v: self._set_lyrics_option("lyrics_outline", v)
+        self.lyrics_outline.currentIndexChanged.connect(
+            lambda _i: self._set_lyrics_option("lyrics_outline", self.lyrics_outline.currentData())
         )
-        self.lyrics_colours.currentTextChanged.connect(
-            lambda v: self._set_lyrics_option("lyrics_colours", v)
+        self.lyrics_colours.currentIndexChanged.connect(
+            lambda _i: self._set_lyrics_option("lyrics_colours", self.lyrics_colours.currentData())
         )
         self.lyrics_contrast.toggled.connect(
             lambda on: self._set_lyrics_option("lyrics_high_contrast", on)
@@ -1295,7 +1366,7 @@ class SettingsPage(Page):
             (self.lyrics_colours, settings.lyrics_colours),
         ):
             combo.blockSignals(True)
-            combo.setCurrentIndex(max(0, combo.findText(value)))
+            combo.setCurrentIndex(max(0, combo.findData(value)))
             combo.blockSignals(False)
         self.lyrics_contrast.blockSignals(True)
         self.lyrics_contrast.setChecked(settings.lyrics_high_contrast)
@@ -1342,7 +1413,7 @@ class SettingsPage(Page):
         from PySide6.QtWidgets import QColorDialog
 
         colour = QColorDialog.getColor(
-            QColor(getattr(self.ctx.controller.settings, attr)), self, "Lyrics colour"
+            QColor(getattr(self.ctx.controller.settings, attr)), self, t("Lyrics colour")
         )
         if colour.isValid():
             self._set_lyrics_option(attr, colour.name())
@@ -1353,11 +1424,11 @@ class SettingsPage(Page):
         self.ai_button.setVisible(writer is not None and not installed)
         if not text and installed:
             text = (
-                "Ready · GPU: every song's lyrics are written on this computer"
+                t("Ready · GPU: every song's lyrics are written on this computer")
                 if writer.on_gpu
-                else "Ready · CPU: only songs without lyrics online"
+                else t("Ready · CPU: only songs without lyrics online")
             )
-        self.ai_status.setText(text or "Not downloaded yet · lyrics come from online")
+        self.ai_status.setText(text or t("Not downloaded yet · lyrics come from online"))
 
     def install_ai_lyrics(self) -> None:
         from ytktv import lyrics_ai
@@ -1366,7 +1437,7 @@ class SettingsPage(Page):
         if writer is None:
             return
         self.ai_button.setEnabled(False)
-        self._show_ai_lyrics("Downloading… (this takes a while)")
+        self._show_ai_lyrics(t("Downloading… (this takes a while)"))
 
         def done(_key: str) -> None:
             self.ai_button.setEnabled(True)
@@ -1374,7 +1445,7 @@ class SettingsPage(Page):
 
         def failed(exc: Exception) -> None:
             self.ai_button.setEnabled(True)
-            self._show_ai_lyrics(f"Could not download: {exc}"[:160])
+            self._show_ai_lyrics(t("Could not download: {error}", error=exc)[:160])
 
         run_async(lambda: lyrics_ai.install(writer.env), done, failed)
 
@@ -1416,11 +1487,18 @@ class SettingsPage(Page):
 
     def _fill_screens(self) -> None:
         self.screen_combo.clear()
-        self.screen_combo.addItem("Automatic (extended display)", -1)
+        self.screen_combo.addItem(t("Automatic (extended display)"), -1)
         for i, screen in enumerate(QGuiApplication.screens()):
             size = screen.size()
             self.screen_combo.addItem(
-                f"Display {i + 1}: {screen.name()} ({size.width()}x{size.height()})", i
+                t(
+                    "Display {value}: {value2} ({value3}x{value4})",
+                    value=i + 1,
+                    value2=screen.name(),
+                    value3=size.width(),
+                    value4=size.height(),
+                ),
+                i,
             )
         index = self.screen_combo.findData(self.ctx.controller.settings.mv_screen)
         self.screen_combo.setCurrentIndex(max(0, index))
@@ -1450,16 +1528,22 @@ class SettingsPage(Page):
         if self._runtime_text:
             self.separation_label.setText(self._runtime_text)
         elif state["separation"]:
-            device = state["accelerator"] or "detecting hardware..."
+            device = state["accelerator"] or t("detecting hardware...")
             self.separation_label.setText(
-                f"Running on: {device}\n"
-                "Each selected song is split into vocals and instrumental in the background, "
-                "so Original / Instrumental can be switched instantly while it plays."
+                t(
+                    "Running on: {device}\n"
+                    "Each selected song is split into vocals and instrumental in the background, "
+                    "so Original / Instrumental can be switched instantly while it plays.",
+                    device=device,
+                )
             )
         else:
             self.separation_label.setText(
-                'Not installed. Install it with:  pip install "ytktv[separation]"\n'
-                "Until then, Instrumental falls back to the original audio; Vocal Cut still works."
+                t(
+                    'Not installed. Install it with:  pip install "ytktv[separation]"\n'
+                    "Until then, Instrumental falls back to the original audio; "
+                    "Vocal Cut still works."
+                )
             )
 
     def set_update_ready(self, ready: bool) -> None:

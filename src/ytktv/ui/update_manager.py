@@ -12,6 +12,7 @@ from ytktv import __version__, updater
 from ytktv.config import cache_dir
 from ytktv.core.controller import KTVController
 from ytktv.core.models import PlayStatus
+from ytktv.i18n import t
 from ytktv.ui.support import run_async
 
 log = logging.getLogger(__name__)
@@ -51,36 +52,47 @@ class UpdateManager(QObject):
         self._busy = True
         if manual:
             self._declined = False
-            self.status.emit("Checking for updates...", "")
+            self.status.emit(t("Checking for updates..."), "")
 
         def failed(exc: Exception) -> None:
             self._busy = False
             log.info("update check failed: %s", exc)
             if manual:
-                self.status.emit(f"YTKTV {__version__}  ·  could not reach GitHub", "")
+                self.status.emit(
+                    t("YTKTV {version}  ·  could not reach GitHub", version=__version__), ""
+                )
 
         run_async(updater.check_for_update, self._checked, failed)
 
     def _checked(self, info: updater.UpdateInfo | None) -> None:
         self._busy = False
         if info is None:
-            self.status.emit(f"YTKTV {__version__}  ·  up to date", "")
+            self.status.emit(t("YTKTV {version}  ·  up to date", version=__version__), "")
             return
         self._info = info
         if not updater.can_self_install():
             self.status.emit(
-                f"YTKTV {__version__}  ·  version {info.version} is available (git pull to update)",
+                t(
+                    "YTKTV {version}  ·  version {version2} is available (git pull to update)",
+                    version=__version__,
+                    version2=info.version,
+                ),
                 info.page_url,
             )
             return
         size = updater.size_label(info, cache_dir() / "updates")
-        self.status.emit(f"Downloading YTKTV {info.version}{size}...", info.page_url)
+        self.status.emit(
+            t("Downloading YTKTV {version}{size}...", version=info.version, size=size),
+            info.page_url,
+        )
         self._busy = True
 
         def downloaded(path: Path) -> None:
             self._busy = False
             self._installer = path
-            self.status.emit(f"YTKTV {info.version} is ready to install", info.page_url)
+            self.status.emit(
+                t("YTKTV {version} is ready to install", version=info.version), info.page_url
+            )
             self.ready.emit(True)
             self._idle_timer.start()
             self._prompt_when_idle()
@@ -88,7 +100,9 @@ class UpdateManager(QObject):
         def failed(exc: Exception) -> None:
             self._busy = False
             log.warning("update download failed: %s", exc)
-            self.status.emit(f"Could not download YTKTV {info.version}", info.page_url)
+            self.status.emit(
+                t("Could not download YTKTV {version}", version=info.version), info.page_url
+            )
 
         run_async(
             lambda: updater.download_update(info, cache_dir() / "updates"), downloaded, failed
@@ -114,16 +128,16 @@ class UpdateManager(QObject):
             return
         self._idle_timer.stop()
         box = QMessageBox(self._parent)
-        box.setWindowTitle("Update ready")
-        box.setText(f"YTKTV {self._info.version} has been downloaded.")
-        detail = "Install it now? YTKTV will close and reopen after the update."
+        box.setWindowTitle(t("Update ready"))
+        box.setText(t("YTKTV {version} has been downloaded.", version=self._info.version))
+        detail = t("Install it now? YTKTV will close and reopen after the update.")
         if updater.password_needed(self._installer):
             detail += "\n\n" + updater.PASSWORD_NOTE.format(app="YTKTV")
         if interrupting:
-            detail += "\n\nThe song that is playing will stop and the queue will be lost."
+            detail += t("\n\nThe song that is playing will stop and the queue will be lost.")
         box.setInformativeText(detail)
-        install = box.addButton("Install and Restart", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("Later", QMessageBox.ButtonRole.RejectRole)
+        install = box.addButton(t("Install and Restart"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(t("Later"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         if box.clickedButton() is not install:
             # Do not ask again by ourselves this session; Settings still offers it.
@@ -133,6 +147,6 @@ class UpdateManager(QObject):
             updater.install_update(self._installer)
         except Exception as exc:
             log.exception("could not start the installer")
-            QMessageBox.warning(self._parent, "Update failed", str(exc))
+            QMessageBox.warning(self._parent, t("Update failed"), str(exc))
             return
         QApplication.quit()

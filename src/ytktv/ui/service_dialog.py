@@ -18,10 +18,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ytktv.i18n import N_, t
 from ytktv.rooms.client import RoomClient
 
-KINDS = ("Drinks", "Snacks", "Equipment problem", "Other")
-MENU_KINDS = ("Drinks", "Snacks")  # not needed as calls once the menu can be ordered from
+KINDS = (N_("Drinks"), N_("Snacks"), N_("Equipment problem"), N_("Other"))
+MENU_KINDS = (N_("Drinks"), N_("Snacks"))  # not needed as calls once the menu can be ordered from
 MAX_QTY = 20
 
 
@@ -82,27 +83,27 @@ class ServiceDialog(QDialog):
         super().__init__(parent)
         self.client = client
         self.sent = ""
-        self.setWindowTitle("Service")
+        self.setWindowTitle(t("Service"))
         self.resize(560, 620)
         column = QVBoxLayout(self)
-        head = QLabel("CALL THE STAFF")
+        head = QLabel(t("CALL THE STAFF"))
         head.setObjectName("settingsHead")
         column.addWidget(head)
         kinds = QHBoxLayout()
         for kind in KINDS:
             if client.products and kind in MENU_KINDS:
                 continue  # drinks and snacks are ordered from the menu below
-            button = QPushButton(kind)
+            button = QPushButton(t(kind))
             button.setMinimumHeight(48)
             button.clicked.connect(lambda _c=False, k=kind: self.call(k))
             kinds.addWidget(button)
         column.addLayout(kinds)
         self.note = QLineEdit()
-        self.note.setPlaceholderText("Add a note (optional)")
+        self.note.setPlaceholderText(t("Add a note (optional)"))
         self.note.setMaxLength(200)
         column.addWidget(self.note)
 
-        menu_head = QLabel("ORDER")
+        menu_head = QLabel(t("ORDER"))
         menu_head.setObjectName("settingsHead")
         column.addWidget(menu_head)
         scroll = QScrollArea()
@@ -117,7 +118,7 @@ class ServiceDialog(QDialog):
         for item in sorted(client.products, key=lambda i: str(i.get("category") or "")):
             if (item.get("category") or "") != category:
                 category = item.get("category") or ""
-                heading = QLabel(category or "Other")
+                heading = QLabel(category or t("Other"))
                 heading.setObjectName("caption")
                 grid.addWidget(heading, row, 0, 1, 3)
                 row += 1
@@ -134,10 +135,10 @@ class ServiceDialog(QDialog):
             self.quantities[int(item["product_id"])] = qty
             row += 1
         if not client.products:
-            grid.addWidget(QLabel("The staff terminal has no menu yet."), 0, 0)
+            grid.addWidget(QLabel(t("The staff terminal has no menu yet.")), 0, 0)
         scroll.setWidget(holder)
         column.addWidget(scroll, stretch=1)
-        order = QPushButton("Send Order")
+        order = QPushButton(t("Send Order"))
         order.setObjectName("accent")
         order.setMinimumHeight(48)
         order.clicked.connect(self.order)
@@ -145,11 +146,11 @@ class ServiceDialog(QDialog):
 
     def call(self, kind: str) -> None:
         if self.client.call(kind, self.note.text()):
-            self.sent = f"Asked the staff: {kind}"
+            self.sent = t("Asked the staff: {kind}", kind=t(kind))
             self.accept()
 
     def order(self) -> None:
         items = [(pid, box.value()) for pid, box in self.quantities.items() if box.value()]
         if self.client.order(items):
-            self.sent = "Order sent to the staff"
+            self.sent = t("Order sent to the staff")
             self.accept()

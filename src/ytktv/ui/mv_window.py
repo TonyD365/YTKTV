@@ -30,6 +30,7 @@ from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import QLabel, QWidget
 
 from ytktv.core.scenes import SCENES
+from ytktv.i18n import t
 from ytktv.player.mpv_player import MpvPlayer
 from ytktv.ui import backdrop, theme
 from ytktv.ui.level_hud import LevelHud
@@ -172,7 +173,7 @@ class IdleCard(QWidget):
         painter.drawText(
             QRectF(0, unit * 31, w, unit * 7),
             Qt.AlignmentFlag.AlignCenter,
-            "Scan with your phone to pick a song",
+            t("Scan with your phone to pick a song"),
         )
 
         if self._qr is not None:
@@ -256,7 +257,7 @@ class MvWindow(QWidget):
 
     def __init__(self, player: MpvPlayer | None) -> None:
         super().__init__()
-        self.setWindowTitle("YTKTV - MV Screen")
+        self.setWindowTitle(t("YTKTV - MV Screen"))
         self.setStyleSheet("background: black;")
         self.resize(960, 540)
         self.video = VideoWidget(player, self) if player is not None else None
@@ -404,7 +405,7 @@ class MvWindow(QWidget):
             if self.live_score.isVisible():
                 fade_out(self.live_score, 300)
             return
-        self.live_score.setText(f"SCORE  {points}")
+        self.live_score.setText(t("SCORE  {points}", points=points))
         self._place_live_score()
         if not self.live_score.isVisible():
             fade_in(self.live_score, 300)
@@ -507,17 +508,24 @@ class MvWindow(QWidget):
         caption = f"{singer}  ·  {score['title']}" if singer else str(score["title"])
         voices = score.get("voices") or []
         if len(voices) >= 2:  # a duet: one score for each microphone
-            caption = "   ·   ".join(f"Mic {voice['mic']}  {voice['points']}" for voice in voices)
+            caption = "   ·   ".join(
+                t("Mic {mic}  {points}", mic=voice["mic"], points=voice["points"])
+                for voice in voices
+            )
         board = score.get("board") or []
-        grade = str(score["grade"])
+        grade = t(str(score["grade"]))
         pk = score.get("pk")
         if pk:  # a PK battle: say who won
             scores = pk.get("scores") or []
-            caption = "  vs  ".join(f"Mic {s['mic']}  {s['points']}" for s in scores) or str(
-                pk.get("note", "")
-            )
+            caption = "  vs  ".join(
+                t("Mic {mic}  {points}", mic=s["mic"], points=s["points"]) for s in scores
+            ) or str(pk.get("note", ""))
             winner = pk.get("winner")
-            grade = f"⚔️ Mic {winner} wins!" if winner else ("⚔️ A draw!" if scores else grade)
+            grade = (
+                t("⚔️ Mic {winner} wins!", winner=winner)
+                if winner
+                else (t("⚔️ A draw!") if scores else grade)
+            )
         self.score_card.set_score(
             int(score["points"]), grade, caption, int(score.get("rank") or 0), board
         )
@@ -690,7 +698,7 @@ class MvWindow(QWidget):
                 fade_in(self.idle, 600)
             self.banner.raise_()
             if state.get("status") == "loading" and current:
-                reason = state.get("loading") or "Loading"
+                reason = t(state.get("loading") or "Loading")
                 self.show_banner(f"{reason}...   {current['song']['title']}", 600)
             else:
                 fade_out(self.banner, 300)
@@ -699,7 +707,9 @@ class MvWindow(QWidget):
         current = state.get("current")
         if current:
             singer = f"   ·   {current['singer']}" if current.get("singer") else ""
-            self.show_banner(f"Now Playing:  {current['song']['title']}{singer}")
+            self.show_banner(
+                t("Now Playing:  {title}{singer}", title=current["song"]["title"], singer=singer)
+            )
             self._next_announced_for = None
 
     def update_position(self, position: float, duration: float, state: dict[str, Any]) -> None:
@@ -713,9 +723,9 @@ class MvWindow(QWidget):
             return
         self._next_announced_for = current["id"]
         if queue:
-            self.show_banner(f"Up Next:  {queue[0]['song']['title']}", 10)
+            self.show_banner(t("Up Next:  {title}", title=queue[0]["song"]["title"]), 10)
         else:
-            self.show_banner("Queue is empty. Pick the next song!", 10)
+            self.show_banner(t("Queue is empty. Pick the next song!"), 10)
 
     def release(self) -> None:
         if self.video is not None:
@@ -762,7 +772,9 @@ class PkBars(QWidget):
             label = QRectF(8 if side == 0 else w / 2, 0, w / 2 - 16, h)
             align = Qt.AlignmentFlag.AlignLeft if side == 0 else Qt.AlignmentFlag.AlignRight
             p.drawText(
-                label, align | Qt.AlignmentFlag.AlignTop, f"Mic {score['mic']}  {score['points']}"
+                label,
+                align | Qt.AlignmentFlag.AlignTop,
+                t("Mic {mic}  {points}", mic=score["mic"], points=score["points"]),
             )
             p.setPen(Qt.PenStyle.NoPen)
         p.setPen(QColor("#ffc94a"))

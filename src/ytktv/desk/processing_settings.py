@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QCheckBox, QFrame, QHBoxLayout, QLabel, QPushButto
 
 from ytktv.desk import processing
 from ytktv.desk.store import DeskStore
+from ytktv.i18n import t
 from ytktv.ui.support import run_async
 
 
@@ -18,24 +19,25 @@ class ProcessingSettings(QFrame):
         self.setObjectName("panel")
         column = QVBoxLayout(self)
         column.setContentsMargins(24, 20, 24, 20)
-        head = QLabel("PROCESS SONGS FOR THE ROOMS")
+        head = QLabel(t("PROCESS SONGS FOR THE ROOMS"))
         head.setObjectName("panelHead")
         note = QLabel(
-            "With a GPU here, this Desk removes the vocals and writes the lyrics of the songs"
-            " every room has queued, so the rooms' own computers need no GPU. Each song is done"
-            " once for all rooms. A room does it itself when the Desk is off or too busy."
-            " Needs both downloads below; takes effect when YTKTV Desk is opened again."
+            t(
+                "With a GPU here, this Desk removes the vocals and writes the lyrics of the songs every room has queued, so the rooms' own computers need no GPU. Each song is done once for all rooms. A room does it itself when the Desk is off or too busy. Needs both downloads below; takes effect when YTKTV Desk is opened again."
+            )
         )
         note.setObjectName("muted")
         note.setWordWrap(True)
-        self.enabled = QCheckBox("Separate songs and write lyrics for the rooms on this computer")
+        self.enabled = QCheckBox(
+            t("Separate songs and write lyrics for the rooms on this computer")
+        )
         self.enabled.setChecked(store.setting(processing.SETTING, "0") == "1")
         self.enabled.toggled.connect(self.save)
         self.status = QLabel()
         self.status.setObjectName("muted")
-        self.separation = QPushButton("Download Vocal Separation")
+        self.separation = QPushButton(t("Download Vocal Separation"))
         self.separation.clicked.connect(self.install_separation)
-        self.lyrics = QPushButton("Download AI Lyrics")
+        self.lyrics = QPushButton(t("Download AI Lyrics"))
         self.lyrics.clicked.connect(self.install_lyrics)
         row = QHBoxLayout()
         row.addWidget(self.separation)
@@ -71,7 +73,7 @@ class ProcessingSettings(QFrame):
     def _install(self, work: object) -> None:
         self.separation.setEnabled(False)
         self.lyrics.setEnabled(False)
-        self.show_status("Downloading… (this takes a while)")
+        self.show_status(t("Downloading… (this takes a while)"))
 
         def done(_result: object) -> None:
             self.separation.setEnabled(True)

@@ -10,14 +10,15 @@ from html import escape
 
 from ytktv.desk.pricing import price_stay, rules_from_json
 from ytktv.desk.store import DeskStore, Room
+from ytktv.i18n import N_
 
 DEFAULT_RATE = "20"
-PAYMENTS = ("Cash", "Card", "WeChat Pay", "Alipay", "Member balance")
+PAYMENTS = (N_("Cash"), N_("Card"), N_("WeChat Pay"), N_("Alipay"), N_("Member balance"))
 # How an open-ended session's time is charged.
 ROUNDING = {
-    "minute": "By the minute",
-    "hour": "Every started hour",
-    "unit": "Every started block (see Block minutes)",
+    "minute": N_("By the minute"),
+    "hour": N_("Every started hour"),
+    "unit": N_("Every started block (see Block minutes)"),
 }
 
 

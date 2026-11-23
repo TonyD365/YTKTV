@@ -297,11 +297,288 @@
 
 <script>
 "use strict";
+// The phone page follows the app's language (<html lang>); English is the fallback.
+const LANG = (document.documentElement.lang || "en").replace("-", "_");
+const ZH = {
+ "Tap to stop": "点击停止",
+ "This room is closed": "本包厢已关闭",
+ "Now Playing": "正在播放",
+ "Nothing yet. Pick a song!": "还没有歌，点一首吧！",
+ "Song, artist or YouTube link": "歌名、歌手或 YouTube 链接",
+ "Search": "搜索",
+ "Search for a song or tap a category.": "搜索歌曲，或点一个分类。",
+ "Your songs": "你的歌",
+ "Selected": "已点",
+ "Tonight's best": "今晚最佳",
+ "Sung": "已唱",
+ "Paste a YouTube playlist link": "粘贴 YouTube 播放列表链接",
+ "Import": "导入",
+ "Save the queue as a playlist": "把已点歌曲存为歌单",
+ "Use this phone as a microphone": "把这部手机当麦克风",
+ "🛎 Service": "🛎 呼叫服务",
+ "Drinks": "酒水",
+ "Snacks": "小吃",
+ "Equipment": "设备",
+ "Other": "其他",
+ "Send Order": "提交订单",
+ "✨ Glow stick: light up with the TV": "✨ 荧光棒：跟随电视一起亮",
+ "Cheer the singer": "给歌手喝彩",
+ "Playback": "播放",
+ "Pause": "暂停",
+ "Replay": "重唱",
+ "Skip": "切歌",
+ "Scoring": "评分",
+ "Lyrics": "歌词",
+ "Lyrics later": "歌词延后",
+ "In time": "歌词对齐",
+ "Lyrics earlier": "歌词提前",
+ "Vocals": "人声",
+ "Original": "原唱",
+ "Instrumental": "伴奏",
+ "Vocal Cut": "消音",
+ "Guide": "导唱",
+ "Key & Tempo": "升降调与速度",
+ "Key": "音调",
+ "Tempo": "速度",
+ "Volume": "音量",
+ "Music": "音乐",
+ "Mic": "麦克风",
+ "Microphones": "麦克风",
+ "Crowd": "气氛",
+ "Applause": "掌声",
+ "Cheer": "欢呼",
+ "Air Horn": "气喇叭",
+ "Drum Roll": "鼓点",
+ "Lights": "灯光",
+ "Mood": "氛围",
+ "✨ Usual": "✨ 常规",
+ "🎂 Birthday": "🎂 生日",
+ "💕 Romantic": "💕 浪漫",
+ "🪩 Party": "🪩 派对",
+ "🌊 Chill": "🌊 放松",
+ "Danmaku": "弹幕",
+ "Send a message to the big screen": "发一条消息到大屏幕",
+ "Send": "发送",
+ "Your name": "你的名字",
+ "Shown next to your songs": "显示在你点的歌旁边",
+ "Results show big on the TV. You play as": "结果会显示在电视大屏上。你的身份是",
+ "you": "寿星",
+ "(set your name under REMOTE).": "（请在“遥控”页设置名字）。",
+ "‹ All games": "‹ 全部游戏",
+ "Start Game": "开始游戏",
+ "SEARCH": "搜索",
+ "QUEUE": "已点",
+ "LISTS": "歌单",
+ "REMOTE": "遥控",
+ "GAMES": "游戏",
+ "Queued": "排队中",
+ "Preparing": "准备中",
+ "Separating": "分离中",
+ "Instrumental ready": "伴奏已就绪",
+ "No instrumental": "无伴奏",
+ "Playing next": "下一首播放",
+ "Added to queue": "已加入已点列表",
+ "No results.": "没有结果。",
+ "Priority": "优先",
+ "+ List": "+ 歌单",
+ "Clear": "清除",
+ "Searching…": "搜索中…",
+ "Search failed. Try again.": "搜索失败，请重试。",
+ "Loading": "加载中",
+ "Paused": "已暂停",
+ "Play": "播放",
+ "Scoring: On": "评分：开",
+ "Scoring: Off": "评分：关",
+ "Lyrics: On": "歌词：开",
+ "Lyrics: Off": "歌词：关",
+ "Member": "会员",
+ "No songs saved yet.": "还没有保存的歌曲。",
+ "No songs sung yet.": "还没有唱过的歌。",
+ "Add": "添加",
+ "Again": "再唱一次",
+ "Next up": "下一首",
+ "under a minute": "不到一分钟",
+ "The queue is empty.": "还没有点歌。",
+ "Yours": "我的",
+ "Top": "置顶",
+ "Remove": "移除",
+ "✓ Sent": "✓ 已发送",
+ "Guest": "访客",
+ "Rolling…": "掷骰中…",
+ "Pick how many dice to roll.": "选择要掷几个骰子。",
+ "Roll!": "掷骰子！",
+ "Picks one of the singers in the queue.": "从已点歌的人里选一位。",
+ "Spin!": "转！",
+ "Spinning…": "旋转中…",
+ "Pick Truth or Dare, then read the card out loud.": "选真心话或大冒险，然后大声读出卡片。",
+ "Random": "随机",
+ "💬 Truth": "💬 真心话",
+ "🔥 Dare": "🔥 大冒险",
+ "Shuffling…": "洗牌中…",
+ "A bomb hides between 1 and 100. Take turns guessing; the range shrinks. Hit it and you lose.": "炸弹藏在 1 到 100 之间。轮流猜数字，范围会缩小。猜中炸弹的人输。",
+ "New Bomb": "新炸弹",
+ "💣 Guess": "💣 猜",
+ "Safe… next player!": "安全…下一位！",
+ "Guess a number in between": "请在两者之间猜一个数",
+ "Roll My Dice": "摇我的骰子",
+ "👁 Hold to peek": "👁 按住偷看",
+ "Roll first": "请先摇骰子",
+ "Only you should see this!": "只有你自己能看！",
+ "👀 Reveal all": "👀 全部揭开",
+ "Spins a hot-songs list and queues whatever it stops on, for you.": "转动热门歌曲列表，转到哪首就帮你点哪首。",
+ "Pull the Lever": "拉动拉杆",
+ "Could not load songs": "无法加载歌曲",
+ "Draw a card before the next song and do what it says.": "下一首歌之前抽一张卡，照卡上说的做。",
+ "Draw a Card": "抽一张卡",
+ "Drawing…": "抽取中…",
+ "Draws a lot for one of the singers.": "为其中一位歌手抽签。",
+ "Draw": "抽签",
+ "Every singer rolls one die: highest picks the next song, lowest drinks.": "每位歌手掷一个骰子：点数最大的选下一首歌，最小的喝酒。",
+ "Roll for Everyone": "大家一起掷",
+ "↺ Start over": "↺ 重新开始",
+ "Press Next Number": "点“下一个数”",
+ "10 seconds on the TV for any race.": "在电视上倒计时 10 秒，适合任何比赛。",
+ "Start Countdown": "开始倒计时",
+ "Call it, then flip.": "先猜，再抛。",
+ "Flip!": "抛！",
+ "Tails": "反面",
+ "Heads": "正面",
+ "Everyone in the queue, two per match. Sing a song with your name on it: the score card decides who goes through.": "已点歌的人两两对决。唱自己点的歌，由评分决定谁晋级。",
+ "Start Tournament": "开始比赛",
+ "🔄 Bracket": "🔄 对阵表",
+ "Drawing the matches…": "正在抽签对阵…",
+ "Type whose birthday it is: their name goes up on the TV and the birthday song plays next.": "输入寿星的名字：名字会显示在电视上，接着播放生日歌。",
+ "Celebrate!": "庆祝！",
+ "Whose birthday?": "谁的生日？",
+ "Finding the birthday song…": "正在找生日歌…",
+ "Roll the Dice": "掷骰子",
+ "Roll and add them up": "掷骰子，点数相加",
+ "Who Sings Next?": "下一位唱谁？",
+ "Spin through the singers": "在歌手中转一转",
+ "Truth or Dare": "真心话大冒险",
+ "Answer, or do the dare": "回答问题，或接受挑战",
+ "Number Bomb": "数字炸弹",
+ "Don't hit the bomb": "别踩到炸弹",
+ "Liar's Dice": "吹牛骰子",
+ "Roll in secret, then bluff": "暗中摇骰，然后虚张声势",
+ "Random Song": "随机选歌",
+ "A slot machine picks your song": "老虎机帮你选歌",
+ "Challenge Cards": "挑战卡",
+ "A dare for the next singer": "给下一位歌手的挑战",
+ "Draw Lots": "抽签",
+ "Drink, sing, or safe": "喝酒、唱歌，或平安无事",
+ "High or Low": "比大小",
+ "One die each": "每人一个骰子",
+ "Sevens": "逢七",
+ "Say PASS on sevens": "遇到 7 说 PASS",
+ "Countdown": "倒计时",
+ "A big timer on the TV": "电视上的大计时器",
+ "Flip a Coin": "抛硬币",
+ "Heads or tails": "正面还是反面",
+ "King of Singers": "歌王争霸",
+ "Knockout rounds": "淘汰赛",
+ "Birthday": "生日",
+ "Name on the TV, then the song": "电视上显示名字，然后唱歌",
+ "Everyone rolls five dice only they can see. Bid, e.g. \"four 5s\"; ones are wild. Call liar, then Reveal.": "每人摇五个骰子，只有自己看得到。叫数，例如“四个 5”；1 可当任意点数。认为对方说谎就喊“开”，然后揭开。",
+ "Count up together. Any number with a 7 or divisible by 7 is \"PASS\".": "一起报数。含 7 或是 7 的倍数的数字要说“PASS”。",
+ "Instrumental is still being prepared": "伴奏还在准备中",
+ "Separation is not installed on the host": "主机未安装人声分离",
+ "Encore!": "再来一首！",
+ "Reverb": "混响",
+ "Echo": "回声",
+ "Compressor": "压缩",
+ "Bass": "低音",
+ "Mid": "中音",
+ "Treble": "高音",
+ "Muted": "已静音",
+ "Mute": "静音",
+ "System default": "系统默认",
+ "No microphone is switched on. Choose one on the host's Mixer page.": "没有开启任何麦克风。请在主机的调音台页面选择。",
+ "No playlists yet.": "还没有歌单。",
+ "Play All": "全部播放",
+ "Shuffle": "随机排序",
+ "This playlist is empty.": "这个歌单是空的。",
+ "Importing...": "导入中...",
+ "Name for a new playlist:": "新歌单的名称：",
+ "Name for the playlist:": "歌单名称：",
+ "(or type a new name)": "（或输入新名称）",
+ "Add to which playlist?": "添加到哪个歌单？",
+ "Delete": "删除",
+ "DELETE": "删除",
+ "Next Number": "下一个数",
+ "Equipment problem": "设备故障",
+ "Error": "出错了",
+ "Not started": "未开始"
+};
+const ZP = [["{n} dice", "{n} 个骰子"], ["{n} songs", "{n} 首歌"], ["Mic {n}", "麦克风 {n}"], ["{name}'s songs", "{name} 的歌"], ["Score: {points} · {grade}", "得分：{points} · {grade}"], ["Added {n} songs", "已添加 {n} 首歌"], ["Added to {name}", "已加入 {name}"], ["Already in {name}", "{name} 里已有这首"], ["Imported {name}", "已导入 {name}"], ["Saved {name}", "已保存 {name}"], ["{n} song ahead", "前面还有 {n} 首"], ["{n} songs ahead", "前面还有 {n} 首"], ["about {n} min", "约 {n} 分钟"], ["Press {start}", "点“{start}”"], ["{a} · under a minute", "{a} · 不到一分钟"], ["{a} · about {n} min", "{a} · 约 {n} 分钟"], ["{a} · about {n} min", "{a} · 约 {n} 分钟"]];
+const BARE = /^[^\p{L}\p{N}]+/u;
+const ZH2 = {};
+for (const [k, v] of Object.entries(ZH)) ZH2[k.replace(BARE, "")] = v.replace(BARE, "");
+const PATS = ZP.map(([k, v]) => {
+  const names = [];
+  const re = new RegExp("^" + k.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{(\w+)\}/g, (_, n) => { names.push(n); return "([\\s\\S]+?)"; }) + "$");
+  return [re, names, v];
+});
+function T(s, v) {
+  let r = s;
+  if (LANG === "zh_CN") {
+    const k = s.replace(/\s+/g, " ").trim();
+    let z = ZH[k] || ZH2[k.replace(BARE, "")];
+    for (const [re, names, p] of PATS) {
+      if (z) break;
+      const m = re.exec(k);
+      if (m) { z = p; names.forEach((n, i) => { z = z.split("{" + n + "}").join(m[i + 1]); }); }
+    }
+    if (z) r = s.replace(/^(\s*[^\p{L}\p{N}]*)[\s\S]*?(\s*)$/u, (_, a, b) => (ZH[k] ? "" : a) + z + b);
+  }
+  if (v) for (const n in v) r = r.split("{" + n + "}").join(v[n]);
+  return r;
+}
+(function () {  // translate the page's own words, including what the script adds later
+  if (LANG !== "zh_CN") return;
+  const SKIP = new Set(["SCRIPT", "STYLE", "TEXTAREA"]);
+  // Anything the server sent (songs, singers, names, categories) is never translated.
+  const data = (e) => !!(e && e.closest && e.closest("[data-raw], #now-title, .t, .s, .tag"));
+  function text(n) {
+    const p = n.parentNode;
+    if (!p || SKIP.has(p.nodeName)) return;
+    if (data(p) && n.nodeValue.trim() !== "Nothing yet. Pick a song!") return;
+    const v = T(n.nodeValue);
+    if (v !== n.nodeValue) n.nodeValue = v;
+  }
+  function attrs(e) {
+    if (data(e)) return;
+    for (const a of ["placeholder", "title"]) {
+      const o = e.getAttribute(a);
+      if (o) { const v = T(o); if (v !== o) e.setAttribute(a, v); }
+    }
+  }
+  function walk(n) {
+    if (n.nodeType === 3) text(n);
+    else if (n.nodeType === 1 && !SKIP.has(n.nodeName)) { attrs(n); n.childNodes.forEach(walk); }
+  }
+  walk(document.body);
+  document.title = T(document.title);
+  new MutationObserver((changes) => changes.forEach((c) => {
+    if (c.type === "characterData") text(c.target);
+    else if (c.type === "attributes") attrs(c.target);
+    else c.addedNodes.forEach(walk);
+  })).observe(document.body, {childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["placeholder", "title"]});
+})();
 const $ = (id) => document.getElementById(id);
 const enc = encodeURIComponent;
 let state = null;
 let dragging = {};
 const SLIDERS = [["music", "music_volume"], ["mic", "mic_volume"], ["guide", "guide_vocal"]];
+
+// Marks text from the server, so the translator leaves it exactly as it is.
+const raw = (text) => {
+  if (text === undefined || text === null || text === "") return "";
+  const node = document.createElement("span");
+  node.dataset.raw = "";
+  node.textContent = text;
+  return node;
+};
 
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
@@ -444,6 +721,7 @@ function renderService() {
     head.className = "menu-category";
     head.style.cssText = "margin:14px 0 2px;font-size:12px;letter-spacing:1.5px;color:var(--cyan);text-transform:uppercase;font-weight:700";
     head.textContent = category;
+    head.dataset.raw = "";
     rows.push(head);
     for (const p of groups.get(category)) {
       const row = document.createElement("div");
@@ -452,6 +730,7 @@ function renderService() {
       const name = document.createElement("span");
       name.style.flex = "1";
       name.textContent = `${p.name} · ${service.currency}${p.price}`;
+      name.dataset.raw = "";
       if (p.picture) {
         const pic = document.createElement("img");
         pic.src = "data:image/jpeg;base64," + p.picture;
@@ -525,7 +804,7 @@ function render() {
   board.replaceChildren();
   for (const entry of state.scoreboard || []) {
     const who = entry.singer ? `${entry.singer} · ${entry.title}` : entry.title;
-    board.append(el("div", {class: "turn"}, el("b", {}, `${entry.rank}.  ${who}`), el("span", {}, String(entry.points))));
+    board.append(el("div", {class: "turn"}, el("b", {}, raw(`${entry.rank}.  ${who}`)), el("span", {}, String(entry.points))));
   }
   $("board-box").hidden = !board.children.length;
 
@@ -572,11 +851,11 @@ function renderQueue() {
   mine.replaceChildren();
   const cur = state.current;
   if (me && cur && cur.owner === me) {
-    mine.append(el("div", {class: "turn"}, el("b", {}, cur.song.title), el("span", {}, "On now")));
+    mine.append(el("div", {class: "turn"}, el("b", {}, raw(cur.song.title)), el("span", {}, "On now")));
   }
   state.queue.forEach((item, i) => {
     if (me && item.owner === me) {
-      mine.append(el("div", {class: "turn"}, el("b", {}, item.song.title), el("span", {}, waitText(item, i))));
+      mine.append(el("div", {class: "turn"}, el("b", {}, raw(item.song.title)), el("span", {}, waitText(item, i))));
     }
   });
   $("mine-box").hidden = !mine.children.length;
@@ -665,7 +944,7 @@ function flash(frames, done, every = 80) {
 const rollFrames = (n, label = "Rolling…") =>
   Array.from({length: 12}, () => [Array.from({length: n}, () => DICE_FACES[Math.floor(Math.random() * 6)]).join(" "), label]);
 const gameButton = (text, onclick) => el("button", {onclick}, text);
-const showResult = (r, size = 54) => gameStage(r.text, r.detail || "", size);
+const showResult = (r, size = 54) => gameStage(raw(r.text), raw(r.detail), size);
 const GAMES = [
   {key: "dice", icon: "🎲", title: "Roll the Dice", color: "#d4537e", blurb: "Roll and add them up",
    rules: "Pick how many dice to roll.", start: "Roll!",
@@ -676,7 +955,7 @@ const GAMES = [
    async go() {
      const r = await playGame("spin");
      const names = [...new Set((state?.queue || []).map((i) => i.singer).filter(Boolean))];
-     flash(Array.from({length: 18}, (_, i) => [names.length ? names[i % names.length] : "🎡", "Spinning…", 40]), () => showResult(r, 48), 90);
+     flash(Array.from({length: 18}, (_, i) => [names.length ? raw(names[i % names.length]) : "🎡", "Spinning…", 40]), () => showResult(r, 48), 90);
    }},
   {key: "truthdare", icon: "💬", title: "Truth or Dare", color: "#1d9e75", blurb: "Answer, or do the dare",
    rules: "Pick Truth or Dare, then read the card out loud.", start: "Random",
@@ -692,11 +971,11 @@ const GAMES = [
        if (!(value >= 1 && value <= 100)) return;
        const r = await playGame("bomb_guess", {value});
        if (r.title.includes("BOOM")) flash([["💥", ""], ["", ""], ["💥", ""], ["", ""]], () => showResult(r, 60), 150);
-       else gameStage(r.text, r.detail || "Safe… next player!", 56);
+       else gameStage(raw(r.text), raw(r.detail) || "Safe… next player!", 56);
      });
      return [input, guess];
    },
-   async go() { const r = await playGame("bomb"); gameStage(r.text, "Guess a number in between", 56); }},
+   async go() { const r = await playGame("bomb"); gameStage(raw(r.text), "Guess a number in between", 56); }},
   {key: "liar", icon: "🎲", title: "Liar's Dice", color: "#5b3fa0", blurb: "Roll in secret, then bluff",
    rules: "Everyone rolls five dice only they can see. Bid, e.g. \"four 5s\"; ones are wild. Call liar, then Reveal.", start: "Roll My Dice",
    setup() {
@@ -706,7 +985,7 @@ const GAMES = [
      peek.addEventListener("pointerdown", showHand);
      ["pointerup", "pointerleave"].forEach((e) => peek.addEventListener(e, hide));
      this.hide = hide;
-     return [peek, gameButton("👀 Reveal all", async () => { const r = await playGame("liar_reveal"); this.hand = ""; gameStage(r.text, r.detail, 18); })];
+     return [peek, gameButton("👀 Reveal all", async () => { const r = await playGame("liar_reveal"); this.hand = ""; gameStage(raw(r.text), raw(r.detail), 18); })];
    },
    async go() { const r = await playGame("liar_roll"); this.hand = r.mine; flash(rollFrames(5), () => this.hide()); }},
   {key: "random", icon: "🎰", title: "Random Song", color: "#0e7490", blurb: "A slot machine picks your song",
@@ -723,7 +1002,7 @@ const GAMES = [
   {key: "sevens", icon: "7️⃣", title: "Sevens", color: "#1e40af", blurb: "Say PASS on sevens",
    rules: "Count up together. Any number with a 7 or divisible by 7 is \"PASS\".", start: "Next Number",
    setup() { return [gameButton("↺ Start over", async () => { await playGame("sevens_reset"); gameStage("1", "Press Next Number", 80); })]; },
-   async go() { const r = await playGame("sevens"); gameStage(r.text, r.detail || "", 90); }},
+   async go() { const r = await playGame("sevens"); gameStage(raw(r.text), raw(r.detail) || "", 90); }},
   {key: "countdown", icon: "⏱", title: "Countdown", color: "#9d174d", blurb: "A big timer on the TV",
    rules: "10 seconds on the TV for any race.", start: "Start Countdown",
    async go() { await playGame("countdown"); let n = 10; gameStage(n, "", 100); const t = setInterval(() => { n -= 1; gameStage(n > 0 ? n : "Time!", "", 100); if (n <= 0) clearInterval(t); }, 1000); }},
@@ -732,8 +1011,8 @@ const GAMES = [
    async go() { const r = await playGame("coin"); flash(Array.from({length: 12}, (_, i) => ["🪙", i % 2 ? "Tails" : "Heads", 80]), () => showResult(r, 64), 90); }},
   {key: "tournament", icon: "👑", title: "King of Singers", color: "#b45309", blurb: "Knockout rounds",
    rules: "Everyone in the queue, two per match. Sing a song with your name on it: the score card decides who goes through.", start: "Start Tournament",
-   setup() { return [gameButton("🔄 Bracket", async () => { const r = await playGame("tournament_status"); gameStage(r.text, r.detail, 30); })]; },
-   async go() { const r = await playGame("tournament"); flash(Array(6).fill(["👑", "Drawing the matches…", 80]), () => gameStage(r.text, r.detail, 30)); }},
+   setup() { return [gameButton("🔄 Bracket", async () => { const r = await playGame("tournament_status"); gameStage(raw(r.text), raw(r.detail), 30); })]; },
+   async go() { const r = await playGame("tournament"); flash(Array(6).fill(["👑", "Drawing the matches…", 80]), () => gameStage(raw(r.text), raw(r.detail), 30)); }},
   {key: "birthday", icon: "🎂", title: "Birthday", color: "#db2777", blurb: "Name on the TV, then the song",
    rules: "Type whose birthday it is: their name goes up on the TV and the birthday song plays next.", start: "Celebrate!",
    setup() { this.input = el("input", {placeholder: "Whose birthday?", maxlength: "30"}); return [this.input]; },
@@ -826,7 +1105,7 @@ function renderMixer(mixer) {
   const presets = $("presets");
   presets.replaceChildren();
   for (const preset of mixer.presets) {
-    const chip = el("button", {class: "chip", onclick: () => api(`/api/mixer/presets/${enc(preset.name)}/apply`, "POST").then(renderMixer)}, preset.name);
+    const chip = el("button", {class: "chip", onclick: () => api(`/api/mixer/presets/${enc(preset.name)}/apply`, "POST").then(renderMixer)}, raw(preset.name));
     if (preset.name === mixer.preset) chip.style.cssText = "background: var(--purple); border-color: var(--purple)";
     presets.append(chip);
   }
@@ -897,7 +1176,7 @@ async function playList(name, shuffle) {
 async function addToList(song) {
   const lists = await api("/api/playlists");
   const names = lists.map((l) => l.name);
-  const hint = names.length ? `Add to which playlist?\n${names.join("\n")}\n\n(or type a new name)` : "Name for a new playlist:";
+  const hint = names.length ? T("Add to which playlist?") + "\n" + names.join("\n") + "\n\n" + T("(or type a new name)") : T("Name for a new playlist:");
   const name = (prompt(hint, names[0] || "") || "").trim();
   if (!name) return;
   try {
@@ -920,7 +1199,7 @@ $("import-form").addEventListener("submit", async (e) => {
   } catch (e) { toast(e.message, true); }
 });
 $("save-queue").onclick = async () => {
-  const name = (prompt("Name for the playlist:") || "").trim();
+  const name = (prompt(T("Name for the playlist:")) || "").trim();
   if (!name) return;
   try { await api("/api/playlists", "POST", {name, from_queue: true}); toast(`Saved ${name}`); }
   catch (e) { toast(e.message, true); }
