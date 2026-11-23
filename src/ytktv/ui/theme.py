@@ -11,6 +11,8 @@ import re
 import shutil
 from pathlib import Path
 
+from ytktv.i18n import t
+
 # Every colour a theme sets. PINK is the main accent, CYAN the second one, PURPLE the third.
 NEON: dict[str, str] = {
     "BG": "#0d0720",
@@ -359,20 +361,20 @@ def import_logo(source: str | Path, folder: Path) -> Path:
     path = Path(source)
     suffix = path.suffix.lower()
     if suffix not in LOGO_TYPES:
-        raise ValueError("The logo must be a PNG, JPEG, WebP, GIF or BMP picture.")
+        raise ValueError(t("The logo must be a PNG, JPEG, WebP, GIF or BMP picture."))
     if not path.is_file():
-        raise ValueError("That file could not be found.")
+        raise ValueError(t("That file could not be found."))
     if path.stat().st_size > LOGO_MAX_BYTES:
-        raise ValueError("The logo must be 2 MB or smaller.")
+        raise ValueError(t("The logo must be 2 MB or smaller."))
     reader = QImageReader(str(path))
     size = reader.size()
     kind = bytes(reader.format().data()).decode(errors="replace").lower()
     if not reader.canRead() or kind not in {"png", "jpg", "jpeg", "webp", "gif", "bmp"}:
-        raise ValueError("That file is not a picture YTKTV can read.")
+        raise ValueError(t("That file is not a picture YTKTV can read."))
     if size.width() > LOGO_MAX_SIDE or size.height() > LOGO_MAX_SIDE:
-        raise ValueError("The logo must be at most 4096 pixels on each side.")
+        raise ValueError(t("The logo must be at most 4096 pixels on each side."))
     if reader.read().isNull():
-        raise ValueError("That file is not a picture YTKTV can read.")
+        raise ValueError(t("That file is not a picture YTKTV can read."))
     for old in folder.glob("venue-logo.*"):
         old.unlink(missing_ok=True)
     target = folder / f"venue-logo{suffix}"

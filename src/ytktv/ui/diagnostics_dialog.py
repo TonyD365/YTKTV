@@ -7,6 +7,8 @@ from typing import Any
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QWidget
 
+from ytktv.i18n import t
+
 
 def save_diagnostics(parent: QWidget, app: str, path: str | None, **details: Any) -> str:
     """Ask where (unless *path* is given), write the diagnostics zip, and say what to do next."""
@@ -14,15 +16,20 @@ def save_diagnostics(parent: QWidget, app: str, path: str | None, **details: Any
 
     if path is None:
         suggested = str(Path.home() / "Desktop" / diagnostics.default_name(app))
-        path, _ = QFileDialog.getSaveFileName(parent, "Save diagnostics", suggested, "Zip (*.zip)")
+        path, _ = QFileDialog.getSaveFileName(
+            parent, t("Save diagnostics"), suggested, "Zip (*.zip)"
+        )
         if not path:
             return ""
         saved = diagnostics.save(Path(path), app, **details)
         QMessageBox.information(
             parent,
-            "Diagnostics saved",
-            f"Saved {saved.name}. Attach it to a new issue at {diagnostics.ISSUES}"
-            " and say what happened.",
+            t("Diagnostics saved"),
+            t(
+                "Saved {name}. Attach it to a new issue at {issues} and say what happened.",
+                name=saved.name,
+                issues=diagnostics.ISSUES,
+            ),
         )
         return str(saved)
     return str(diagnostics.save(Path(path), app, **details))

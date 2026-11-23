@@ -23,6 +23,7 @@ from ytktv.audio.dsp import VOICES
 from ytktv.audio.phone_mic import is_phone
 from ytktv.config import MicSettings
 from ytktv.core.controller import KTVController
+from ytktv.i18n import t
 from ytktv.ui.console_widgets import Fader, Knob, Led, LedMeter, XlrJack
 
 OFF = "Off"
@@ -85,10 +86,10 @@ class ChannelStrip(_StripFrame):
         number.setObjectName("chNumber")
         layout.addWidget(number, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(XlrJack(), alignment=Qt.AlignmentFlag.AlignHCenter)
-        layout.addWidget(QLabel("MIC"), alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(QLabel(t("MIC")), alignment=Qt.AlignmentFlag.AlignHCenter)
 
         self.device = QComboBox()
-        self.device.setToolTip("Input device for this channel")
+        self.device.setToolTip(t("Input device for this channel"))
         self.device.activated.connect(self._device_chosen)
         layout.addWidget(self.device)
         layout.addSpacing(4)
@@ -140,15 +141,15 @@ class ChannelStrip(_StripFrame):
         self.fader.valueChanged.connect(lambda value: self._set("fader", value))
         layout.addWidget(self.fader, stretch=1)
 
-        self.mute = QPushButton("MUTE")
+        self.mute = QPushButton(t("MUTE"))
         self.mute.setCheckable(True)
         self.mute.setChecked(mic.mute)
         self.mute.toggled.connect(lambda on: self._set("mute", on))
         layout.addWidget(self.mute)
         self.voice = QComboBox()
-        self.voice.setToolTip("Voice effect: higher, deeper or a robot, for fun")
+        self.voice.setToolTip(t("Voice effect: higher, deeper or a robot, for fun"))
         for key, name in VOICES.items():
-            self.voice.addItem(name if key != "off" else "Voice: Off", key)
+            self.voice.addItem(t(name) if key != "off" else t("Voice: Off"), key)
         self.voice.setCurrentIndex(max(0, self.voice.findData(mic.voice)))
         self.voice.activated.connect(lambda _i: self._set("voice", self.voice.currentData()))
         layout.addWidget(self.voice)
@@ -173,17 +174,21 @@ class ChannelStrip(_StripFrame):
         if is_phone(self.mic.device) and self.mic.device not in names:
             # A phone that has left stays chosen, so it is back as soon as it reconnects.
             names = [*names, str(self.mic.device)]
-        self.device.addItems([OFF, DEFAULT, *names])
+        self.device.addItem(t(OFF), OFF)
+        self.device.addItem(t(DEFAULT), DEFAULT)
+        for name in names:
+            self.device.addItem(name, name)
         if not self.mic.enabled:
-            self.device.setCurrentText(OFF)
+            wanted = OFF
         elif self.mic.device and self.mic.device in names:
-            self.device.setCurrentText(self.mic.device)
+            wanted = self.mic.device
         else:
-            self.device.setCurrentText(DEFAULT)
+            wanted = DEFAULT
+        self.device.setCurrentIndex(max(0, self.device.findData(wanted)))
         self.device.blockSignals(False)
 
     def _device_chosen(self, _index: int) -> None:
-        choice = self.device.currentText()
+        choice = str(self.device.currentData())
         self.mic.enabled = choice != OFF
         if choice not in (OFF, DEFAULT):
             self.mic.device = choice
@@ -244,9 +249,9 @@ class MixerPanel(QWidget):
         root.setContentsMargins(16, 10, 16, 14)
         root.setSpacing(6)
         head = QHBoxLayout()
-        brand = QLabel("Professional")
+        brand = QLabel(t("Professional"))
         brand.setObjectName("brand")
-        sub = QLabel("4-channel karaoke mixing console with effects processor")
+        sub = QLabel(t("4-channel karaoke mixing console with effects processor"))
         sub.setObjectName("brandSub")
         head.addWidget(brand)
         head.addWidget(sub)
@@ -277,53 +282,55 @@ class MixerPanel(QWidget):
         self.lcd.setTextFormat(Qt.TextFormat.PlainText)
         master.addWidget(self.lcd)
 
-        master.addWidget(QLabel("MAIN OUT"))
+        master.addWidget(QLabel(t("MAIN OUT")))
         self.output = QComboBox()
-        self.output.setToolTip("Output device for music and microphones")
+        self.output.setToolTip(t("Output device for music and microphones"))
         self.output.activated.connect(self._output_chosen)
         master.addWidget(self.output)
 
         buttons = QHBoxLayout()
-        self.monitor = QPushButton("MIC ON")
+        self.monitor = QPushButton(t("MIC ON"))
         self.monitor.setCheckable(True)
         self.monitor.setChecked(settings.mic_monitor)
-        self.monitor.setToolTip("Mix the microphones into the output")
+        self.monitor.setToolTip(t("Mix the microphones into the output"))
         self.monitor.toggled.connect(self._monitor_toggled)
-        rescan = QPushButton("RESCAN")
-        rescan.setToolTip("Look for newly connected audio devices")
+        rescan = QPushButton(t("RESCAN"))
+        rescan.setToolTip(t("Look for newly connected audio devices"))
         rescan.clicked.connect(self.refresh_devices)
         buttons.addWidget(self.monitor)
         buttons.addWidget(rescan)
         master.addLayout(buttons)
         self.guard = QComboBox()
         for text, level in (
-            ("Feedback guard: off", ""),
-            ("Feedback guard: low", "low"),
-            ("Feedback guard: medium", "medium"),
-            ("Feedback guard: high", "high"),
+            (t("Feedback guard: off"), ""),
+            (t("Feedback guard: low"), "low"),
+            (t("Feedback guard: medium"), "medium"),
+            (t("Feedback guard: high"), "high"),
         ):
             self.guard.addItem(text, level)
         self.guard.setToolTip(
-            "Finds the squeal of a microphone feeding back and cuts just that frequency.\n"
-            "Low: only a tone that keeps getting louder, or lasts a full second.\n"
-            "Medium: any steady pure tone after a tenth of a second (also a whistle).\n"
-            "High: quicker and less picky still."
+            t(
+                "Finds the squeal of a microphone feeding back and cuts just that frequency.\n"
+                "Low: only a tone that keeps getting louder, or lasts a full second.\n"
+                "Medium: any steady pure tone after a tenth of a second (also a whistle).\n"
+                "High: quicker and less picky still."
+            )
         )
         self.guard.activated.connect(self._guard_chosen)
         self._show_guard()
         master.addWidget(self.guard)
 
-        master.addWidget(QLabel("EFFECT PRESET"))
+        master.addWidget(QLabel(t("EFFECT PRESET")))
         self.preset = QComboBox()
-        self.preset.setToolTip("EQ, reverb and echo for every microphone channel")
+        self.preset.setToolTip(t("EQ, reverb and echo for every microphone channel"))
         self.preset.activated.connect(self._preset_chosen)
         master.addWidget(self.preset)
         preset_buttons = QHBoxLayout()
-        save = QPushButton("SAVE AS")
-        save.setToolTip("Save channel 1's EQ, reverb and echo as a new preset")
+        save = QPushButton(t("SAVE AS"))
+        save.setToolTip(t("Save channel 1's EQ, reverb and echo as a new preset"))
         save.clicked.connect(self._save_preset)
-        self.delete_preset = QPushButton("DELETE")
-        self.delete_preset.setToolTip("Delete the selected saved preset")
+        self.delete_preset = QPushButton(t("DELETE"))
+        self.delete_preset.setToolTip(t("Delete the selected saved preset"))
         self.delete_preset.clicked.connect(self._delete_preset)
         preset_buttons.addWidget(save)
         preset_buttons.addWidget(self.delete_preset)
@@ -334,12 +341,12 @@ class MixerPanel(QWidget):
         meter_column = QVBoxLayout()
         meter_column.setSpacing(2)
         self.meter = LedMeter()
-        self.meter.setToolTip("Total output level: music and microphones together")
+        self.meter.setToolTip(t("Total output level: music and microphones together"))
         meter_column.addWidget(self.meter, stretch=1)
-        meter_column.addWidget(QLabel("OUTPUT"), alignment=Qt.AlignmentFlag.AlignHCenter)
+        meter_column.addWidget(QLabel(t("OUTPUT")), alignment=Qt.AlignmentFlag.AlignHCenter)
         buses.addLayout(meter_column)
-        self.music = _BusStrip("MUSIC", "#8c8c92")
-        self.mic_bus = _BusStrip("MICS", "#ececec")
+        self.music = _BusStrip(t("MUSIC"), "#8c8c92")
+        self.mic_bus = _BusStrip(t("MICS"), "#ececec")
         self.main = _BusStrip("L   MAIN   R", "#e02a2a", count=2)
         for bus, name in ((self.music, "music"), (self.mic_bus, "mic"), (self.main, "master")):
             for fader in bus.faders:
@@ -365,14 +372,17 @@ class MixerPanel(QWidget):
         self.output.blockSignals(True)
         self.output.clear()
         outputs = devices.list_outputs()
-        self.output.addItems([DEFAULT, *outputs])
+        self.output.addItem(t(DEFAULT), DEFAULT)
+        for name in outputs:
+            self.output.addItem(name, name)
         current = self.controller.settings.output_device
-        self.output.setCurrentText(current if current in outputs else DEFAULT)
+        wanted = current if current in outputs else DEFAULT
+        self.output.setCurrentIndex(max(0, self.output.findData(wanted)))
         self.output.blockSignals(False)
         self._update_lcd()
 
     def _output_chosen(self, _index: int) -> None:
-        choice = self.output.currentText()
+        choice = str(self.output.currentData())
         self.controller.set_output_device(None if choice == DEFAULT else choice)
         self._update_lcd()
 
@@ -391,7 +401,7 @@ class MixerPanel(QWidget):
             self.controller.apply_preset(str(name))
 
     def _save_preset(self) -> None:
-        name, accepted = QInputDialog.getText(self, "Save preset", "Name for this preset:")
+        name, accepted = QInputDialog.getText(self, t("Save preset"), t("Name for this preset:"))
         if not accepted or not name.strip():
             return
         try:
@@ -402,15 +412,15 @@ class MixerPanel(QWidget):
     def _delete_preset(self) -> None:
         name = self.preset.currentData()
         if name and not self.controller.delete_preset(str(name)):
-            self.controller.toast("Built-in presets cannot be deleted", error=True)
+            self.controller.toast(t("Built-in presets cannot be deleted"), error=True)
 
     def _refresh_presets(self) -> None:
         state = self.controller.mixer_state()
         self.preset.blockSignals(True)
         self.preset.clear()
-        self.preset.addItem("Custom", "")
+        self.preset.addItem(t("Custom"), "")
         for preset in state["presets"]:
-            self.preset.addItem(preset["name"], preset["name"])
+            self.preset.addItem(t(preset["name"]), preset["name"])
         self.preset.setCurrentIndex(max(0, self.preset.findData(state["preset"])))
         self.preset.blockSignals(False)
         saved = {p["name"] for p in state["presets"] if not p["builtin"]}

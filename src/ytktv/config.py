@@ -65,6 +65,7 @@ class Settings:
     smart_lights: str = "off"  # off, wled or hue (see smart_lights.KINDS)
     smart_lights_host: str = ""  # the WLED controller's or the Hue bridge's address
     hue_key: str = ""  # what the Hue bridge gave when paired
+    language: str = ""  # a code from i18n.LANGUAGES; "" follows the system's language
     text_size: str = "Normal"  # Normal, Large or Extra large (see theme.TEXT_SIZES)
     theme: str = "Neon"  # the console's colours (see theme.THEMES)
     accent_color: str = ""  # the venue's own accent colour, #rrggbb, or "" for the theme's

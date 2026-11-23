@@ -9,6 +9,7 @@ from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ytktv import cast
+from ytktv.i18n import t
 from ytktv.ui.support import run_async
 
 
@@ -79,34 +80,36 @@ class CastCard(QWidget):
         head = QLabel("<b>Chromecast</b>")
         layout.addWidget(head)
         note = QLabel(
-            "Casting sends the whole MV screen, lyrics and effects included, to a Chromecast"
-            " or a TV with Chromecast built in. The picture arrives about 1–3 seconds late,"
-            " and the sound stays on this computer's speakers: raise the picture delay above"
-            " to its highest so the lyrics stay closer to the singing."
+            t(
+                "Casting sends the whole MV screen, lyrics and effects included, to a Chromecast"
+                " or a TV with Chromecast built in. The picture arrives about 1–3 seconds late,"
+                " and the sound stays on this computer's speakers: raise the picture delay above"
+                " to its highest so the lyrics stay closer to the singing."
+            )
         )
         note.setObjectName("muted")
         note.setWordWrap(True)
         layout.addWidget(note)
         row = QHBoxLayout()
         self.devices = QComboBox()
-        self.devices.setPlaceholderText("No Chromecast found yet")
-        self.search_button = QPushButton("Search")
+        self.devices.setPlaceholderText(t("No Chromecast found yet"))
+        self.search_button = QPushButton(t("Search"))
         self.search_button.clicked.connect(self.search)
-        self.cast_button = QPushButton("Cast to Chromecast")
+        self.cast_button = QPushButton(t("Cast to Chromecast"))
         self.cast_button.setProperty("accent", True)
         self.cast_button.clicked.connect(self.toggle)
         row.addWidget(self.devices, stretch=1)
         row.addWidget(self.search_button)
         row.addWidget(self.cast_button)
         layout.addLayout(row)
-        self.status = QLabel("Not casting")
+        self.status = QLabel(t("Not casting"))
         self.status.setObjectName("muted")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
 
     def search(self) -> None:
         self.search_button.setEnabled(False)
-        self.status.setText("Looking for Chromecasts…")
+        self.status.setText(t("Looking for Chromecasts…"))
 
         def found(devices: list[cast.Device]) -> None:
             self.search_button.setEnabled(True)
@@ -119,12 +122,14 @@ class CastCard(QWidget):
                 self.devices.setCurrentIndex(index)
             if self.caster.state != cast.CASTING:
                 self.status.setText(
-                    f"Found {len(devices)}." if devices else "No Chromecast on this network."
+                    t("Found {count}.", count=len(devices))
+                    if devices
+                    else t("No Chromecast on this network.")
                 )
 
         def failed(exc: Exception) -> None:
             self.search_button.setEnabled(True)
-            self.status.setText(f"Could not search: {exc}")
+            self.status.setText(t("Could not search: {exc}", exc=exc))
 
         run_async(self._discover, found, failed)
 
@@ -134,7 +139,7 @@ class CastCard(QWidget):
             return
         device = self.devices.currentData()
         if not isinstance(device, cast.Device):
-            self.status.setText("Search, then pick a Chromecast first.")
+            self.status.setText(t("Search, then pick a Chromecast first."))
             return
         self.grabber.start()
         self.cast_button.setEnabled(False)
@@ -148,7 +153,7 @@ class CastCard(QWidget):
         self.status.setText(text)
         busy = state in (cast.CASTING, cast.CONNECTING)
         self.cast_button.setEnabled(state != cast.CONNECTING)
-        self.cast_button.setText("Stop Casting" if busy else "Cast to Chromecast")
+        self.cast_button.setText(t("Stop Casting") if busy else t("Cast to Chromecast"))
         self.devices.setEnabled(not busy)
         if not busy:
             self.grabber.stop()

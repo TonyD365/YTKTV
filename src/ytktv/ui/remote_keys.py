@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QComboBox, QLineEd
 
 from ytktv.core.controller import KTVController
 from ytktv.core.models import VocalMode
+from ytktv.i18n import N_, t
 
 K = Qt.Key
 STEP = 5  # volume steps, out of 100
@@ -22,20 +23,20 @@ STEP = 5  # volume steps, out of 100
 # (keys, what it does) — shown in Settings, so keep them in a readable order.
 KEYS: tuple[tuple[tuple[Qt.Key, ...], str], ...] = (
     ((K.Key_Space, K.Key_MediaPlay, K.Key_MediaPause, K.Key_MediaTogglePlayPause, K.Key_Play),
-     "Play / pause"),
-    ((K.Key_N, K.Key_MediaNext, K.Key_Forward), "Next song"),
-    ((K.Key_R, K.Key_MediaPrevious, K.Key_Back), "Sing it again"),
-    ((K.Key_V, K.Key_Return, K.Key_Enter, K.Key_Select), "Original / instrumental"),
-    ((K.Key_Up, K.Key_Plus, K.Key_Equal), "Music louder"),
-    ((K.Key_Down, K.Key_Minus), "Music softer"),
-    ((K.Key_BracketRight, K.Key_Right), "Key up"),
-    ((K.Key_BracketLeft, K.Key_Left), "Key down"),
-    ((K.Key_L,), "Lyrics on / off"),
-    ((K.Key_S,), "Scoring on / off"),
+     N_("Play / pause")),
+    ((K.Key_N, K.Key_MediaNext, K.Key_Forward), N_("Next song")),
+    ((K.Key_R, K.Key_MediaPrevious, K.Key_Back), N_("Sing it again")),
+    ((K.Key_V, K.Key_Return, K.Key_Enter, K.Key_Select), N_("Original / instrumental")),
+    ((K.Key_Up, K.Key_Plus, K.Key_Equal), N_("Music louder")),
+    ((K.Key_Down, K.Key_Minus), N_("Music softer")),
+    ((K.Key_BracketRight, K.Key_Right), N_("Key up")),
+    ((K.Key_BracketLeft, K.Key_Left), N_("Key down")),
+    ((K.Key_L,), N_("Lyrics on / off")),
+    ((K.Key_S,), N_("Scoring on / off")),
 )  # fmt: skip
 KEY_NAMES = {
-    K.Key_Space: "Space", K.Key_MediaPlay: "▶", K.Key_MediaTogglePlayPause: "⏯",
-    K.Key_MediaNext: "⏭", K.Key_MediaPrevious: "⏮", K.Key_Return: "Enter / OK",
+    K.Key_Space: N_("Space"), K.Key_MediaPlay: "▶", K.Key_MediaTogglePlayPause: "⏯",
+    K.Key_MediaNext: "⏭", K.Key_MediaPrevious: "⏮", K.Key_Return: N_("Enter / OK"),
     K.Key_Up: "↑", K.Key_Down: "↓", K.Key_Right: "→", K.Key_Left: "←",
     K.Key_Plus: "+", K.Key_Minus: "−", K.Key_BracketRight: "]", K.Key_BracketLeft: "[",
     K.Key_N: "N", K.Key_R: "R", K.Key_V: "V", K.Key_L: "L", K.Key_S: "S",
@@ -48,7 +49,7 @@ def key_help() -> list[tuple[str, str]]:
     rows = []
     for keys, action in KEYS:
         names = [KEY_NAMES[k] for k in keys if k in KEY_NAMES]
-        rows.append(("  ".join(names), action))
+        rows.append(("  ".join(t(n) for n in names), t(action)))
     return rows
 
 

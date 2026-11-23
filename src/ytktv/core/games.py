@@ -4,23 +4,25 @@ from __future__ import annotations
 
 import random
 
+from ytktv.i18n import N_, t
+
 DICE = "⚀⚁⚂⚃⚄⚅"
 
 TRUTHS = (
-    "Which song do you secretly sing in the shower?",
-    "Who in this room would you duet with?",
-    "What is the most embarrassing song on your phone?",
-    "What was your worst karaoke moment?",
-    "Which singer did you have a crush on?",
-    "What song always makes you cry?",
+    N_("Which song do you secretly sing in the shower?"),
+    N_("Who in this room would you duet with?"),
+    N_("What is the most embarrassing song on your phone?"),
+    N_("What was your worst karaoke moment?"),
+    N_("Which singer did you have a crush on?"),
+    N_("What song always makes you cry?"),
 )
 DARES = (
-    "Sing the next chorus in a whisper.",
-    "Dance through the whole next song.",
-    "Sing the next song with your eyes closed.",
-    "Do your best impression of the original singer.",
-    "Sing one line in a different language.",
-    "Pick a duet partner and sing the next song together.",
+    N_("Sing the next chorus in a whisper."),
+    N_("Dance through the whole next song."),
+    N_("Sing the next song with your eyes closed."),
+    N_("Do your best impression of the original singer."),
+    N_("Sing one line in a different language."),
+    N_("Pick a duet partner and sing the next song together."),
 )
 
 
@@ -29,9 +31,9 @@ def roll_dice(count: int = 5, rng: random.Random | None = None) -> dict[str, str
     faces = [rng.randrange(6) for _ in range(count)]
     total = sum(faces) + count
     return {
-        "title": "🎲 Dice",
+        "title": t("🎲 Dice"),
         "text": " ".join(DICE[f] for f in faces),
-        "detail": f"Total {total}",
+        "detail": t("Total {total}", total=total),
     }
 
 
@@ -39,65 +41,77 @@ def spin(names: list[str], rng: random.Random | None = None) -> dict[str, str]:
     rng = rng or random.Random()
     names = [n for n in dict.fromkeys(n.strip() for n in names) if n]
     if not names:
-        return {"title": "🎡 Spin", "text": "Add singers first", "detail": ""}
-    return {"title": "🎡 Next to sing", "text": rng.choice(names), "detail": ""}
+        return {"title": t("🎡 Spin"), "text": t("Add singers first"), "detail": ""}
+    return {"title": t("🎡 Next to sing"), "text": rng.choice(names), "detail": ""}
 
 
 def truth_or_dare(kind: str, rng: random.Random | None = None) -> dict[str, str]:
     rng = rng or random.Random()
     if kind == "truth":
-        return {"title": "💬 Truth", "text": rng.choice(TRUTHS), "detail": ""}
-    return {"title": "🔥 Dare", "text": rng.choice(DARES), "detail": ""}
+        return {"title": t("💬 Truth"), "text": t(rng.choice(TRUTHS)), "detail": ""}
+    return {"title": t("🔥 Dare"), "text": t(rng.choice(DARES)), "detail": ""}
 
 
 CHALLENGES = (
-    "Sing the next song in a baby voice.",
-    "Sing the next song as an opera singer.",
-    "Duet the next song with the person on your left.",
-    "Sing the next chorus without looking at the lyrics.",
-    "Everyone sings the next chorus together.",
-    "Sing the next song while doing a dance move on every line.",
-    "Swap the next song with the person on your right.",
-    "Sing the next song in slow motion (Tempo down).",
-    "Sing the next song one key higher.",
-    "Introduce the next song like a radio DJ first.",
+    N_("Sing the next song in a baby voice."),
+    N_("Sing the next song as an opera singer."),
+    N_("Duet the next song with the person on your left."),
+    N_("Sing the next chorus without looking at the lyrics."),
+    N_("Everyone sings the next chorus together."),
+    N_("Sing the next song while doing a dance move on every line."),
+    N_("Swap the next song with the person on your right."),
+    N_("Sing the next song in slow motion (Tempo down)."),
+    N_("Sing the next song one key higher."),
+    N_("Introduce the next song like a radio DJ first."),
 )
-LOTS = ("Drink!", "Sing next!", "Safe", "Safe", "Pick someone to drink", "Everyone drinks!")
+LOTS = (
+    N_("Drink!"),
+    N_("Sing next!"),
+    N_("Safe"),
+    N_("Safe"),
+    N_("Pick someone to drink"),
+    N_("Everyone drinks!"),
+)
 
 
 def challenge(rng: random.Random | None = None) -> dict[str, str]:
     rng = rng or random.Random()
-    return {"title": "🎤 Challenge card", "text": rng.choice(CHALLENGES), "detail": ""}
+    return {"title": t("🎤 Challenge card"), "text": t(rng.choice(CHALLENGES)), "detail": ""}
 
 
 def draw_lots(names: list[str], rng: random.Random | None = None) -> dict[str, str]:
     rng = rng or random.Random()
     names = [n for n in dict.fromkeys(n.strip() for n in names) if n]
-    who = rng.choice(names) if names else "You"
-    return {"title": "🥢 Draw lots", "text": f"{who}: {rng.choice(LOTS)}", "detail": ""}
+    who = rng.choice(names) if names else t("You")
+    return {"title": t("🥢 Draw lots"), "text": f"{who}: {t(rng.choice(LOTS))}", "detail": ""}
 
 
 def high_low(names: list[str], rng: random.Random | None = None) -> dict[str, str]:
     """Everyone rolls one die: the highest picks the next song, the lowest drinks."""
     rng = rng or random.Random()
-    names = [n for n in dict.fromkeys(n.strip() for n in names) if n] or ["Player 1", "Player 2"]
+    names = [n for n in dict.fromkeys(n.strip() for n in names) if n] or [
+        t("Player 1"),
+        t("Player 2"),
+    ]
     if len(names) == 1:
-        names.append("The machine")
+        names.append(t("The machine"))
     rolls = {name: rng.randrange(6) for name in names}
     best, worst = max(rolls.values()), min(rolls.values())
     winners = [n for n, r in rolls.items() if r == best]
     losers = [n for n, r in rolls.items() if r == worst]
     return {
-        "title": "🎲 High or low",
+        "title": t("🎲 High or low"),
         # Numbers, not dice faces: next to names the faces are too small to read.
         "text": "   ".join(f"{n} {r + 1}" for n, r in rolls.items()),
-        "detail": f"High: {', '.join(winners)}  ·  Low: {', '.join(losers)}",
+        "detail": t(
+            "High: {value}  ·  Low: {value2}", value=", ".join(winners), value2=", ".join(losers)
+        ),
     }
 
 
 def coin(rng: random.Random | None = None) -> dict[str, str]:
     rng = rng or random.Random()
-    return {"title": "🪙 Coin", "text": rng.choice(("Heads", "Tails")), "detail": ""}
+    return {"title": t("🪙 Coin"), "text": rng.choice((t("Heads"), t("Tails"))), "detail": ""}
 
 
 def is_seven(n: int) -> bool:
@@ -113,12 +127,12 @@ class Sevens:
     def next(self) -> dict[str, str]:
         self.n += 1
         if is_seven(self.n):
-            return {"title": "7️⃣ Sevens", "text": "PASS!", "detail": f"({self.n})"}
-        return {"title": "7️⃣ Sevens", "text": str(self.n), "detail": "Next person!"}
+            return {"title": t("7️⃣ Sevens"), "text": t("PASS!"), "detail": f"({self.n})"}
+        return {"title": t("7️⃣ Sevens"), "text": str(self.n), "detail": t("Next person!")}
 
     def reset(self) -> dict[str, str]:
         self.n = 0
-        return {"title": "7️⃣ Sevens", "text": "Start from 1", "detail": ""}
+        return {"title": t("7️⃣ Sevens"), "text": t("Start from 1"), "detail": ""}
 
 
 class NumberBomb:
@@ -131,25 +145,25 @@ class NumberBomb:
     def start(self) -> dict[str, str]:
         self.low, self.high = 1, 100
         self.secret = self.rng.randint(2, 99)
-        return {"title": "💣 Number bomb", "text": "1 – 100", "detail": "Guess a number!"}
+        return {"title": t("💣 Number bomb"), "text": "1 – 100", "detail": t("Guess a number!")}
 
     def guess(self, n: int, who: str = "") -> dict[str, str]:
         if not self.low < n < self.high:
             return {
-                "title": "💣 Number bomb",
+                "title": t("💣 Number bomb"),
                 "text": f"{self.low} – {self.high}",
-                "detail": f"{n} is not in the range",
+                "detail": t("{n} is not in the range", n=n),
             }
         if n == self.secret:
-            boomed = f"{who} hit the bomb!" if who else "You hit the bomb!"
-            result = {"title": "💥 BOOM!", "text": str(n), "detail": boomed}
+            boomed = t("{who} hit the bomb!", who=who) if who else t("You hit the bomb!")
+            result = {"title": t("💥 BOOM!"), "text": str(n), "detail": boomed}
             self.start()
             return result
         if n < self.secret:
             self.low = n
         else:
             self.high = n
-        return {"title": "💣 Number bomb", "text": f"{self.low} – {self.high}", "detail": ""}
+        return {"title": t("💣 Number bomb"), "text": f"{self.low} – {self.high}", "detail": ""}
 
 
 class LiarsDice:
@@ -168,20 +182,20 @@ class LiarsDice:
 
     def public(self) -> dict[str, str]:
         return {
-            "title": "🎲 Liar's dice",
-            "text": f"{len(self.hands)} players rolled",
-            "detail": "Make your bids, then reveal",
+            "title": t("🎲 Liar's dice"),
+            "text": t("{count} players rolled", count=len(self.hands)),
+            "detail": t("Make your bids, then reveal"),
         }
 
     def reveal(self) -> dict[str, str]:
         if not self.hands:
-            return {"title": "🎲 Liar's dice", "text": "Nobody rolled yet", "detail": ""}
+            return {"title": t("🎲 Liar's dice"), "text": t("Nobody rolled yet"), "detail": ""}
         counts = [sum(hand.count(face) for hand in self.hands.values()) for face in range(6)]
-        hands = "   ".join(f"{p}: {self.hand(p)}" for p in self.hands)
+        hands = "   ".join(f"{t(p) if p == 'Console' else p}: {self.hand(p)}" for p in self.hands)
         # Ones are wild in liar's dice: they count as every other face.
         totals = "  ".join(f"{DICE[f]}×{counts[f] + (counts[0] if f else 0)}" for f in range(6))
         self.hands = {}
-        return {"title": "🎲 Liar's dice — reveal", "text": hands, "detail": totals}
+        return {"title": t("🎲 Liar's dice — reveal"), "text": hands, "detail": totals}
 
 
 class Tournament:
@@ -190,7 +204,7 @@ class Tournament:
     Scores come from the score card when a match's singer finishes a song (or are typed in).
     """
 
-    TITLE = "👑 King of Singers"
+    TITLE = N_("👑 King of Singers")
 
     def __init__(self, rng: random.Random | None = None) -> None:
         self.rng = rng or random.Random()
@@ -226,17 +240,21 @@ class Tournament:
 
     def public(self) -> dict[str, str]:
         if self.champion:
-            return {"title": self.TITLE, "text": f"👑 {self.champion}", "detail": "Champion!"}
+            return {"title": t(self.TITLE), "text": f"👑 {self.champion}", "detail": t("Champion!")}
         match = self.current()
         if match is None:
-            return {"title": self.TITLE, "text": "Add singers and start", "detail": ""}
+            return {"title": t(self.TITLE), "text": t("Add singers and start"), "detail": ""}
         scored = "  ·  ".join(f"{n} {self.scores[n]}" for n in match if n in self.scores)
-        bye = f"  ·  {self.winners[0]} goes through" if self.winners and self.index == 0 else ""
+        bye = (
+            t("  ·  {winner} goes through", winner=self.winners[0])
+            if self.winners and self.index == 0
+            else ""
+        )
         return {
-            "title": f"{self.TITLE} · Round {self.round}",
+            "title": t("{title} · Round {round}", title=t(self.TITLE), round=self.round),
             "text": f"{match[0]}  vs  {match[1]}",
-            "detail": f"Match {self.index + 1} of {len(self.matches)}"
-            + (f"  ·  {scored}" if scored else "  ·  each sings one song")
+            "detail": t("Match {value} of {count}", value=self.index + 1, count=len(self.matches))
+            + (f"  ·  {scored}" if scored else t("  ·  each sings one song"))
             + bye,
         }
 
@@ -253,7 +271,7 @@ class Tournament:
             return self.public()
         a, b = match
         if self.scores[a] == self.scores[b]:
-            winner, how = self.rng.choice(match), "A tie! A coin decides"
+            winner, how = self.rng.choice(match), t("A tie! A coin decides")
         else:
             winner = a if self.scores[a] > self.scores[b] else b
             how = f"{a} {self.scores[a]} – {self.scores[b]} {b}"
@@ -261,24 +279,33 @@ class Tournament:
         self.index, self.scores = self.index + 1, {}
         if self.index < len(self.matches):
             following = self.public()
-            return {"title": self.TITLE, "text": f"🏆 {winner} wins",
-                    "detail": f"{how}  ·  Next: {following['text']}"}  # fmt: skip
+            detail = t("{how}  ·  Next: {text}", how=how, text=following["text"])
+            return {"title": t(self.TITLE), "text": t("🏆 {winner} wins", winner=winner),
+                    "detail": detail}  # fmt: skip
         if len(self.winners) == 1:
             self.champion = winner
-            return {"title": self.TITLE, "text": f"👑 {winner}", "detail": f"{how}  ·  Champion!"}
+            return {
+                "title": t(self.TITLE),
+                "text": f"👑 {winner}",
+                "detail": t("{how}  ·  Champion!", how=how),
+            }
         survivors = list(self.winners)
         self._next_round(survivors)
-        return {"title": self.TITLE, "text": f"🏆 {winner} wins",
-                "detail": f"{how}  ·  Round {self.round}: {self.public()['text']}"}  # fmt: skip
+        detail = t(
+            "{how}  ·  Round {round}: {text}", how=how, round=self.round, text=self.public()["text"]
+        )
+        return {"title": t(self.TITLE), "text": t("🏆 {winner} wins", winner=winner),
+                "detail": detail}  # fmt: skip
 
 
 BIRTHDAY_SEARCH = "Happy Birthday to You karaoke"  # the song queued for the birthday singer
 
 
 def birthday(name: str) -> dict[str, str]:
-    name = name.strip() or "you"
+    name = name.strip()
+    name = t("you") if name in ("", "you") else name
     return {
-        "title": "🎂 Happy Birthday!",
+        "title": t("🎂 Happy Birthday!"),
         "text": f"🎉 {name} 🎉",
-        "detail": "Everyone sing along!",
+        "detail": t("Everyone sing along!"),
     }

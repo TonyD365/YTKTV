@@ -6,14 +6,15 @@ from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QPainter, QPaintEvent
 from PySide6.QtWidgets import QWidget
 
+from ytktv.i18n import N_, t
 from ytktv.ui.support import fade_in, fade_out
 
 SEGMENTS = 16
 # What each level is called and its symbol.
 KINDS = {
-    "music_volume": ("Music", "🔊"),
-    "mic_volume": ("Microphones", "🎤"),
-    "guide_vocal": ("Guide vocal", "🎵"),
+    "music_volume": (N_("Music"), "🔊"),
+    "mic_volume": (N_("Microphones"), "🎤"),
+    "guide_vocal": (N_("Guide vocal"), "🎵"),
 }
 
 
@@ -62,6 +63,7 @@ class LevelHud(QWidget):
         painter.setBrush(QColor(20, 12, 44, 225))
         painter.drawRoundedRect(QRectF(0, 0, w, h), h * 0.3, h * 0.3)
         name, symbol = KINDS.get(self._kind, ("", ""))
+        name = t(name) if name else ""
         font = QFont()
         font.setPixelSize(int(h * 0.42))
         painter.setFont(font)

@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ytktv.core import recap
+from ytktv.i18n import t
 from ytktv.ui.support import qr_pixmap
 
 
@@ -27,7 +28,7 @@ class RecapCard(QWidget):
         outer.setContentsMargins(48, 40, 48, 40)
         outer.setSpacing(48)
         text = QVBoxLayout()
-        title = QLabel("Thanks for singing!")
+        title = QLabel(t("Thanks for singing!"))
         title.setStyleSheet("color: #ff4fd8; font-size: 40px; font-weight: 800;")
         text.addWidget(title)
         text.addSpacing(16)
@@ -50,7 +51,7 @@ class RecapCard(QWidget):
         self.qr = QLabel()
         self.qr.setPixmap(qr_pixmap(url, 220))
         self.qr.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint = QLabel("Scan to keep tonight's recap")
+        hint = QLabel(t("Scan to keep tonight's recap"))
         hint.setStyleSheet("color: #4ff0ff; font-size: 18px;")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         side.addStretch()

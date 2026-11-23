@@ -26,6 +26,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 
 from ytktv.core.scenes import Scene
+from ytktv.i18n import t
 from ytktv.icon_set import split
 from ytktv.ui import icons, theme
 from ytktv.youtube.lyrics import (
@@ -875,7 +876,7 @@ class ScoreCard(_Overlay):
             font, width = sized(pixel_size, weight, text, w * 0.9)
             _outlined_text(painter, font, text, QPointF((w - width) / 2, y), fill)
 
-        centred("SCORE", h * 0.09, h * 0.17, QColor(theme.CYAN), QFont.Weight.Bold)
+        centred(t("SCORE"), h * 0.09, h * 0.17, QColor(theme.CYAN), QFont.Weight.Bold)
         glow = QLinearGradient(w * 0.3, 0, w * 0.7, 0)
         glow.setColorAt(0.0, QColor(theme.PINK))
         glow.setColorAt(1.0, QColor(theme.CYAN))
@@ -886,7 +887,7 @@ class ScoreCard(_Overlay):
         if not rows:
             return
         y = h * (1.0 + BOARD_HEAD * 0.45)
-        centred("TONIGHT'S BEST", h * 0.05, y, QColor(theme.CYAN), QFont.Weight.Bold)
+        centred(t("TONIGHT'S BEST"), h * 0.05, y, QColor(theme.CYAN), QFont.Weight.Bold)
         left, right = w * 0.08, w * 0.92
         for entry in self._board:
             y += h * BOARD_ROW

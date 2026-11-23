@@ -19,16 +19,17 @@ from PySide6.QtWidgets import (
 )
 
 from ytktv.core.models import Song
+from ytktv.i18n import N_, t
 from ytktv.ui.support import ThumbnailLoader, fade, format_time
 
 THUMB_W, THUMB_H = 128, 72
 
 STEM_TAGS = {
-    "queued": ("busy", "Instrumental queued"),
-    "downloading": ("busy", "Preparing instrumental"),
-    "separating": ("busy", "Separating vocals"),
-    "ready": ("ready", "Instrumental ready"),
-    "failed": ("", "No instrumental"),
+    "queued": ("busy", N_("Instrumental queued")),
+    "downloading": ("busy", N_("Preparing instrumental")),
+    "separating": ("busy", N_("Separating vocals")),
+    "ready": ("ready", N_("Instrumental ready")),
+    "failed": ("", N_("No instrumental")),
 }
 
 # (button text, style property or "", callback)
@@ -52,7 +53,7 @@ class _Grip(QLabel):
         self.setFixedWidth(26)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
-        self.setToolTip("Drag to change the order")
+        self.setToolTip(t("Drag to change the order"))
         self._row = row
 
     def _list(self) -> SongList | None:

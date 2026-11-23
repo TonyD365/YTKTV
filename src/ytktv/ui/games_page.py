@@ -26,7 +26,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ytktv import i18n
 from ytktv.core import games
+from ytktv.i18n import N_, t
 from ytktv.ui import icons
 from ytktv.ui.pages import Context, Page
 from ytktv.ui.support import run_async
@@ -59,7 +61,7 @@ class GameScreen(QWidget):
     blurb = ""  # one line for the lobby
     rules = ""
     colour = "#7f77dd"
-    start_text = "Start Game"
+    start_text = N_("Start Game")
 
     def __init__(self, lobby: GamesPage) -> None:
         super().__init__()
@@ -72,16 +74,16 @@ class GameScreen(QWidget):
         column = QVBoxLayout(self)
         column.setSpacing(14)
         top = QHBoxLayout()
-        back = QPushButton("‹  All games")
+        back = QPushButton(t("‹  All games"))
         back.clicked.connect(lobby.show_lobby)
-        heading = QLabel(f"{self.icon}  {self.title}")
+        heading = QLabel(f"{self.icon}  {t(self.title)}")
         heading.setStyleSheet("color: white; font-size: 28px; font-weight: 800;")
         top.addWidget(back)
         top.addSpacing(12)
         top.addWidget(heading)
         top.addStretch()
         column.addLayout(top)
-        rules = QLabel(self.rules)
+        rules = QLabel(t(self.rules))
         rules.setWordWrap(True)
         rules.setObjectName("muted")
         rules.setStyleSheet("font-size: 15px;")
@@ -97,7 +99,7 @@ class GameScreen(QWidget):
         self.controls = QHBoxLayout()
         self.controls.setSpacing(10)
         column.addLayout(self.controls)
-        self.start_button = QPushButton(self.start_text)
+        self.start_button = QPushButton(t(self.start_text))
         self.start_button.setObjectName("accent")
         self.start_button.setMinimumHeight(56)
         self.start_button.setStyleSheet(
@@ -114,7 +116,7 @@ class GameScreen(QWidget):
         """Add the game's own controls to self.controls."""
 
     def reset(self) -> None:
-        self.show_stage(self.icon, "Press Start Game")
+        self.show_stage(self.icon, t("Press Start Game"))
 
     def start(self) -> None:
         raise NotImplementedError
@@ -158,13 +160,13 @@ class GameScreen(QWidget):
 
 
 class DiceGame(GameScreen):
-    key, icon, title, colour = "dice", "🎲", "Roll the Dice", "#d4537e"
-    blurb = "Roll up to six dice and add them up"
-    rules = "Pick how many dice to roll. Highest total wins, or make up your own rule."
-    start_text = "Roll!"
+    key, icon, title, colour = "dice", "🎲", N_("Roll the Dice"), "#d4537e"
+    blurb = N_("Roll up to six dice and add them up")
+    rules = N_("Pick how many dice to roll. Highest total wins, or make up your own rule.")
+    start_text = N_("Roll!")
 
     def build(self) -> None:
-        self.controls.addWidget(QLabel("Dice"))
+        self.controls.addWidget(QLabel(t("Dice")))
         self.count = QSpinBox()
         self.count.setRange(1, 6)
         self.count.setValue(5)
@@ -175,7 +177,7 @@ class DiceGame(GameScreen):
     def start(self) -> None:
         n = self.count.value()
         frames = [
-            stage_html(" ".join(random.choice(games.DICE) for _ in range(n)), "Rolling…")
+            stage_html(" ".join(random.choice(games.DICE) for _ in range(n)), t("Rolling…"))
             for _ in range(14)
         ]
         self.animate(frames, lambda: self.finish(games.roll_dice(n), size=88))
@@ -193,76 +195,76 @@ class PlayersMixin:
 
 
 class SpinGame(PlayersMixin, GameScreen):
-    key, icon, title, colour = "spin", "🎡", "Who Sings Next?", "#7f77dd"
-    blurb = "Spin through the players and stop on one"
-    rules = "Uses the players listed at the top of the lobby (or everyone in the queue)."
-    start_text = "Spin!"
+    key, icon, title, colour = "spin", "🎡", N_("Who Sings Next?"), "#7f77dd"
+    blurb = N_("Spin through the players and stop on one")
+    rules = N_("Uses the players listed at the top of the lobby (or everyone in the queue).")
+    start_text = N_("Spin!")
 
     def start(self) -> None:
         names = self.players()
         if not names:
             self.show_stage(
-                "Add players first", "Type names at the top of the games lobby", size=36
+                t("Add players first"), t("Type names at the top of the games lobby"), size=36
             )
             return
         result = games.spin(names)
         order = names * 6
         start = random.randrange(len(names))
         frames = [
-            stage_html(order[(start + i) % len(order)], "Spinning…", "#c9c3e6", 56)
+            stage_html(order[(start + i) % len(order)], t("Spinning…"), "#c9c3e6", 56)
             for i in range(22)
         ]
-        frames += [stage_html(result["text"], "Slowing down…", "#c9c3e6", 56)] * 3
+        frames += [stage_html(result["text"], t("Slowing down…"), "#c9c3e6", 56)] * 3
         self.animate(frames, lambda: self.finish(result, "#ffc94a", 80), interval=90)
 
 
 class TruthOrDareGame(GameScreen):
-    key, icon, title, colour = "truthdare", "💬", "Truth or Dare", "#1d9e75"
-    blurb = "Answer honestly, or do the dare"
-    rules = "The player picks Truth or Dare, then reads the card out loud."
-    start_text = "Random: Truth or Dare"
+    key, icon, title, colour = "truthdare", "💬", N_("Truth or Dare"), "#1d9e75"
+    blurb = N_("Answer honestly, or do the dare")
+    rules = N_("The player picks Truth or Dare, then reads the card out loud.")
+    start_text = N_("Random: Truth or Dare")
 
     def build(self) -> None:
-        self.button("💬  Truth", lambda: self.draw("truth"))
-        self.button("🔥  Dare", lambda: self.draw("dare"))
+        self.button(t("💬  Truth"), lambda: self.draw("truth"))
+        self.button(t("🔥  Dare"), lambda: self.draw("dare"))
 
     def start(self) -> None:
         self.draw(random.choice(("truth", "dare")))
 
     def draw(self, kind: str) -> None:
         result = games.truth_or_dare(kind)
-        frames = [stage_html("🂠", "Shuffling…", size=96)] * 6
+        frames = [stage_html("🂠", t("Shuffling…"), size=96)] * 6
         colour = "#2ee6ff" if kind == "truth" else "#ff7a59"
         self.animate(frames, lambda: self.finish(result, colour, 34))
 
 
 class NumberBombGame(GameScreen):
-    key, icon, title, colour = "bomb", "💣", "Number Bomb", "#c2410c"
-    blurb = "Guess numbers until someone finds the bomb"
-    rules = (
+    key, icon, title, colour = "bomb", "💣", N_("Number Bomb"), "#c2410c"
+    blurb = N_("Guess numbers until someone finds the bomb")
+    rules = N_(
         "A bomb hides at a number between 1 and 100. Take turns guessing: the range shrinks"
         " with every miss. Whoever hits the bomb loses (and sings, or drinks)."
     )
-    start_text = "New Bomb"
+    start_text = N_("New Bomb")
 
     def build(self) -> None:
-        self.controls.addWidget(QLabel("Your guess"))
+        self.controls.addWidget(QLabel(t("Your guess")))
         self.guess = QSpinBox()
         self.guess.setRange(1, 100)
         self.guess.setValue(50)
         self.guess.setStyleSheet(SPIN_STYLE)
         self.controls.addWidget(self.guess)
-        self.guess_button = self.button("💣  Guess", self.try_guess)
+        self.guess_button = self.button(t("💣  Guess"), self.try_guess)
         self.controls.addStretch()
 
     def reset(self) -> None:
-        self.show_stage("💣", "Press New Bomb to hide a number")
+        self.show_stage("💣", t("Press New Bomb to hide a number"))
 
     def start(self) -> None:
         result = self.controller.play_game("bomb")
         self.guess.setRange(2, 99)
         self.guess.setValue(50)
-        self.show_stage(result["text"], "Guess a number in between", "#ffc94a", 80)
+        self.show_stage(result["text"], t("Guess a number in between"), "#ffc94a", 80)
         self.lobby.last_result = result
 
     def try_guess(self) -> None:
@@ -274,46 +276,50 @@ class NumberBombGame(GameScreen):
             self.guess.setRange(2, 99)
             return
         self.guess.setRange(bomb.low + 1, bomb.high - 1)
-        self.show_stage(result["text"], result.get("detail") or "Safe… next player!", "#ffc94a", 80)
+        self.show_stage(
+            result["text"], result.get("detail") or t("Safe… next player!"), "#ffc94a", 80
+        )
         self.lobby.last_result = result
 
 
 class LiarsDiceGame(GameScreen):
-    key, icon, title, colour = "liar", "🎲", "Liar's Dice", "#5b3fa0"
-    blurb = "Everyone rolls in secret, then bluff"
-    rules = (
+    key, icon, title, colour = "liar", "🎲", N_("Liar's Dice"), "#5b3fa0"
+    blurb = N_("Everyone rolls in secret, then bluff")
+    rules = N_(
         "Everyone rolls five dice that only they can see: on their phone (Games → Liar's dice)"
         ' or here at the console. Take turns bidding, e.g. "four 5s". Ones are wild. When'
         " someone calls liar, press Reveal: every hand shows on the TV."
     )
-    start_text = "Roll My Dice (Console)"
+    start_text = N_("Roll My Dice (Console)")
 
     def build(self) -> None:
-        self.peek = self.button("👁  Hold to Peek", lambda: None)
+        self.peek = self.button(t("👁  Hold to Peek"), lambda: None)
         self.peek.pressed.connect(self.show_hand)
         self.peek.released.connect(self.hide_hand)
-        self.button("👀  Reveal Everyone", self.reveal)
+        self.button(t("👀  Reveal Everyone"), self.reveal)
 
     def reset(self) -> None:
         players = len(self.controller.liars.hands)
-        self.show_stage("🎲 🎲 🎲", f"{players} players rolled so far", size=72)
+        self.show_stage("🎲 🎲 🎲", t("{players} players rolled so far", players=players), size=72)
 
     def start(self) -> None:
         self.controller.play_game("liar_roll", player="Console")
         frames = [
-            stage_html(" ".join(random.choice(games.DICE) for _ in range(5)), "Rolling…")
+            stage_html(" ".join(random.choice(games.DICE) for _ in range(5)), t("Rolling…"))
             for _ in range(10)
         ]
         self.animate(frames, self.hide_hand)
 
     def show_hand(self) -> None:
         hand = self.controller.liars.hand("Console")
-        self.show_stage(hand or "Roll first", "Only you should see this!", "#ffc94a", 80)
+        self.show_stage(hand or t("Roll first"), t("Only you should see this!"), "#ffc94a", 80)
 
     def hide_hand(self) -> None:
         players = len(self.controller.liars.hands)
         self.show_stage(
-            "❓ ❓ ❓ ❓ ❓", f"Your dice are hidden · {players} players rolled", size=64
+            "❓ ❓ ❓ ❓ ❓",
+            t("Your dice are hidden · {players} players rolled", players=players),
+            size=64,
         )
 
     def reveal(self) -> None:
@@ -323,20 +329,20 @@ class LiarsDiceGame(GameScreen):
 
 
 class RandomSongGame(GameScreen):
-    key, icon, title, colour = "random", "🎰", "Random Song", "#0e7490"
-    blurb = "A slot machine picks your next song"
-    rules = "Spins through a hot-songs list and queues whatever it stops on. No take-backs!"
-    start_text = "Pull the Lever"
+    key, icon, title, colour = "random", "🎰", N_("Random Song"), "#0e7490"
+    blurb = N_("A slot machine picks your next song")
+    rules = N_("Spins through a hot-songs list and queues whatever it stops on. No take-backs!")
+    start_text = N_("Pull the Lever")
 
     def start(self) -> None:
         self.start_button.setEnabled(False)
-        self.show_stage("🎰", "Loading songs…")
+        self.show_stage("🎰", t("Loading songs…"))
         category = random.choice(list(HOT_CATEGORIES))
         run_async(lambda: self.lobby.ctx.youtube.hot(category), self.spin, self.failed)
 
     def failed(self, _exc: Exception) -> None:
         self.start_button.setEnabled(True)
-        self.show_stage("😕", "Could not load a song list. Check the internet.", size=48)
+        self.show_stage("😕", t("Could not load a song list. Check the internet."), size=48)
 
     def spin(self, songs: list[Any]) -> None:
         self.start_button.setEnabled(True)
@@ -355,61 +361,61 @@ class RandomSongGame(GameScreen):
 
 
 class ChallengeGame(GameScreen):
-    key, icon, title, colour = "challenge", "🎤", "Challenge Cards", "#be185d"
-    blurb = "Draw a dare for the next singer"
-    rules = "Draw a card before the next song. The singer must follow it, or pick a forfeit."
-    start_text = "Draw a Card"
+    key, icon, title, colour = "challenge", "🎤", N_("Challenge Cards"), "#be185d"
+    blurb = N_("Draw a dare for the next singer")
+    rules = N_("Draw a card before the next song. The singer must follow it, or pick a forfeit.")
+    start_text = N_("Draw a Card")
 
     def start(self) -> None:
         result = games.challenge()
-        frames = [stage_html("🂠", "Drawing…", size=110)] * 5
+        frames = [stage_html("🂠", t("Drawing…"), size=110)] * 5
         self.animate(frames, lambda: self.finish(result, "#ffc94a", 34))
 
 
 class LotsGame(PlayersMixin, GameScreen):
-    key, icon, title, colour = "lots", "🥢", "Draw Lots", "#4d7c0f"
-    blurb = "Everyone draws a stick: drink, sing or safe"
-    rules = "Every player draws one lot. Some are safe, some are not."
-    start_text = "Everyone Draws"
+    key, icon, title, colour = "lots", "🥢", N_("Draw Lots"), "#4d7c0f"
+    blurb = N_("Everyone draws a stick: drink, sing or safe")
+    rules = N_("Every player draws one lot. Some are safe, some are not.")
+    start_text = N_("Everyone Draws")
 
     def start(self) -> None:
-        names = self.players() or ["You"]
+        names = self.players() or [t("You")]
         rng = random.Random()
-        lots = [f"{n}: {rng.choice(games.LOTS)}" for n in names]
-        result = {"title": "🥢 Draw lots", "text": "  ·  ".join(lots), "detail": ""}
-        frames = [stage_html("🥢 " * min(8, len(names)), "Drawing…", size=56)] * 6
+        lots = [f"{n}: {t(rng.choice(games.LOTS))}" for n in names]
+        result = {"title": t("🥢 Draw lots"), "text": "  ·  ".join(lots), "detail": ""}
+        frames = [stage_html("🥢 " * min(8, len(names)), t("Drawing…"), size=56)] * 6
         self.animate(frames, lambda: self.finish(result, "white", 30))
 
 
 class HighLowGame(PlayersMixin, GameScreen):
-    key, icon, title, colour = "highlow", "⚖️", "High or Low", "#7c2d12"
-    blurb = "One die each: highest picks, lowest drinks"
-    rules = "Every player rolls one die. The highest picks the next song; the lowest drinks."
-    start_text = "Roll for Everyone"
+    key, icon, title, colour = "highlow", "⚖️", N_("High or Low"), "#7c2d12"
+    blurb = N_("One die each: highest picks, lowest drinks")
+    rules = N_("Every player rolls one die. The highest picks the next song; the lowest drinks.")
+    start_text = N_("Roll for Everyone")
 
     def start(self) -> None:
         result = games.high_low(self.players())
         frames = [
-            stage_html("  ".join(random.choice(games.DICE) for _ in range(4)), "Rolling…")
+            stage_html("  ".join(random.choice(games.DICE) for _ in range(4)), t("Rolling…"))
             for _ in range(12)
         ]
         self.animate(frames, lambda: self.finish(result, "white", 34))
 
 
 class SevensGame(GameScreen):
-    key, icon, title, colour = "sevens", "7️⃣", "Sevens", "#1e40af"
-    blurb = "Count up, but say PASS on sevens"
-    rules = (
+    key, icon, title, colour = "sevens", "7️⃣", N_("Sevens"), "#1e40af"
+    blurb = N_("Count up, but say PASS on sevens")
+    rules = N_(
         "Take turns counting up. Any number with a 7 in it, or divisible by 7, must be"
         ' replaced by "PASS". Get it wrong and you lose. Press Next for each number.'
     )
-    start_text = "Next Number"
+    start_text = N_("Next Number")
 
     def build(self) -> None:
-        self.button("↺  Start Over", self.restart)
+        self.button(t("↺  Start Over"), self.restart)
 
     def reset(self) -> None:
-        self.show_stage("1", "Press Next Number to start counting", size=96)
+        self.show_stage("1", t("Press Next Number to start counting"), size=96)
 
     def restart(self) -> None:
         self.controller.play_game("sevens_reset")
@@ -417,7 +423,7 @@ class SevensGame(GameScreen):
 
     def start(self) -> None:
         result = self.controller.play_game("sevens")
-        passed = result["text"] == "PASS!"
+        passed = result["text"] == t("PASS!")
         self.show_stage(
             result["text"], result.get("detail", ""), "#ff3d9a" if passed else "white", 110
         )
@@ -425,13 +431,13 @@ class SevensGame(GameScreen):
 
 
 class CountdownGame(GameScreen):
-    key, icon, title, colour = "countdown", "⏱", "Countdown", "#9d174d"
-    blurb = "A big timer on the TV for any race"
-    rules = "Chug, find a song, finish the verse… pick the seconds and race the clock."
-    start_text = "Start Countdown"
+    key, icon, title, colour = "countdown", "⏱", N_("Countdown"), "#9d174d"
+    blurb = N_("A big timer on the TV for any race")
+    rules = N_("Chug, find a song, finish the verse… pick the seconds and race the clock.")
+    start_text = N_("Start Countdown")
 
     def build(self) -> None:
-        self.controls.addWidget(QLabel("Seconds"))
+        self.controls.addWidget(QLabel(t("Seconds")))
         self.seconds = QSpinBox()
         self.seconds.setRange(3, 60)
         self.seconds.setValue(10)
@@ -454,33 +460,33 @@ class CountdownGame(GameScreen):
             self.show_stage(str(self._left), "", "#ffc94a", 140)
         else:
             self._clock.stop()
-            self.show_stage("Time!", "", "#ff3d3d", 120)
+            self.show_stage(t("Time!"), "", "#ff3d3d", 120)
 
 
 class CoinGame(GameScreen):
-    key, icon, title, colour = "coin", "🪙", "Flip a Coin", "#a16207"
-    blurb = "Heads or tails, settle it"
-    rules = "Call heads or tails, then flip."
-    start_text = "Flip!"
+    key, icon, title, colour = "coin", "🪙", N_("Flip a Coin"), "#a16207"
+    blurb = N_("Heads or tails, settle it")
+    rules = N_("Call heads or tails, then flip.")
+    start_text = N_("Flip!")
 
     def start(self) -> None:
         result = games.coin()
-        frames = [stage_html("🪙", side, size=100) for side in ("Heads", "Tails") * 6]
+        frames = [stage_html("🪙", side, size=100) for side in (t("Heads"), t("Tails")) * 6]
         self.animate(frames, lambda: self.finish(result, "#ffc94a", 96), interval=90)
 
 
 class TournamentGame(PlayersMixin, GameScreen):
-    key, icon, title, colour = "tournament", "👑", "King of Singers", "#b45309"
-    blurb = "Knockout rounds until one singer is king"
-    rules = (
+    key, icon, title, colour = "tournament", "👑", N_("King of Singers"), "#b45309"
+    blurb = N_("Knockout rounds until one singer is king")
+    rules = N_(
         "Uses the players at the top of the lobby (or everyone in the queue). Two singers per"
         " match each sing a song with their name on it; the score card decides who goes"
         " through. No scoring? Type the scores in below."
     )
-    start_text = "Start Tournament"
+    start_text = N_("Start Tournament")
 
     def build(self) -> None:
-        self.controls.addWidget(QLabel("Score"))
+        self.controls.addWidget(QLabel(t("Score")))
         self.points = QSpinBox()
         self.points.setRange(1, 100)
         self.points.setValue(80)
@@ -500,19 +506,19 @@ class TournamentGame(PlayersMixin, GameScreen):
         state = self.controller.tournament.public()
         colour = "#ffc94a" if self.controller.tournament.champion else "white"
         if state["text"] == "Add singers and start":
-            self.show_stage(self.icon, "Press Start Tournament")
+            self.show_stage(self.icon, t("Press Start Tournament"))
         else:
             self.show_stage(state["text"], f"{state['title']}<br>{state['detail']}", colour, 48)
         match = self.controller.tournament.current()
         for button, index in ((self.first, 0), (self.second, 1)):
             button.setVisible(match is not None)
             if match is not None:
-                button.setText(f"Score for {match[index]}")
+                button.setText(t("Score for {value}", value=match[index]))
 
     def start(self) -> None:
         names = self.players()
         if len(names) < 2:
-            self.show_stage("Add players first", "At least two names, at the top", size=36)
+            self.show_stage(t("Add players first"), t("At least two names, at the top"), size=36)
             return
         self.controller.play_game("tournament", player=",".join(names) + ",")
         self.show_bracket()
@@ -525,22 +531,22 @@ class TournamentGame(PlayersMixin, GameScreen):
 
 
 class BirthdayGame(GameScreen):
-    key, icon, title, colour = "birthday", "🎂", "Birthday", "#db2777"
-    blurb = "Their name on the TV, then the birthday song"
-    rules = (
+    key, icon, title, colour = "birthday", "🎂", N_("Birthday"), "#db2777"
+    blurb = N_("Their name on the TV, then the birthday song")
+    rules = N_(
         "Type whose birthday it is. Their name goes up on the TV and the birthday song plays next."
     )
-    start_text = "Celebrate!"
+    start_text = N_("Celebrate!")
 
     def build(self) -> None:
         self.name = QLineEdit()
-        self.name.setPlaceholderText("Whose birthday?")
+        self.name.setPlaceholderText(t("Whose birthday?"))
         self.controls.addWidget(self.name, stretch=1)
 
     def start(self) -> None:
         name = self.name.text().strip() or "you"
         self.start_button.setEnabled(False)
-        self.show_stage("🎂", "Finding the birthday song…")
+        self.show_stage("🎂", t("Finding the birthday song…"))
 
         def celebrate(songs: list[Any]) -> None:
             self.start_button.setEnabled(True)
@@ -579,7 +585,7 @@ class GamesPage(Page):
     animate = True
 
     def __init__(self, ctx: Context) -> None:
-        super().__init__("Games", ctx)
+        super().__init__(t("Games"), ctx)
         self.last_result: dict[str, str] | None = None
         self.stack = QStackedWidget()
         self.body.addWidget(self.stack, stretch=1)
@@ -588,9 +594,11 @@ class GamesPage(Page):
         column = QVBoxLayout(lobby)
         column.setContentsMargins(0, 0, 0, 0)
         players_row = QHBoxLayout()
-        players_row.addWidget(QLabel("Players"))
+        players_row.addWidget(QLabel(t("Players")))
         self.players = QLineEdit()
-        self.players.setPlaceholderText("Names, separated by commas (empty: everyone in the queue)")
+        self.players.setPlaceholderText(
+            t("Names, separated by commas (empty: everyone in the queue)")
+        )
         players_row.addWidget(self.players, stretch=1)
         column.addLayout(players_row)
         grid = QGridLayout()
@@ -605,8 +613,9 @@ class GamesPage(Page):
             tile.setStyleSheet(
                 f"#tile {{ background: {screen.colour}; text-align: left; padding: 16px; }}"
             )
-            blurb = textwrap.fill(screen.blurb, 30)  # buttons do not wrap on their own
-            tile.setText(f"{screen.icon}  {screen.title}\n{blurb}")
+            # Buttons do not wrap on their own; Chinese characters are about twice as wide.
+            blurb = textwrap.fill(t(screen.blurb), 14 if i18n.current() == "zh_CN" else 30)
+            tile.setText(f"{screen.icon}  {t(screen.title)}\n{blurb}")
             tile.setMinimumHeight(110)
             tile.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             tile.setCursor(Qt.CursorShape.PointingHandCursor)

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from ytktv import smart_lights
 from ytktv.core.controller import KTVController
+from ytktv.i18n import t
 from ytktv.ui.support import run_async
 
 
@@ -29,12 +30,14 @@ class SmartLightsCard(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
-        head = QLabel("SMART LIGHTS")
+        head = QLabel(t("SMART LIGHTS"))
         head.setObjectName("settingsHead")
         layout.addWidget(head)
         note = QLabel(
-            "Room lights that change colour with the music, like the TV's edge lights: a WLED"
-            " strip, or Philips Hue lights through their bridge (all lights on the bridge)."
+            t(
+                "Room lights that change colour with the music, like the TV's edge lights: a WLED"
+                " strip, or Philips Hue lights through their bridge (all lights on the bridge)."
+            )
         )
         note.setObjectName("muted")
         note.setWordWrap(True)
@@ -45,11 +48,11 @@ class SmartLightsCard(QFrame):
             self.kind.addItem(name, key)
         self.kind.setCurrentIndex(list(smart_lights.KINDS).index(settings.smart_lights))
         self.host = QLineEdit(settings.smart_lights_host)
-        self.host.setPlaceholderText("Address, e.g. 192.168.1.50")
-        self.pair_button = QPushButton("Pair Hue Bridge")
-        self.pair_button.setToolTip("Press the round button on the bridge first, then this")
+        self.host.setPlaceholderText(t("Address, e.g. 192.168.1.50"))
+        self.pair_button = QPushButton(t("Pair Hue Bridge"))
+        self.pair_button.setToolTip(t("Press the round button on the bridge first, then this"))
         self.pair_button.clicked.connect(lambda: self.pair())
-        test = QPushButton("Test")
+        test = QPushButton(t("Test"))
         test.clicked.connect(lambda: self.test())
         row.addWidget(self.kind)
         row.addWidget(self.host, stretch=1)
@@ -69,7 +72,9 @@ class SmartLightsCard(QFrame):
         self.pair_button.setVisible(kind == "hue")
         self.host.setEnabled(kind != "off")
         if kind == "hue" and not self.controller.settings.hue_key:
-            self.status.setText("Not paired yet: press the bridge's button, then Pair Hue Bridge.")
+            self.status.setText(
+                t("Not paired yet: press the bridge's button, then Pair Hue Bridge.")
+            )
 
     def save(self) -> None:
         settings = self.controller.settings
@@ -82,26 +87,26 @@ class SmartLightsCard(QFrame):
         self.save()
         host = self.controller.settings.smart_lights_host
         if not host:
-            self.status.setText("Type the Hue bridge's address first.")
+            self.status.setText(t("Type the Hue bridge's address first."))
             return
-        self.status.setText("Pairing…")
+        self.status.setText(t("Pairing…"))
 
         def done(key: str) -> None:
             self.controller.settings.hue_key = key
             self.controller.store.save()
-            self.status.setText("Paired. Press Test to see the lights change.")
+            self.status.setText(t("Paired. Press Test to see the lights change."))
 
         def failed(exc: Exception) -> None:
-            self.status.setText(f"Could not pair: {exc}")
+            self.status.setText(t("Could not pair: {exc}", exc=exc))
 
         run_async(lambda: smart_lights.pair_hue(host, request), done, failed)
 
     def test(self, lights: smart_lights.SmartLights | None = None) -> None:
         self.save()
         sender = lights or smart_lights.SmartLights(self.controller.settings)
-        self.status.setText("Sending a colour…")
+        self.status.setText(t("Sending a colour…"))
         run_async(
             lambda: sender.send(1.0, 0.85),
-            lambda _r: self.status.setText("Sent: the lights should turn pink."),
-            lambda exc: self.status.setText(f"No answer from the lights: {exc}"),
+            lambda _r: self.status.setText(t("Sent: the lights should turn pink.")),
+            lambda exc: self.status.setText(t("No answer from the lights: {exc}", exc=exc)),
         )

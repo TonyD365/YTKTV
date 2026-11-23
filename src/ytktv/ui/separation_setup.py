@@ -11,6 +11,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from ytktv.core.controller import KTVController
+from ytktv.i18n import t
 from ytktv.separation.runtime import VARIANTS, Gpu, Runtime, choose_variant, detect_gpu
 from ytktv.ui.support import run_async
 
@@ -39,11 +40,13 @@ class SeparationSetup(QObject):
         self._gpu: Gpu | None = None
         self._recommended = "cpu"
         self._busy = False
-        self._progress.connect(lambda line: self.status.emit(f"Installing...  {line}", ""))
+        self._progress.connect(
+            lambda line: self.status.emit(t("Installing...  {line}", line=line), "")
+        )
 
     def start(self) -> None:
         """Detect the hardware in the background, then offer the download if needed."""
-        self.status.emit("Checking the graphics hardware...", "")
+        self.status.emit(t("Checking the graphics hardware..."), "")
         run_async(detect_gpu, self._detected, lambda _exc: self._detected(None))
 
     def _detected(self, gpu: Gpu | None) -> None:
@@ -61,22 +64,33 @@ class SeparationSetup(QObject):
             QTimer.singleShot(1500, self._prompt)
 
     def _hardware(self) -> str:
-        return self._gpu.name if self._gpu else "no supported graphics card"
+        return self._gpu.name if self._gpu else t("no supported graphics card")
 
     def _publish(self) -> None:
         installed = self.runtime.installed_variant()
         wanted = VARIANTS[self._recommended]
         if installed is None:
             self.status.emit(
-                f"Not installed yet. Detected: {self._hardware()}.\n"
-                f"The {wanted.title} runtime is a one-time download of {wanted.download_size}.",
-                "Download and Install",
+                t(
+                    "Not installed yet. Detected: {value}.\nThe {title} runtime is a "
+                    "one-time download of {download_size}.",
+                    value=self._hardware(),
+                    title=wanted.title,
+                    download_size=wanted.download_size,
+                ),
+                t("Download and Install"),
             )
         elif installed != self._recommended and self._recommended != "cpu":
             self.status.emit(
-                f"Installed: {VARIANTS[installed].title}. Detected: {self._hardware()}.\n"
-                f"The {wanted.title} runtime ({wanted.download_size}) would be much faster.",
-                f"Switch to {wanted.title}",
+                t(
+                    "Installed: {title}. Detected: {value}.\nThe {title2} runtime "
+                    "({download_size}) would be much faster.",
+                    title=VARIANTS[installed].title,
+                    value=self._hardware(),
+                    title2=wanted.title,
+                    download_size=wanted.download_size,
+                ),
+                t("Switch to {title}", title=wanted.title),
             )
         else:
             self.status.emit("", "")  # installed and optimal: the normal text applies
@@ -87,20 +101,25 @@ class SeparationSetup(QObject):
         wanted = VARIANTS[self._recommended]
         installed = self.runtime.installed_variant()
         box = QMessageBox(self._parent)
-        box.setWindowTitle("Vocal separation")
+        box.setWindowTitle(t("Vocal separation"))
         if installed is None:
-            box.setText("Download the vocal separation runtime?")
-            detail = "Original / Instrumental switching needs an extra component."
+            box.setText(t("Download the vocal separation runtime?"))
+            detail = t("Original / Instrumental switching needs an extra component.")
         else:
-            box.setText("Use your graphics card for vocal separation?")
-            detail = "Songs are prepared many times faster on the GPU."
+            box.setText(t("Use your graphics card for vocal separation?"))
+            detail = t("Songs are prepared many times faster on the GPU.")
         box.setInformativeText(
-            f"{detail}\n\nDetected: {self._hardware()}\n"
-            f"Download: {wanted.title} runtime, {wanted.download_size}.\n\n"
-            "You can also do this later from Settings."
+            t(
+                "{detail}\n\nDetected: {value}\nDownload: {title} runtime, "
+                "{download_size}.\n\nYou can also do this later from Settings.",
+                detail=detail,
+                value=self._hardware(),
+                title=wanted.title,
+                download_size=wanted.download_size,
+            )
         )
-        accept = box.addButton("Download", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("Not Now", QMessageBox.ButtonRole.RejectRole)
+        accept = box.addButton(t("Download"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(t("Not Now"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         if box.clickedButton() is accept:
             self.install_recommended()
@@ -113,7 +132,7 @@ class SeparationSetup(QObject):
             return
         self._busy = True
         key = self._recommended
-        self.status.emit(f"Installing the {VARIANTS[key].title} runtime...", "")
+        self.status.emit(t("Installing the {title} runtime...", title=VARIANTS[key].title), "")
 
         def done(installed: str) -> None:
             self._busy = False
@@ -122,7 +141,7 @@ class SeparationSetup(QObject):
             if installed != key:
                 self._recommended = installed  # the GPU build did not install; stop offering it
             self._publish()
-            self.controller.toast("Vocal separation is ready")
+            self.controller.toast(t("Vocal separation is ready"))
             self._on_ready(self._make_separator())
 
         def failed(exc: Exception) -> None:
@@ -130,8 +149,11 @@ class SeparationSetup(QObject):
             log.warning("separation runtime install failed: %s", exc)
             reason = str(exc)[:300]
             self.status.emit(
-                f"The download failed: {reason}\nCheck the internet connection and try again.",
-                "Try Again",
+                t(
+                    "The download failed: {reason}\nCheck the internet connection and try again.",
+                    reason=reason,
+                ),
+                t("Try Again"),
             )
 
         run_async(
