@@ -121,3 +121,33 @@ def test_theme_and_toast(tmp_path: Path) -> None:
         assert toasts == ["Now singing: Yellow"]
     finally:
         theme.THEMES.pop("Sunset", None)
+
+
+def _example(tmp_path: Path, name: str) -> PluginManager:
+    source = Path(__file__).parents[1] / "examples" / "plugins" / f"{name}.py"
+    write(tmp_path, name, source.read_text("utf-8"))
+    manager = PluginManager(tmp_path)
+    manager.discover()
+    manager.set_enabled(f"file:{name}", True)
+    manager.start()
+    return manager
+
+
+def test_theme_example(tmp_path: Path) -> None:
+    manager = _example(tmp_path, "theme_plugin")
+    try:
+        assert not manager.discover()[0].error
+        assert theme.THEMES["Ocean"]["PINK"] == "#2dd4bf"
+    finally:
+        theme.THEMES.pop("Ocean", None)
+
+
+def test_song_source_example(tmp_path: Path) -> None:
+    manager = _example(tmp_path, "song_source_plugin")
+    assert manager.search("yellow") == []  # no list yet
+    [folder] = list((tmp_path / "data").iterdir())
+    (folder / "songs.csv").write_text(
+        "video_id,title,channel\nabcdefghijk,Yellow Sky,Band\nbad,Yellow Bad,Band\n", "utf-8"
+    )
+    assert [s.video_id for s in manager.search("yellow band")] == ["abcdefghijk"]
+    assert manager.search("") == []

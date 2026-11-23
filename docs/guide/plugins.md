@@ -23,7 +23,11 @@ def setup(api):
     api.on("state", on_state)
 ```
 
-A fuller example is in [examples/plugins/hello_plugin.py](../../examples/plugins/hello_plugin.py).
+Examples to copy and change:
+
+- [hello_plugin.py](../../examples/plugins/hello_plugin.py): reacts to songs and shows a message.
+- [theme_plugin.py](../../examples/plugins/theme_plugin.py): a colour theme.
+- [song_source_plugin.py](../../examples/plugins/song_source_plugin.py): adds songs from a CSV file to search results.
 
 ## Installing
 
