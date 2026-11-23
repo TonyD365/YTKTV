@@ -73,6 +73,31 @@ def test_the_worker_reports_each_piece_and_writes_whole_stems(tmp_path, monkeypa
     assert len(heard) == 36 * RATE
 
 
+def test_pieces_recreate_a_work_folder_that_was_removed(tmp_path, monkeypatch):
+    class Soundfile(FakeSoundfile):
+        def write(self, path, samples, rate, format=None):  # noqa: A002 - soundfile's own name
+            assert Path(path).parent.exists()
+            super().write(path, samples, rate, format)
+
+    soundfile = Soundfile()
+    monkeypatch.setitem(sys.modules, "soundfile", soundfile)
+    song = np.ones((5 * RATE, 2), dtype="float32")
+    soundfile.write(tmp_path / "source.wav", song, RATE)
+    work = tmp_path / "gone"
+
+    class Model:
+        def separate(self, path):
+            assert work.exists()
+            samples, _ = soundfile.read(path)
+            soundfile.write(work / "x_(Instrumental).flac", samples, RATE)
+            return ["x_(Instrumental).flac"]
+
+    worker = sep_worker.Worker(type("Args", (), {"work_dir": str(work)})())
+    worker.separator = Model()
+    sep_worker.separate_in_chunks(worker, tmp_path / "source.wav", tmp_path / "out" / "i.flac")
+    assert work.exists()
+
+
 PIECE_WORKER = textwrap.dedent(
     """
     import json, shutil, sys
