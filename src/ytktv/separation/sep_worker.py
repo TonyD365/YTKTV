@@ -52,7 +52,7 @@ def be_a_good_neighbour():
             kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
             kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), below_normal)
         else:
-            os.nice(5)
+            os.nice(10)
     except Exception:
         pass
     threads = max(1, (os.cpu_count() or 4) // 2)

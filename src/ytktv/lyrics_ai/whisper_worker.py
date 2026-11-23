@@ -13,6 +13,7 @@ Standalone: the ytktv package is not installed in that environment.
 """
 
 import json
+import os
 import sys
 
 MODEL = "small"  # good for singing, still fine on a CPU
@@ -41,6 +42,25 @@ def lines_from(segments):
     return lines
 
 
+def be_gentle():
+    """Leave the CPU to the music and the microphones, which must never wait."""
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            below_normal = 0x00004000
+            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), below_normal)
+        else:
+            os.nice(10)
+    except Exception:
+        pass
+    threads = max(1, (os.cpu_count() or 4) // 2)
+    for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+        os.environ.setdefault(name, str(threads))
+    return threads
+
+
 _MODELS: dict = {}
 
 
@@ -55,7 +75,11 @@ def load_model(models):
             )
         except Exception:
             _MODELS[models] = WhisperModel(
-                MODEL, device="cpu", compute_type="int8", download_root=models
+                MODEL,
+                device="cpu",
+                compute_type="int8",
+                download_root=models,
+                cpu_threads=max(1, (os.cpu_count() or 4) // 2),
             )
     return _MODELS[models]
 
@@ -106,6 +130,7 @@ def serve(models):
 
 
 def main() -> int:
+    be_gentle()
     if sys.argv[1] == "--serve":
         return serve(sys.argv[2])
     audio, output, models = sys.argv[1], sys.argv[2], sys.argv[3]
