@@ -179,6 +179,8 @@ jobs:
 
       - name: Install mpv as a user would
         shell: bash
+        env:
+          YTKTV_GITHUB_TOKEN: ${{ github.token }} # shared runners hit the anonymous rate limit
         run: |
           case "$RUNNER_OS" in
             macOS) brew install mpv ;;
@@ -609,6 +611,49 @@ jobs:
           if ! grep -q '^## Install$' notes.md; then
             cat packaging/release/install-notes.md >> notes.md
             gh release edit "$TAG" --notes-file notes.md
+          fi
+
+  release-check:
+    # Says so at once when a release ends up without all its installers.
+    name: Check the release is complete
+    needs: [build, macos-universal, desk, installer-cli, attach]
+    if: always() && github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.event.release.tag_name }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: packaging/release
+          persist-credentials: false
+      - name: Every installer is attached
+        run: bash packaging/release/check-assets.sh "$TAG" | tee check.txt; exit "${PIPESTATUS[0]}"
+      - name: Close the alert after a successful re-run
+        run: |
+          gh issue list --state open --json number,title \
+            --jq '.[] | select(.title == env.ALERT) | .number' --limit 100 \
+            | xargs -r -I{} gh issue close {} --comment "Fixed by $RUN_URL"
+        env:
+          ALERT: Release ${{ github.event.release.tag_name }} is incomplete
+      - name: Open an alert
+        if: failure()
+        env:
+          ALERT: Release ${{ github.event.release.tag_name }} is incomplete
+        run: |
+          found="$(gh issue list --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title == env.ALERT) | .number][0] // empty')"
+          { echo "The release build for $TAG did not finish: $RUN_URL"; echo
+            echo '```'; cat check.txt 2>/dev/null || true; echo '```'; } > alert.md
+          if [ -n "$found" ]; then
+            gh issue comment "$found" --body-file alert.md
+          else
+            gh issue create --title "$ALERT" --body-file alert.md
           fi
 
   winget:

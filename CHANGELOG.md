@@ -3,6 +3,11 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.6.1
+
+### 🔒 Security
+- YTKTV Desk no longer writes the room ID that a connecting room claims into its log, so a fake room cannot add false lines to the log.
+
 ## 4.6.0
 
 **⚠️ Not compatible with 4.5 and older.** Rooms and YTKTV Desk now talk in a new, encrypted way, so a 4.6 room cannot connect to an older Desk, or the other way round. Update YTKTV Desk and every room's YTKTV to 4.6 together, then pair each room again: on the Desk, unbind the room in **Settings → Room settings** and add it again. Rooms that are not bound to a Desk are not affected.

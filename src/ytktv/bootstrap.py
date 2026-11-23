@@ -173,6 +173,20 @@ def _extract_7z(archive: Path, member: str, dest: Path) -> None:
     raise RuntimeError("could not extract libmpv: " + ("; ".join(errors) or "no tar or 7z found"))
 
 
+def _latest_mpv_request() -> urllib.request.Request:
+    """The GitHub API call for the newest mpv build.
+
+    Release builds set YTKTV_GITHUB_TOKEN so shared runners are not rate limited. It is
+    never sent on a redirect.
+    """
+    api = f"https://api.github.com/repos/{MPV_WINDOWS_REPO}/releases/latest"
+    request = urllib.request.Request(api, headers={"Accept": "application/vnd.github+json"})
+    token = os.environ.get("YTKTV_GITHUB_TOKEN", "")
+    if token:
+        request.add_unredirected_header("Authorization", f"Bearer {token}")
+    return request
+
+
 def _windows_on_arm() -> bool:
     return platform.system() == "Windows" and platform.machine().lower() in ("arm64", "aarch64")
 
@@ -183,9 +197,7 @@ def install_windows_arm_ffmpeg() -> Path:
     if target.exists() and target.stat().st_size > 1_000_000:
         return _on_path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
-    api = f"https://api.github.com/repos/{MPV_WINDOWS_REPO}/releases/latest"
-    request = urllib.request.Request(api, headers={"Accept": "application/vnd.github+json"})
-    with urlopen(request, timeout=30) as response:
+    with urlopen(_latest_mpv_request(), timeout=30) as response:
         release = json.load(response)
     pattern = re.compile(r"^ffmpeg-aarch64-git-.*\.7z$")
     asset = next((a for a in release.get("assets", []) if pattern.match(a["name"])), None)
@@ -219,9 +231,7 @@ def _on_path(exe: Path) -> Path:
 
 
 def install_windows_libmpv(report: Callable[[str], None]) -> None:
-    api = f"https://api.github.com/repos/{MPV_WINDOWS_REPO}/releases/latest"
-    request = urllib.request.Request(api, headers={"Accept": "application/vnd.github+json"})
-    with urlopen(request, timeout=30) as response:
+    with urlopen(_latest_mpv_request(), timeout=30) as response:
         release = json.load(response)
     pattern = _windows_mpv_asset()
     asset = next((a for a in release.get("assets", []) if pattern.match(a["name"])), None)
