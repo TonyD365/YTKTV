@@ -235,6 +235,8 @@ def separate_in_chunks(worker, source, output, pitch=None, chunk_dir=None):
     pieces = plan_chunks(frames, rate)
     fade = int(FADE_SECONDS * rate)
     for index, (start, end, low, high) in enumerate(pieces):
+        # Before the model loads, and again for each piece: the cache can be emptied any time.
+        work.mkdir(parents=True, exist_ok=True)
         piece = work / f"piece-{index}.wav"
         soundfile.write(str(piece), original[low:high], rate)
         outputs = [worker._resolve(name) for name in worker.load().separate(str(piece))]
