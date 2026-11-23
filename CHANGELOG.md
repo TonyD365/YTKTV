@@ -3,6 +3,18 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.7.0
+
+### 🌏 简体中文
+- YTKTV, YTKTV Desk and the phone pages are now available in Simplified Chinese.
+- The first run follows the computer's language. Change it in **Settings → Language**; it applies after a restart. On a room bound to a Desk, it stays in the guests' settings. Each staff terminal keeps its own choice.
+
+### 🧩 Plugins
+- Two new examples to copy: a colour theme, and a song source that adds songs from a CSV file.
+
+### 🛠 Releases
+- Release builds are less likely to stop on GitHub's rate limit, and a release missing an installer now raises an alert.
+
 ## 4.6.1
 
 ### 🔒 Security
