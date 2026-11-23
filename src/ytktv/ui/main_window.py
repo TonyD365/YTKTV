@@ -319,7 +319,7 @@ class MainWindow(QMainWindow):
             label.setObjectName("groupLabel")
             box.addWidget(label)
             row = QHBoxLayout()
-            row.setSpacing(6)
+            row.setSpacing(4)  # the whole bar has to fit the window's minimum width
             for widget in widgets:
                 row.addWidget(widget)
             box.addLayout(row)
@@ -345,7 +345,7 @@ class MainWindow(QMainWindow):
                 VocalMode.INSTRUMENTAL,
                 t("Instrumental"),
                 t("Play the AI-separated backing track"),
-                100,
+                96,
             ),
         ):
             widget = button(text, lambda m=mode: self._choose_mode(m), tip, width)
@@ -353,7 +353,7 @@ class MainWindow(QMainWindow):
             self.mode_buttons[mode] = widget
         # The instant modes are used less often, so they share one menu button.
         self.more_modes = QPushButton(t(_MORE_MODES))
-        self.more_modes.setFixedSize(84, 44)
+        self.more_modes.setFixedSize(72, 44)
         self.more_modes.setCheckable(True)
         self.more_modes.setCursor(Qt.CursorShape.PointingHandCursor)
         self.more_modes.setToolTip(t("Vocal modes that need no preparation"))
@@ -455,9 +455,9 @@ class MainWindow(QMainWindow):
             ("mic_volume", t("MIC"), t("the microphones")),
         ):
             down = button(
-                "−", partial(self._step_level, name, -1), t("Quieter: {what}", what=what), 32
+                "−", partial(self._step_level, name, -1), t("Quieter: {what}", what=what), 28
             )
-            up = button("+", partial(self._step_level, name, 1), t("Louder: {what}", what=what), 32)
+            up = button("+", partial(self._step_level, name, 1), t("Louder: {what}", what=what), 28)
             self.level_keys[name] = (down, up)
             group(title, down, up)
 
