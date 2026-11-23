@@ -37,6 +37,7 @@ from ytktv.desk import lock, receipt
 from ytktv.desk.billing import DEFAULT_RATE, PAYMENTS, ROUNDING, Bill
 from ytktv.desk.server import Hub
 from ytktv.desk.store import LOW_STOCK, DeskStore, Member, Product
+from ytktv.i18n import N_, t
 
 
 class OrdersBox(QWidget):
@@ -49,10 +50,10 @@ class OrdersBox(QWidget):
         self._shown: list[tuple[int, str]] = []
         self.column = QVBoxLayout(self)
         self.column.setContentsMargins(0, 8, 0, 8)
-        head = QLabel("ORDERS")
+        head = QLabel(t("ORDERS"))
         head.setObjectName("panelHead")
         self.rows = QVBoxLayout()
-        add = QPushButton("＋ Add Item")
+        add = QPushButton(t("＋ Add Item"))
         add.clicked.connect(self.add_item)
         self.column.addWidget(head)
         self.column.addLayout(self.rows)
@@ -82,7 +83,7 @@ class OrdersBox(QWidget):
                 text.setObjectName("muted")
             line.addWidget(text, stretch=1)
             if order.status == "pending":
-                for label, status in (("Delivered", "delivered"), ("Cancel", "cancelled")):
+                for label, status in ((t("Delivered"), "delivered"), (t("Cancel"), "cancelled")):
                     button = QPushButton(label)
                     button.clicked.connect(
                         lambda _c=False, o=order.order_id, s=status: self._set(o, s)
@@ -90,7 +91,7 @@ class OrdersBox(QWidget):
                     line.addWidget(button)
             self.rows.addWidget(row)
         if not orders:
-            empty = QLabel("No orders")
+            empty = QLabel(t("No orders"))
             empty.setObjectName("muted")
             self.rows.addWidget(empty)
 
@@ -103,10 +104,10 @@ class OrdersBox(QWidget):
         if self.room_id is None or not products:
             return
         names = [f"{p.name} ({p.price:g})" for p in products]
-        choice, ok = QInputDialog.getItem(self, "Add item", "Item:", names, 0, False)
+        choice, ok = QInputDialog.getItem(self, t("Add item"), t("Item:"), names, 0, False)
         if not ok:
             return
-        qty, ok = QInputDialog.getInt(self, "Add item", "How many?", 1, 1, 99)
+        qty, ok = QInputDialog.getInt(self, t("Add item"), t("How many?"), 1, 1, 99)
         if ok:
             product = products[names.index(choice)]
             self.store.add_order(self.room_id, [(product.product_id, qty)])
@@ -128,7 +129,7 @@ class BillDialog(QDialog):
         self.bill = bill
         self.store = store
         self.member: Member | None = None
-        self.setWindowTitle(f"Bill · {bill.room}")
+        self.setWindowTitle(t("Bill · {room}", room=bill.room))
         self.resize(560, 720)
         column = QVBoxLayout(self)
         self.view = QTextBrowser()
@@ -138,64 +139,65 @@ class BillDialog(QDialog):
         form = QFormLayout()
         member_row = QHBoxLayout()
         self.phone = QLineEdit()
-        self.phone.setPlaceholderText("Member's phone number")
+        self.phone.setPlaceholderText(t("Member's phone number"))
         self.phone.returnPressed.connect(self.find_member)
-        find = QPushButton("Find")
+        find = QPushButton(t("Find"))
         find.clicked.connect(self.find_member)
         member_row.addWidget(self.phone, stretch=1)
         member_row.addWidget(find)
-        self.member_label = QLabel("No member")
+        self.member_label = QLabel(t("No member"))
         self.member_label.setObjectName("muted")
         self.discount = QSpinBox()
         self.discount.setRange(0, 100)
         self.discount.setSuffix(" %")
         self.round_to = QComboBox()
         for label, value in (
-            ("Keep", 0.0),
-            ("To a whole number", 1.0),
-            ("To the nearest 10 below", 10.0),
+            (t("Keep"), 0.0),
+            (t("To a whole number"), 1.0),
+            (t("To the nearest 10 below"), 10.0),
         ):
             self.round_to.addItem(label, value)
         self.payment = QComboBox()
-        self.payment.addItems(list(PAYMENTS))
+        for method in PAYMENTS:
+            self.payment.addItem(t(method), method)
         for field in (self.discount, self.round_to, self.payment):
             steady(field)
         self.discount.valueChanged.connect(self.update_bill)
         self.round_to.currentIndexChanged.connect(self.update_bill)
         self.payment.currentIndexChanged.connect(self.update_bill)
         if store is not None:
-            form.addRow("Member", member_row)
+            form.addRow(t("Member"), member_row)
             form.addRow("", self.member_label)
-        form.addRow("Discount", self.discount)
+        form.addRow(t("Discount"), self.discount)
         if store is not None:
             coupon_row = QHBoxLayout()
             self.coupon = QLineEdit()
-            self.coupon.setPlaceholderText("Coupon code")
+            self.coupon.setPlaceholderText(t("Coupon code"))
             self.coupon.returnPressed.connect(self.apply_coupon)
-            apply = QPushButton("Apply")
+            apply = QPushButton(t("Apply"))
             apply.clicked.connect(self.apply_coupon)
             coupon_row.addWidget(self.coupon, stretch=1)
             coupon_row.addWidget(apply)
-            form.addRow("Coupon", coupon_row)
-        form.addRow("Drop small change", self.round_to)
-        form.addRow("Paid by", self.payment)
+            form.addRow(t("Coupon"), coupon_row)
+        form.addRow(t("Drop small change"), self.round_to)
+        form.addRow(t("Paid by"), self.payment)
         column.addLayout(form)
         self.error = QLabel("")
         self.error.setStyleSheet("color: #ff6b8b;")
         column.addWidget(self.error)
 
         buttons = QHBoxLayout()
-        print_button = QPushButton("Print…")
+        print_button = QPushButton(t("Print…"))
         print_button.clicked.connect(self.print_bill)
-        pdf = QPushButton("Save PDF…")
+        pdf = QPushButton(t("Save PDF…"))
         pdf.clicked.connect(self.save_pdf)
-        receipt_button = QPushButton("🧾 Receipt")
-        receipt_button.setToolTip("Print a receipt on the receipt printer (Settings → Receipts)")
+        receipt_button = QPushButton(t("🧾 Receipt"))
+        receipt_button.setToolTip(t("Print a receipt on the receipt printer (Settings → Receipts)"))
         receipt_button.clicked.connect(lambda: self.print_receipt())
-        close = QPushButton("Close Room")
+        close = QPushButton(t("Close Room"))
         close.setObjectName("accent")
         close.clicked.connect(self.settle)
-        cancel = QPushButton("Cancel")
+        cancel = QPushButton(t("Cancel"))
         cancel.clicked.connect(self.reject)
         for button in (print_button, pdf, receipt_button):
             buttons.addWidget(button)
@@ -262,14 +264,20 @@ class BillDialog(QDialog):
         )
         bill.discount = float(self.discount.value())
         bill.round_to = float(self.round_to.currentData() or 0)
-        bill.payment = self.payment.currentText()
+        bill.payment = str(self.payment.currentData())
         if member is not None:
             self.member_label.setText(
-                f"{member.name} · balance {bill.currency}{member.balance:.2f}"
-                f" · {member.points} points · members save {bill.member_off:g}%"
+                t(
+                    "{name} · balance {currency}{balance:.2f} · {points} points · members save {member_off:g}%",
+                    name=member.name,
+                    currency=bill.currency,
+                    balance=member.balance,
+                    points=member.points,
+                    member_off=bill.member_off,
+                )
             )
         elif self.phone.text().strip():
-            self.member_label.setText("No member with that phone number")
+            self.member_label.setText(t("No member with that phone number"))
         self.view.setHtml(bill.html())
         self.error.clear()
 
@@ -279,13 +287,17 @@ class BillDialog(QDialog):
         bill, store, member = self.bill, self.store, self.member
         if bill.payment == "Member balance":
             if member is None or store is None:
-                self.error.setText("Find the member first to pay from their balance.")
+                self.error.setText(t("Find the member first to pay from their balance."))
                 return
             try:
                 store.pay_from_balance(member.member_id, bill.total)
             except ValueError:
                 self.error.setText(
-                    f"Not enough balance: {bill.currency}{member.balance:.2f}. Top up first."
+                    t(
+                        "Not enough balance: {currency}{balance:.2f}. Top up first.",
+                        currency=bill.currency,
+                        balance=member.balance,
+                    )
                 )
                 return
         if member is not None and store is not None:
@@ -308,7 +320,7 @@ class BillDialog(QDialog):
     def save_pdf(self, path: str = "") -> None:
         if not path:
             path, _ = QFileDialog.getSaveFileName(
-                self, "Save bill", f"{self.bill.room} bill.pdf", "PDF (*.pdf)"
+                self, t("Save bill"), f"{self.bill.room} bill.pdf", "PDF (*.pdf)"
             )
         if path:
             printer = QPrinter(QPrinter.PrinterMode.HighResolution)
@@ -358,7 +370,7 @@ class OnMenu(QCheckBox):
         self._label(on)
 
     def _label(self, on: bool) -> None:
-        self.setText("On menu" if on else "Hidden")
+        self.setText(t("On menu") if on else t("Hidden"))
 
 
 def picture_jpeg(path: str, side: int = 160) -> str:
@@ -379,7 +391,7 @@ def picture_jpeg(path: str, side: int = 160) -> str:
 class ShopSettings(QFrame):
     """The menu rooms can order from, and how rooms are charged."""
 
-    COLUMNS = ("Name", "Category", "Price", "Stock", "On menu", "Picture")
+    COLUMNS = (N_("Name"), N_("Category"), N_("Price"), N_("Stock"), N_("On menu"), N_("Picture"))
 
     def __init__(self, store: DeskStore, changed: object = None) -> None:
         super().__init__()
@@ -388,11 +400,11 @@ class ShopSettings(QFrame):
         self.setObjectName("panel")
         column = QVBoxLayout(self)
         column.setContentsMargins(24, 20, 24, 20)
-        head = QLabel("MENU AND PRICES")
+        head = QLabel(t("MENU AND PRICES"))
         head.setObjectName("panelHead")
         column.addWidget(head)
         self.table = QTableWidget(0, len(self.COLUMNS))
-        self.table.setHorizontalHeaderLabels(self.COLUMNS)
+        self.table.setHorizontalHeaderLabels([t(c) for c in self.COLUMNS])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(44)
@@ -405,9 +417,9 @@ class ShopSettings(QFrame):
         column.addWidget(self.table, stretch=1)
         buttons = QHBoxLayout()
         for text, action in (
-            ("Add Item", self.add_row),
-            ("Remove", self.remove_row),
-            ("Save Menu", self.save),
+            (t("Add Item"), self.add_row),
+            (t("Remove"), self.remove_row),
+            (t("Save Menu"), self.save),
         ):
             button = QPushButton(text)
             button.clicked.connect(action)
@@ -435,11 +447,11 @@ class ShopSettings(QFrame):
         self.block.setValue(int(store.setting("block", "15")))
         for field in (self.rate, self.minimum, self.rounding, self.block):
             steady(field)
-        form.addRow("Currency", self.currency)
-        form.addRow("Price per hour", self.rate)
-        form.addRow("Minimum spend", self.minimum)
-        form.addRow("Rooms without a time limit", self.rounding)
-        form.addRow("Block minutes", self.block)
+        form.addRow(t("Currency"), self.currency)
+        form.addRow(t("Price per hour"), self.rate)
+        form.addRow(t("Minimum spend"), self.minimum)
+        form.addRow(t("Rooms without a time limit"), self.rounding)
+        form.addRow(t("Block minutes"), self.block)
         self.member_discount = QSpinBox()
         self.member_discount.setRange(0, 100)
         self.member_discount.setSuffix(" %")
@@ -449,12 +461,13 @@ class ShopSettings(QFrame):
         self.points_per_unit.setValue(int(float(store.setting("points_per_unit", "1"))))
         steady(self.member_discount)
         steady(self.points_per_unit)
-        form.addRow("Members save", self.member_discount)
-        form.addRow("Member points per 1 spent", self.points_per_unit)
-        self.member_songs = QCheckBox("Members' songs follow them into rooms")
+        form.addRow(t("Members save"), self.member_discount)
+        form.addRow(t("Member points per 1 spent"), self.points_per_unit)
+        self.member_songs = QCheckBox(t("Members' songs follow them into rooms"))
         self.member_songs.setToolTip(
-            "A room opened for a member gets their favourites and recent songs, only for"
-            " that session; what they sing and like there is saved back to them"
+            t(
+                "A room opened for a member gets their favourites and recent songs, only for that session; what they sing and like there is saved back to them"
+            )
         )
         self.member_songs.setChecked(store.setting("member_songs", "1") != "0")
         form.addRow("", self.member_songs)
@@ -468,15 +481,15 @@ class ShopSettings(QFrame):
         self.tax_rate.setValue(float(store.setting("tax_rate", "0")))
         steady(self.service_rate)
         steady(self.tax_rate)
-        form.addRow("Service charge", self.service_rate)
-        form.addRow("Tax (on top, after discounts)", self.tax_rate)
+        form.addRow(t("Service charge"), self.service_rate)
+        form.addRow(t("Tax (on top, after discounts)"), self.tax_rate)
         self.low_stock = QSpinBox()
         self.low_stock.setRange(0, 999)
-        self.low_stock.setSpecialValueText("Never")
+        self.low_stock.setSpecialValueText(t("Never"))
         self.low_stock.setValue(int(store.setting("low_stock", str(LOW_STOCK))))
-        self.low_stock.setToolTip("Warn in the service bar when this many or fewer are left")
+        self.low_stock.setToolTip(t("Warn in the service bar when this many or fewer are left"))
         steady(self.low_stock)
-        form.addRow("Warn when stock is down to", self.low_stock)
+        form.addRow(t("Warn when stock is down to"), self.low_stock)
         column.addLayout(form)
         self.load()
 
@@ -496,11 +509,11 @@ class ShopSettings(QFrame):
         self.table.setItem(row, 1, QTableWidgetItem(product.category))
         self.table.setItem(row, 2, QTableWidgetItem(f"{product.price:g}"))
         stock = QTableWidgetItem("" if product.stock is None else str(product.stock))
-        stock.setToolTip("Leave empty if it never runs out")
+        stock.setToolTip(t("Leave empty if it never runs out"))
         self.table.setItem(row, 3, stock)
         self.table.setCellWidget(row, 4, OnMenu(product.active))
         picture = QPushButton()
-        picture.setToolTip("Choose a picture of this item, shown on the rooms' menus")
+        picture.setToolTip(t("Choose a picture of this item, shown on the rooms' menus"))
         picture.clicked.connect(lambda _c=False, b=picture: self.choose_picture(b))
         self.table.setCellWidget(row, 5, picture)
         self._show_picture(picture, self._pictures.get(str(product.product_id), ""))
@@ -515,7 +528,7 @@ class ShopSettings(QFrame):
             button.setText("")
         else:
             button.setIcon(QIcon())
-            button.setText("Choose…")
+            button.setText(t("Choose…"))
 
     def choose_picture(self, button: QPushButton, path: str | None = None) -> None:
         """Pick a picture for the item in the button's row; an empty choice removes it."""
@@ -526,7 +539,7 @@ class ShopSettings(QFrame):
             return
         if path is None:
             path, _ = QFileDialog.getOpenFileName(
-                self, "Picture of the item", "", "Pictures (*.png *.jpg *.jpeg *.webp *.bmp)"
+                self, t("Picture of the item"), "", "Pictures (*.png *.jpg *.jpeg *.webp *.bmp)"
             )
             if not path:
                 return
@@ -608,15 +621,15 @@ class BroadcastDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.store, self.hub = store, hub
-        self.setWindowTitle("Broadcast" if rooms is None else "Message")
+        self.setWindowTitle(t("Broadcast") if rooms is None else t("Message"))
         self.resize(460, 480)
         column = QVBoxLayout(self)
         self.text = QLineEdit()
-        self.text.setPlaceholderText("e.g. Dinner is ready!")
+        self.text.setPlaceholderText(t("e.g. Dinner is ready!"))
         self.text.setMaxLength(300)
-        column.addWidget(QLabel("Message"))
+        column.addWidget(QLabel(t("Message")))
         column.addWidget(self.text)
-        column.addWidget(QLabel("Rooms"))
+        column.addWidget(QLabel(t("Rooms")))
         self.checks: dict[str, QCheckBox] = {}
         for room in store.rooms():
             if room.is_open:
@@ -625,24 +638,24 @@ class BroadcastDialog(QDialog):
                 column.addWidget(box)
                 self.checks[room.room_id] = box
         if not self.checks:
-            column.addWidget(QLabel("No room is open."))
+            column.addWidget(QLabel(t("No room is open.")))
         self.length = QComboBox()
         for label, seconds in (
-            ("10 seconds", 10),
-            ("30 seconds", 30),
-            ("Until they press Got it", None),
+            (t("10 seconds"), 10),
+            (t("30 seconds"), 30),
+            (t("Until they press Got it"), None),
         ):
             self.length.addItem(label, seconds)
-        self.pause = QCheckBox("Pause the music")
-        self.sound = QCheckBox("Play a sound")
+        self.pause = QCheckBox(t("Pause the music"))
+        self.sound = QCheckBox(t("Play a sound"))
         self.sound.setChecked(True)
         form = QFormLayout()
-        form.addRow("Show for", self.length)
+        form.addRow(t("Show for"), self.length)
         column.addLayout(form)
         column.addWidget(self.pause)
         column.addWidget(self.sound)
         column.addStretch()
-        send = QPushButton("Send")
+        send = QPushButton(t("Send"))
         send.setObjectName("accent")
         send.clicked.connect(self.send)
         column.addWidget(send)
@@ -675,7 +688,7 @@ class SecuritySettings(QFrame):
         self.setObjectName("panel")
         column = QVBoxLayout(self)
         column.setContentsMargins(24, 20, 24, 20)
-        head = QLabel("DESK PASSWORD")
+        head = QLabel(t("DESK PASSWORD"))
         head.setObjectName("panelHead")
         column.addWidget(head)
         self.status = QLabel()
@@ -684,10 +697,10 @@ class SecuritySettings(QFrame):
         row = QHBoxLayout()
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password.setPlaceholderText("New password")
-        set_button = QPushButton("Set Password")
+        self.password.setPlaceholderText(t("New password"))
+        set_button = QPushButton(t("Set Password"))
         set_button.clicked.connect(self.set_password)
-        off = QPushButton("Turn Off")
+        off = QPushButton(t("Turn Off"))
         off.clicked.connect(lambda: self.turn_off())
         row.addWidget(self.password, stretch=1)
         row.addWidget(set_button)
@@ -695,21 +708,27 @@ class SecuritySettings(QFrame):
         column.addLayout(row)
         form = QFormLayout()
         self.lock_after = QComboBox()
-        self.lock_after.addItems(list(lock.LOCK_AFTER))
-        self.lock_after.setCurrentText(store.setting("lock_after", "Never"))
+        for key in lock.LOCK_AFTER:
+            self.lock_after.addItem(t(key), key)
+        self.lock_after.setCurrentIndex(
+            max(0, self.lock_after.findData(store.setting("lock_after", "Never")))
+        )
         steady(self.lock_after)
-        self.lock_after.currentTextChanged.connect(lambda v: store.set_setting("lock_after", v))
-        form.addRow("Lock when idle for", self.lock_after)
+        self.lock_after.currentIndexChanged.connect(
+            lambda _i: store.set_setting("lock_after", str(self.lock_after.currentData()))
+        )
+        form.addRow(t("Lock when idle for"), self.lock_after)
         column.addLayout(form)
         self.refresh()
 
     def refresh(self) -> None:
         on = lock.has_password(self.store)
         self.status.setText(
-            "On: the desk asks for the password when it starts, after being idle, and"
-            " before unbinding a room."
+            t(
+                "On: the desk asks for the password when it starts, after being idle, and before unbinding a room."
+            )
             if on
-            else "Off: anyone at this computer can use the desk."
+            else t("Off: anyone at this computer can use the desk.")
         )
         self.lock_after.setEnabled(on)
 
@@ -723,7 +742,10 @@ class SecuritySettings(QFrame):
         if lock.has_password(self.store):
             if password is None:
                 password, ok = QInputDialog.getText(
-                    self, "Turn off password", "Current password:", QLineEdit.EchoMode.Password
+                    self,
+                    t("Turn off password"),
+                    t("Current password:"),
+                    QLineEdit.EchoMode.Password,
                 )
                 if not ok:
                     return
@@ -742,11 +764,12 @@ class ReceiptSettings(QFrame):
         self.setObjectName("panel")
         column = QVBoxLayout(self)
         column.setContentsMargins(24, 20, 24, 20)
-        head = QLabel("RECEIPTS")
+        head = QLabel(t("RECEIPTS"))
         head.setObjectName("panelHead")
         note = QLabel(
-            "Any 58 mm or 80 mm receipt printer installed on this computer works through its"
-            " driver (set the driver to cut the paper after each receipt if it can)."
+            t(
+                "Any 58 mm or 80 mm receipt printer installed on this computer works through its driver (set the driver to cut the paper after each receipt if it can)."
+            )
         )
         note.setObjectName("muted")
         note.setWordWrap(True)
@@ -758,25 +781,25 @@ class ReceiptSettings(QFrame):
         self.printer.setCurrentText(store.setting("receipt_printer", receipt.ASK))
         self.paper = QComboBox()
         for mm in receipt.WIDTHS:
-            self.paper.addItem(f"{mm} mm", mm)
+            self.paper.addItem(t("{mm} mm", mm=mm), mm)
         self.paper.setCurrentIndex(receipt.WIDTHS.index(int(store.setting("receipt_width", "58"))))
         self.shop = QLineEdit(store.setting("shop_name", "YTKTV"))
         self.footer = QLineEdit(store.setting("receipt_footer", "Thank you! See you again."))
-        self.auto = QCheckBox("Print a receipt when a room checks out")
+        self.auto = QCheckBox(t("Print a receipt when a room checks out"))
         self.auto.setChecked(store.setting("receipt_auto", "0") == "1")
         self.copies = QSpinBox()
         self.copies.setRange(1, 3)
         self.copies.setValue(int(store.setting("receipt_copies", "1")))
         for field in (self.printer, self.paper, self.copies):
             steady(field)
-        form.addRow("Printer", self.printer)
-        form.addRow("Paper", self.paper)
-        form.addRow("Shop name", self.shop)
-        form.addRow("Closing line", self.footer)
-        form.addRow("Copies", self.copies)
+        form.addRow(t("Printer"), self.printer)
+        form.addRow(t("Paper"), self.paper)
+        form.addRow(t("Shop name"), self.shop)
+        form.addRow(t("Closing line"), self.footer)
+        form.addRow(t("Copies"), self.copies)
         form.addRow("", self.auto)
         column.addLayout(form)
-        save = QPushButton("Save Receipt Settings")
+        save = QPushButton(t("Save Receipt Settings"))
         save.clicked.connect(self.save)
         column.addWidget(save, alignment=Qt.AlignmentFlag.AlignLeft)
 
@@ -797,19 +820,19 @@ class CallSettings(QFrame):
         self.setObjectName("panel")
         column = QVBoxLayout(self)
         column.setContentsMargins(24, 20, 24, 20)
-        head = QLabel("SERVICE CALLS")
+        head = QLabel(t("SERVICE CALLS"))
         head.setObjectName("panelHead")
         row = QHBoxLayout()
-        row.addWidget(QLabel("A call waiting longer than"))
+        row.addWidget(QLabel(t("A call waiting longer than")))
         self.minutes = QSpinBox()
         self.minutes.setRange(1, 30)
-        self.minutes.setSuffix(" min")
+        self.minutes.setSuffix(t(" min"))
         self.minutes.setValue(store.overdue_minutes())
         self.minutes.valueChanged.connect(
             lambda value: store.set_setting("call_overdue_minutes", str(value))
         )
         row.addWidget(self.minutes)
-        row.addWidget(QLabel("turns red, beeps again and counts as late in the shift report."))
+        row.addWidget(QLabel(t("turns red, beeps again and counts as late in the shift report.")))
         row.addStretch()
         column.addWidget(head)
         column.addLayout(row)
@@ -825,23 +848,25 @@ class UpdateSettings(QFrame):
         self.setObjectName("panel")
         column = QVBoxLayout(self)
         column.setContentsMargins(24, 20, 24, 20)
-        head = QLabel("UPDATES")
+        head = QLabel(t("UPDATES"))
         head.setObjectName("panelHead")
-        version = QLabel(f"YTKTV Desk {__version__}")
-        self.auto = QCheckBox("Check for updates automatically and download them in the background")
+        version = QLabel(t("YTKTV Desk {version}", version=__version__))
+        self.auto = QCheckBox(
+            t("Check for updates automatically and download them in the background")
+        )
         self.auto.setChecked(store.setting("auto_update", "1") == "1")
         self.auto.toggled.connect(lambda on: store.set_setting("auto_update", "1" if on else "0"))
-        self.state = QLabel("Updates install only when you press Update, never by themselves.")
+        self.state = QLabel(t("Updates install only when you press Update, never by themselves."))
         self.state.setObjectName("muted")
         self.state.setWordWrap(True)
-        self.check_button = QPushButton("Check Now")
+        self.check_button = QPushButton(t("Check Now"))
         self.check_button.clicked.connect(lambda: self.check_now and self.check_now())
         for widget in (head, version, self.auto, self.state):
             column.addWidget(widget)
         buttons = QHBoxLayout()
         buttons.addWidget(self.check_button)
-        diagnose = QPushButton("Save Diagnostics…")
-        diagnose.setToolTip("One zip with the recent logs and the version, for a bug report")
+        diagnose = QPushButton(t("Save Diagnostics…"))
+        diagnose.setToolTip(t("One zip with the recent logs and the version, for a bug report"))
         diagnose.clicked.connect(lambda: self.save_diagnostics())
         buttons.addWidget(diagnose)
         buttons.addStretch()

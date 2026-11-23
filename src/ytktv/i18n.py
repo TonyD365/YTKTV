@@ -88,3 +88,8 @@ def t(text: str, /, **values: Any) -> str:
     except (KeyError, IndexError, ValueError):  # a broken translation must not crash the room
         log.warning("bad translation for %r", text)
         return text.format(**values)
+
+
+def localize_page(html: str) -> str:
+    """A phone page told the app's language through its <html lang>; nothing else is exposed."""
+    return html.replace('<html lang="en">', f'<html lang="{current().replace("_", "-")}">', 1)

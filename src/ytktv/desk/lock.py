@@ -10,8 +10,9 @@ from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtWidgets import QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from ytktv.desk.store import DeskStore
+from ytktv.i18n import N_, t
 
-LOCK_AFTER = {"Never": 0, "5 minutes": 5, "15 minutes": 15, "30 minutes": 30}
+LOCK_AFTER = {N_("Never"): 0, N_("5 minutes"): 5, N_("15 minutes"): 15, N_("30 minutes"): 30}
 
 
 def _digest(password: str, salt: str) -> str:
@@ -49,18 +50,18 @@ class LockScreen(QWidget):
         self.setStyleSheet("LockScreen { background: #07040f; }")
         column = QVBoxLayout(self)
         column.addStretch()
-        title = QLabel("YTKTV Desk is locked")
+        title = QLabel(t("YTKTV Desk is locked"))
         title.setStyleSheet("color: white; font-size: 28px; font-weight: 800;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password.setPlaceholderText("Password")
+        self.password.setPlaceholderText(t("Password"))
         self.password.setFixedWidth(320)
         self.password.returnPressed.connect(self.try_unlock)
         self.error = QLabel("")
         self.error.setStyleSheet("color: #ff6b8b;")
         self.error.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        unlock = QPushButton("Unlock")
+        unlock = QPushButton(t("Unlock"))
         unlock.setObjectName("accent")
         unlock.clicked.connect(self.try_unlock)
         column.addWidget(title)
@@ -92,7 +93,7 @@ class LockScreen(QWidget):
             self.hide()
             self.activity()
         else:
-            self.error.setText("Wrong password")
+            self.error.setText(t("Wrong password"))
             self.password.selectAll()
 
     def activity(self) -> None:

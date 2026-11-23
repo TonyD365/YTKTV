@@ -83,6 +83,7 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 [tool.ruff.lint.per-file-ignores]
 # Qt style sheets read best one rule per line.
 "src/ytktv/ui/theme.py" = ["E501"]
+"src/ytktv/desk/*.py" = ["E501"]  # long translatable sentences stay one literal
 "src/ytktv/ui/mixer_panel.py" = ["E501"]
 
 [tool.mypy]

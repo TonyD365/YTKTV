@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ytktv.i18n import t
 from ytktv.rooms.admin import FIELDS, QUALITIES
 from ytktv.smart_lights import KINDS as LIGHT_KINDS
 
@@ -27,7 +28,7 @@ class AdminSettingsDialog(QDialog):
 
     def __init__(self, room: str, report: dict[str, Any], parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"Admin Settings · {room}")
+        self.setWindowTitle(t("Admin Settings · {room}", room=room))
         self.setMinimumWidth(560)
         self.current: dict[str, Any] = dict(report.get("settings") or {})
         column = QVBoxLayout(self)
@@ -46,7 +47,7 @@ class AdminSettingsDialog(QDialog):
             self.widgets[name] = widget
             form.addRow(label, widget)
         column.addLayout(form)
-        note = QLabel("Changes are applied by the room at once and noted in the Log.")
+        note = QLabel(t("Changes are applied by the room at once and noted in the Log."))
         note.setObjectName("muted")
         column.addWidget(note)
         buttons = QDialogButtonBox(
@@ -69,14 +70,14 @@ class AdminSettingsDialog(QDialog):
             return combo
         if name == "mv_screen":
             combo = QComboBox()
-            combo.addItem("Automatic (extended display)", -1)
+            combo.addItem(t("Automatic (extended display)"), -1)
             for index, screen in enumerate(report.get("screens") or []):
                 combo.addItem(f"{index + 1}: {screen}", index)
             combo.setCurrentIndex(max(0, combo.findData(value)))
             return combo
         if name == "output_device":
             combo = QComboBox()
-            combo.addItem("System default", None)
+            combo.addItem(t("System default"), None)
             for device in report.get("outputs") or []:
                 combo.addItem(str(device), str(device))
             combo.setCurrentIndex(max(0, combo.findData(value)))
@@ -97,12 +98,12 @@ class AdminSettingsDialog(QDialog):
             delay = QSpinBox()
             delay.setRange(0, 1000)
             delay.setSingleStep(20)
-            delay.setSuffix(" ms")
+            delay.setSuffix(t(" ms"))
             delay.setValue(int(value))
             return delay
         if name == "local_folders":
             edit = QPlainTextEdit("\n".join(value or []))
-            edit.setPlaceholderText("One folder per line, as a path on the room's computer")
+            edit.setPlaceholderText(t("One folder per line, as a path on the room's computer"))
             edit.setMaximumHeight(90)
             return edit
         return QLineEdit("" if value is None else str(value))

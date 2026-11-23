@@ -37,13 +37,15 @@ from PySide6.QtWidgets import (
 
 from ytktv.config import data_dir
 from ytktv.desk import awake, lock, staff
+from ytktv.desk.language import LanguageSettings
 from ytktv.desk.metrics import Metrics, memory_mb, uptime_text
 from ytktv.desk.server import Hub
 from ytktv.desk.store import DeskStore
+from ytktv.i18n import N_, t
 from ytktv.ui import backdrop
 
 ONLINE_SECONDS = 120  # a staff terminal that called within this long counts as online
-FILTERS = ("Everything", "Operations", "Rooms", "Songs", "Errors", "Server")
+FILTERS = (N_("Everything"), N_("Operations"), N_("Rooms"), N_("Songs"), N_("Errors"), N_("Server"))
 KINDS = {
     "Operations": "operation",
     "Rooms": "room",
@@ -87,7 +89,7 @@ class ServerConsole(QMainWindow):
         self.processor = processor  # processing.SongProcessor while songs are done here
         self.keep_awake = keep_awake
         self.confirm_close = True
-        self.setWindowTitle("YTKTV Desk · Server")
+        self.setWindowTitle(t("YTKTV Desk · Server"))
         self.resize(1280, 800)
         root = backdrop.Backdrop()
         root.setObjectName("console")
@@ -107,7 +109,7 @@ class ServerConsole(QMainWindow):
         heading.addWidget(self.title)
         heading.addWidget(self.facts)
         top.addLayout(heading, stretch=1)
-        self.running = QLabel("●  RUNNING")
+        self.running = QLabel(t("●  RUNNING"))
         self.running.setObjectName("running")
         top.addWidget(self.running, alignment=Qt.AlignmentFlag.AlignTop)
         page.addLayout(top)
@@ -117,12 +119,12 @@ class ServerConsole(QMainWindow):
         self.values: dict[str, QLabel] = {}
         self.details: dict[str, QLabel] = {}
         cards = (
-            ("rooms", "ROOMS ONLINE"),
-            ("terminals", "STAFF TERMINALS"),
-            ("requests", "REQUESTS / MIN"),
-            ("machine", "THIS COMPUTER"),
-            ("today", "TODAY"),
-            ("gpu", "SONGS FOR ROOMS"),
+            ("rooms", t("ROOMS ONLINE")),
+            ("terminals", t("STAFF TERMINALS")),
+            ("requests", t("REQUESTS / MIN")),
+            ("machine", t("THIS COMPUTER")),
+            ("today", t("TODAY")),
+            ("gpu", t("SONGS FOR ROOMS")),
         )
         for index, (key, head) in enumerate(cards):
             card = QFrame()
@@ -144,12 +146,13 @@ class ServerConsole(QMainWindow):
         page.addLayout(grid)
 
         bar = QHBoxLayout()
-        log_head = QLabel("LIVE LOG")
+        log_head = QLabel(t("LIVE LOG"))
         log_head.setObjectName("cardHead")
         self.filter = QComboBox()
-        self.filter.addItems(FILTERS)
+        for name in FILTERS:
+            self.filter.addItem(t(name), name)
         self.filter.currentIndexChanged.connect(lambda _i: self.refresh())
-        export = QPushButton("Export Log…")
+        export = QPushButton(t("Export Log…"))
         export.clicked.connect(lambda: self.export_log())
         bar.addWidget(log_head)
         bar.addStretch()
@@ -160,18 +163,18 @@ class ServerConsole(QMainWindow):
         page.addWidget(self.log, stretch=1)
 
         buttons = QHBoxLayout()
-        settings = QPushButton("⚙️  Settings")
+        settings = QPushButton(t("⚙️  Settings"))
         settings.clicked.connect(lambda: ConsoleSettings(self).exec())
-        backup = QPushButton("💾  Back Up Now")
+        backup = QPushButton(t("💾  Back Up Now"))
         backup.clicked.connect(lambda: self.backup_now(tell=True))
-        lock_button = QPushButton("🔒  Lock")
+        lock_button = QPushButton(t("🔒  Lock"))
         lock_button.clicked.connect(self._lock)
         lock_button.setEnabled(lock.has_password(store))
         buttons.addWidget(settings)
         buttons.addWidget(backup)
         buttons.addWidget(lock_button)
         buttons.addStretch()
-        note = QLabel("Front-desk work happens on the staff terminals.")
+        note = QLabel(t("Front-desk work happens on the staff terminals."))
         note.setObjectName("facts")
         buttons.addWidget(note)
         page.addLayout(buttons)
@@ -197,10 +200,14 @@ class ServerConsole(QMainWindow):
 
     def refresh(self) -> None:
         now = time.time()
-        self.title.setText(f"{self.name()}  ·  Server")
+        self.title.setText(t("{name}  ·  Server", name=self.name()))
         self.facts.setText(
-            f"https://{self.address}   ·   fingerprint {self.store.fingerprint}"
-            f"   ·   up {uptime_text(self.metrics.uptime())}"
+            t(
+                "https://{address}   ·   fingerprint {fingerprint}   ·   up {uptime_text}",
+                address=self.address,
+                fingerprint=self.store.fingerprint,
+                uptime_text=uptime_text(self.metrics.uptime()),
+            )
         )
         rooms = self.store.rooms()
         online = self.hub.online()
@@ -209,24 +216,33 @@ class ServerConsole(QMainWindow):
         in_use = sum(1 for r in rooms if r.is_open)
         offline = [r.name for r in rooms if r.room_id not in online]
         self.details["rooms"].setText(
-            f"{in_use} in use"
-            + (f" · offline: {', '.join(sorted(offline)[:6])}" if offline else " · all online")
+            t("{count} in use", count=in_use)
+            + (
+                t(" · offline: {names}", names=", ".join(sorted(offline)[:6]))
+                if offline
+                else t(" · all online")
+            )
         )
         terminals = self.store.terminals()
-        here = [t for t in terminals if now - t.last_seen < ONLINE_SECONDS]
+        here = [x for x in terminals if now - x.last_seen < ONLINE_SECONDS]
         self.values["terminals"].setText(f"{len(here)} / {len(terminals)}")
         self.details["terminals"].setText(
-            ", ".join(sorted(t.name for t in here)) or "None online right now"
+            ", ".join(sorted(x.name for x in here)) or t("None online right now")
         )
         self.values["requests"].setText(str(self.metrics.per_minute()))
         errors = self.metrics.errors_last_hour()
-        self.details["requests"].setText(f"{errors} refused or failed in the last hour")
+        self.details["requests"].setText(
+            t("{errors} refused or failed in the last hour", errors=errors)
+        )
         memory = memory_mb()
-        self.values["machine"].setText(f"{self.metrics.cpu_percent():.0f}% CPU")
+        self.values["machine"].setText(
+            t("{cpu_percent:.0f}% CPU", cpu_percent=self.metrics.cpu_percent())
+        )
         file = Path(self.store.path)
         size = file.stat().st_size / 2**20 if file.is_file() else 0.0
         self.details["machine"].setText(
-            (f"{memory:.0f} MB memory · " if memory is not None else "") + f"database {size:.1f} MB"
+            (t("{memory:.0f} MB memory · ", memory=memory) if memory is not None else "")
+            + t("database {size:.1f} MB", size=size)
         )
         start = day_start(now)
         visits = self.store.history(start, start + 86400)
@@ -235,7 +251,12 @@ class ServerConsole(QMainWindow):
         orders = [o for o in self.store.orders() if o.created >= start]
         self.values["today"].setText(f"{currency}{takings:,.2f}")
         self.details["today"].setText(
-            f"{len(visits)} sessions closed · {in_use} open · {len(orders)} orders"
+            t(
+                "{len} sessions closed · {in_use} open · {len2} orders",
+                len=len(visits),
+                in_use=in_use,
+                len2=len(orders),
+            )
         )
         self._show_gpu()
         self.show_log(now)
@@ -245,11 +266,11 @@ class ServerConsole(QMainWindow):
 
         state = processing.describe(self.processor)
         if not state["on"]:
-            self.values["gpu"].setText("Off")
-            self.details["gpu"].setText("Settings → Process Songs for the Rooms")
+            self.values["gpu"].setText(t("Off"))
+            self.details["gpu"].setText(t("Settings → Process Songs for the Rooms"))
             return
-        self.values["gpu"].setText(f"{state['queue']} queued")
-        parts = [f"working on {state['active']}" if state["active"] else "idle"]
+        self.values["gpu"].setText(t("{value} queued", value=state["queue"]))
+        parts = [t("working on {song}", song=state["active"]) if state["active"] else t("idle")]
         if state["device"]:
             parts.append(state["device"])
         parts.append(f"cache {state['cache_mb'] / 1024:.1f} GB")
@@ -264,7 +285,7 @@ class ServerConsole(QMainWindow):
             for e in self.store.oplog(now - 86400, now + 1)
         ]
         rows += [(e.at, e.kind, e.text) for e in self.metrics.events()]
-        wanted = KINDS.get(self.filter.currentText())
+        wanted = KINDS.get(str(self.filter.currentData()))
         if wanted:
             rows = [row for row in rows if row[1] == wanted]
         return sorted(rows, key=lambda row: row[0], reverse=True)
@@ -283,7 +304,7 @@ class ServerConsole(QMainWindow):
     def export_log(self, path: str | None = None) -> None:
         if path is None:
             path, _ = QFileDialog.getSaveFileName(
-                self, "Export Log", "ytktv-desk-log.csv", "CSV (*.csv)"
+                self, t("Export Log"), "ytktv-desk-log.csv", "CSV (*.csv)"
             )
             if not path:
                 return
@@ -301,7 +322,9 @@ class ServerConsole(QMainWindow):
         self.metrics.event("server", f"Backed up the records to {target}")
         if tell:
             QMessageBox.information(
-                self, "Back Up Now", f"Saved a copy of every record to\n{target}"
+                self,
+                t("Back Up Now"),
+                t("Saved a copy of every record to\n{target}", target=target),
             )
         self.refresh()
         return target
@@ -311,21 +334,21 @@ class ServerConsole(QMainWindow):
         if lock.has_password(self.store):
             if password is None:
                 password, ok = QInputDialog.getText(
-                    self, "Leave Server Mode", "Desk password:", QLineEdit.EchoMode.Password
+                    self, t("Leave Server Mode"), t("Desk password:"), QLineEdit.EchoMode.Password
                 )
                 if not ok:
                     return False
             if not lock.check(self.store, password):
                 if confirm:
-                    QMessageBox.warning(self, "Leave Server Mode", "Wrong password.")
+                    QMessageBox.warning(self, t("Leave Server Mode"), t("Wrong password."))
                 return False
         self.store.set_setting(staff.SERVER_MODE_SETTING, "0")
         self.store.log(self.name(), "Left Server Mode")
         if confirm:
             QMessageBox.information(
                 self,
-                "Leave Server Mode",
-                "YTKTV Desk closes now. Open it again to use the front desk on this computer.",
+                t("Leave Server Mode"),
+                t("YTKTV Desk closes now. Open it again to use the front desk on this computer."),
             )
             self.confirm_close = False
             QApplication.quit()
@@ -335,9 +358,10 @@ class ServerConsole(QMainWindow):
         if self.confirm_close:
             answer = QMessageBox.question(
                 self,
-                "Stop the server",
-                "Closing this window stops the server: rooms and staff terminals lose the Desk"
-                " until it is opened again. Close it?",
+                t("Stop the server"),
+                t(
+                    "Closing this window stops the server: rooms and staff terminals lose the Desk until it is opened again. Close it?"
+                ),
             )
             if answer != QMessageBox.StandardButton.Yes:
                 event.ignore()
@@ -357,23 +381,25 @@ class ConsoleSettings(QDialog):
         super().__init__(console)
         self.console = console
         self._start_at_login = start_at_login or awake.start_at_login
-        self.setWindowTitle("Server Settings")
+        self.setWindowTitle(t("Server Settings"))
         column = QVBoxLayout(self)
         form = QFormLayout()
         self.name = QLineEdit(console.name())
-        form.addRow("This Desk's name", self.name)
+        form.addRow(t("This Desk's name"), self.name)
         column.addLayout(form)
-        self.autostart = QCheckBox("Start YTKTV Desk when this computer starts")
+        self.autostart = QCheckBox(t("Start YTKTV Desk when this computer starts"))
         self.autostart.setChecked(awake.starts_at_login())
         column.addWidget(self.autostart)
+        self.language = LanguageSettings(console.store)
+        column.addWidget(self.language)
         from ytktv.desk.processing_settings import ProcessingSettings
 
         column.addWidget(ProcessingSettings(console.store))
         row = QHBoxLayout()
-        save = QPushButton("Save")
+        save = QPushButton(t("Save"))
         save.setObjectName("accent")
         save.clicked.connect(self.save)
-        leave = QPushButton("Leave Server Mode…")
+        leave = QPushButton(t("Leave Server Mode…"))
         leave.clicked.connect(self.leave)
         row.addWidget(leave)
         row.addStretch()
@@ -403,21 +429,21 @@ def enter_server_mode(
     if lock.has_password(store):
         if password is None:
             password, ok = QInputDialog.getText(
-                parent, "Server Mode", "Desk password:", QLineEdit.EchoMode.Password
+                parent, t("Server Mode"), t("Desk password:"), QLineEdit.EchoMode.Password
             )
             if not ok:
                 return False
         if not lock.check(store, password):
             if confirm:
-                QMessageBox.warning(parent, "Server Mode", "Wrong password.")
+                QMessageBox.warning(parent, t("Server Mode"), t("Wrong password."))
             return False
     if confirm:
         answer = QMessageBox.question(
             parent,
-            "Server Mode",
-            "This computer will only run the server and show its console; staff work on the"
-            " staff terminals. It stays in Server Mode until you leave it in the console's"
-            " Settings. Switch now?",
+            t("Server Mode"),
+            t(
+                "This computer will only run the server and show its console; staff work on the staff terminals. It stays in Server Mode until you leave it in the console's Settings. Switch now?"
+            ),
         )
         if answer != QMessageBox.StandardButton.Yes:
             return False
@@ -426,7 +452,7 @@ def enter_server_mode(
     store.log(staff.machine_name(store), "Switched to Server Mode")
     if confirm:
         QMessageBox.information(
-            parent, "Server Mode", "YTKTV Desk closes now. Open it again to start the server."
+            parent, t("Server Mode"), t("YTKTV Desk closes now. Open it again to start the server.")
         )
         QApplication.quit()
     return True

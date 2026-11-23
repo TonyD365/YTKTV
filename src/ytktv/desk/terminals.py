@@ -27,12 +27,13 @@ from PySide6.QtWidgets import (
 
 from ytktv.desk import remote, staff
 from ytktv.desk.store import CODE_SECONDS, DeskStore
+from ytktv.i18n import t
 from ytktv.rooms import discovery
 from ytktv.ui.support import qr_pixmap, run_async
 
 
 def _restart_note(parent: QWidget, text: str) -> None:
-    QMessageBox.information(parent, "Restart YTKTV Desk", text)
+    QMessageBox.information(parent, t("Restart YTKTV Desk"), text)
     QApplication.quit()
 
 
@@ -47,7 +48,7 @@ class TerminalSettings(QFrame):
         self.setObjectName("panel")
         self.column = QVBoxLayout(self)
         self.column.setContentsMargins(24, 20, 24, 20)
-        head = QLabel("STAFF TERMINALS")
+        head = QLabel(t("STAFF TERMINALS"))
         head.setObjectName("panelHead")
         self.column.addWidget(head)
         if main is None:
@@ -66,15 +67,16 @@ class TerminalSettings(QFrame):
 
     def _main_desk(self) -> None:
         self._note(
-            "Other computers running YTKTV Desk can work on this Desk's rooms as staff"
-            " terminals: everything stays here, and the Log shows which machine did what."
+            t(
+                "Other computers running YTKTV Desk can work on this Desk's rooms as staff terminals: everything stays here, and the Log shows which machine did what."
+            )
         )
         form = QFormLayout()
         self.name = QLineEdit(staff.machine_name(self.store))
         self.name.editingFinished.connect(self.save_name)
-        form.addRow("This Desk's name", self.name)
+        form.addRow(t("This Desk's name"), self.name)
         self.column.addLayout(form)
-        self.serving = QCheckBox("Let other Desks connect as staff terminals")
+        self.serving = QCheckBox(t("Let other Desks connect as staff terminals"))
         self.serving.setChecked(self.store.setting(staff.SERVER_SETTING, "0") == "1")
         self.serving.toggled.connect(self.set_serving)
         self.column.addWidget(self.serving)
@@ -83,9 +85,10 @@ class TerminalSettings(QFrame):
         qr.setPixmap(qr_pixmap(self.phone_url, 120))
         phone_row.addWidget(qr)
         phone_note = QLabel(
-            f"Staff can use a phone too: open {self.phone_url} (accept the security warning"
-            " once: the Desk's certificate is its own), then pair it with a code from Add"
-            " Terminal. Phones see rooms, calls and orders, and can open and check out rooms."
+            t(
+                "Staff can use a phone too: open {phone_url} (accept the security warning once: the Desk's certificate is its own), then pair it with a code from Add Terminal. Phones see rooms, calls and orders, and can open and check out rooms.",
+                phone_url=self.phone_url,
+            )
         )
         phone_note.setWordWrap(True)
         phone_note.setObjectName("muted")
@@ -95,12 +98,12 @@ class TerminalSettings(QFrame):
         self.list.setMaximumHeight(140)
         self.column.addWidget(self.list)
         buttons = QHBoxLayout()
-        self.add_button = QPushButton("Add Terminal")
+        self.add_button = QPushButton(t("Add Terminal"))
         self.add_button.clicked.connect(self.add_terminal)
-        remove = QPushButton("Remove")
+        remove = QPushButton(t("Remove"))
         remove.clicked.connect(self.remove_terminal)
-        join = QPushButton("Make This Desk a Staff Terminal…")
-        join.setToolTip("Work on another Desk's rooms instead of this one's")
+        join = QPushButton(t("Make This Desk a Staff Terminal…"))
+        join.setToolTip(t("Work on another Desk's rooms instead of this one's"))
         join.clicked.connect(lambda: ConnectDialog(self).exec())
         for button in (self.add_button, remove):
             buttons.addWidget(button)
@@ -108,11 +111,11 @@ class TerminalSettings(QFrame):
         buttons.addWidget(join)
         self.column.addLayout(buttons)
         self._note(
-            "Server Mode: this computer only runs the server and shows a console with its"
-            " status, while staff work on the staff terminals. It stays on, restarts included,"
-            " until you leave it in the console's Settings."
+            t(
+                "Server Mode: this computer only runs the server and shows a console with its status, while staff work on the staff terminals. It stays on, restarts included, until you leave it in the console's Settings."
+            )
         )
-        server_mode = QPushButton("Switch to Server Mode…")
+        server_mode = QPushButton(t("Switch to Server Mode…"))
         server_mode.clicked.connect(self.enter_server_mode)
         self.column.addWidget(server_mode, alignment=Qt.AlignmentFlag.AlignLeft)
         self.load()
@@ -136,7 +139,7 @@ class TerminalSettings(QFrame):
         self.list.clear()
         for terminal in self.store.terminals():
             seen = time.strftime("%m-%d %H:%M", time.localtime(terminal.last_seen))
-            item = QListWidgetItem(f"{terminal.name}  ·  last seen {seen}")
+            item = QListWidgetItem(t("{name}  ·  last seen {seen}", name=terminal.name, seen=seen))
             item.setData(Qt.ItemDataRole.UserRole, terminal.terminal_id)
             self.list.addItem(item)
 
@@ -145,11 +148,14 @@ class TerminalSettings(QFrame):
         if show:
             QMessageBox.information(
                 self,
-                "Add a staff terminal",
-                f"On the other computer open YTKTV Desk → Settings → Staff Terminals →"
-                f" Make This Desk a Staff Terminal, pick this Desk ({self.address})"
-                f" and enter\n\n{code}\n\nwithin {CODE_SECONDS // 60} minutes. Its screen will"
-                f" show these pictures; they must match:\n\n{self.store.fingerprint}",
+                t("Add a staff terminal"),
+                t(
+                    "On the other computer open YTKTV Desk → Settings → Staff Terminals → Make This Desk a Staff Terminal, pick this Desk ({address}) and enter\n\n{code}\n\nwithin {value} minutes. Its screen will show these pictures; they must match:\n\n{fingerprint}",
+                    address=self.address,
+                    code=code,
+                    value=CODE_SECONDS // 60,
+                    fingerprint=self.store.fingerprint,
+                ),
             )
             self.load()
         return code
@@ -165,20 +171,23 @@ class TerminalSettings(QFrame):
     def _terminal(self, main: remote.MainDesk) -> None:
         config = main.config
         self._note(
-            f"This Desk is a staff terminal of {config.main_name or 'the main Desk'}"
-            f" ({config.fingerprint}). The rooms, records and settings are that Desk's."
+            t(
+                "This Desk is a staff terminal of {value} ({fingerprint}). The rooms, records and settings are that Desk's.",
+                value=config.main_name or "the main Desk",
+                fingerprint=config.fingerprint,
+            )
         )
         form = QFormLayout()
         self.name = QLineEdit(config.name)
-        rename = QPushButton("Rename")
+        rename = QPushButton(t("Rename"))
         rename.clicked.connect(self.rename_self)
         row = QHBoxLayout()
         row.addWidget(self.name)
         row.addWidget(rename)
-        form.addRow("This terminal's name", row)
+        form.addRow(t("This terminal's name"), row)
         self.column.addLayout(form)
-        leave = QPushButton("Disconnect")
-        leave.setToolTip("Stop being a staff terminal; this Desk uses its own rooms again")
+        leave = QPushButton(t("Disconnect"))
+        leave.setToolTip(t("Stop being a staff terminal; this Desk uses its own rooms again"))
         leave.clicked.connect(self.leave)
         self.column.addWidget(leave, alignment=Qt.AlignmentFlag.AlignLeft)
 
@@ -193,13 +202,15 @@ class TerminalSettings(QFrame):
     def leave(self, _checked: bool = False, confirm: bool = True) -> None:
         if confirm:
             answer = QMessageBox.question(
-                self, "Disconnect", "Stop working on the main Desk and use this Desk's own rooms?"
+                self,
+                t("Disconnect"),
+                t("Stop working on the main Desk and use this Desk's own rooms?"),
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return
         remote.forget_config()
         if confirm:
-            _restart_note(self, "YTKTV Desk closes now. Open it again to use its own rooms.")
+            _restart_note(self, t("YTKTV Desk closes now. Open it again to use its own rooms."))
 
 
 class ConnectDialog(QDialog):
@@ -207,31 +218,31 @@ class ConnectDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Make This Desk a Staff Terminal")
+        self.setWindowTitle(t("Make This Desk a Staff Terminal"))
         self.setMinimumWidth(460)
         column = QVBoxLayout(self)
-        column.addWidget(QLabel("Desks on this network:"))
+        column.addWidget(QLabel(t("Desks on this network:")))
         self.found = QListWidget()
         self.found.currentItemChanged.connect(self._picked)
         column.addWidget(self.found)
         form = QFormLayout()
         self.address = QLineEdit()
-        self.address.setPlaceholderText("or type its address, e.g. 192.168.1.20:8770")
+        self.address.setPlaceholderText(t("or type its address, e.g. 192.168.1.20:8770"))
         self.code = QLineEdit()
         self.code.setMaxLength(6)
         self.name = QLineEdit(socket.gethostname().split(".")[0])
-        form.addRow("Address", self.address)
-        form.addRow("Code", self.code)
-        form.addRow("This terminal's name", self.name)
+        form.addRow(t("Address"), self.address)
+        form.addRow(t("Code"), self.code)
+        form.addRow(t("This terminal's name"), self.name)
         column.addLayout(form)
         self.status = QLabel()
         self.status.setObjectName("muted")
         self.status.setWordWrap(True)
         column.addWidget(self.status)
         buttons = QHBoxLayout()
-        search = QPushButton("Search Again")
+        search = QPushButton(t("Search Again"))
         search.clicked.connect(self.search)
-        connect = QPushButton("Connect")
+        connect = QPushButton(t("Connect"))
         connect.setObjectName("accent")
         connect.clicked.connect(lambda: self.join())
         buttons.addWidget(search)
@@ -241,7 +252,7 @@ class ConnectDialog(QDialog):
         self.search()
 
     def search(self) -> None:
-        self.status.setText("Looking for Desks…")
+        self.status.setText(t("Looking for Desks…"))
         run_async(lambda: discovery.browse(2.0), self._show_found, lambda _e: self._show_found([]))
 
     def _show_found(self, desks: list[discovery.FoundDesk]) -> None:
@@ -255,7 +266,7 @@ class ConnectDialog(QDialog):
             item = QListWidgetItem(f"{desk.name}  ·  {desk.address}")
             item.setData(Qt.ItemDataRole.UserRole, desk.address)
             self.found.addItem(item)
-        self.status.setText("" if desks else "No Desk answered. Type its address instead.")
+        self.status.setText("" if desks else t("No Desk answered. Type its address instead."))
 
     def _picked(self, item: QListWidgetItem | None) -> None:
         if item is not None:
@@ -264,25 +275,27 @@ class ConnectDialog(QDialog):
     def join(self, confirm: Callable[[remote.TerminalConfig], bool] | None = None) -> None:
         address, code = self.address.text().strip(), self.code.text().strip()
         if not address or not code:
-            self.status.setText("Pick a Desk (or type its address) and enter its code.")
+            self.status.setText(t("Pick a Desk (or type its address) and enter its code."))
             return
-        self.status.setText("Connecting…")
+        self.status.setText(t("Connecting…"))
 
         def paired(config: remote.TerminalConfig) -> None:
             if not (confirm or self._compare)(config):
-                self.status.setText("Not connected.")
+                self.status.setText(t("Not connected."))
                 return
             remote.save_config(config)
             self.accept()
             if confirm is None:
                 _restart_note(
                     self,
-                    f"This Desk is now a staff terminal of {config.main_name}."
-                    " YTKTV Desk closes now; open it again to start.",
+                    t(
+                        "This Desk is now a staff terminal of {main_name}. YTKTV Desk closes now; open it again to start.",
+                        main_name=config.main_name,
+                    ),
                 )
 
         def failed(exc: Exception) -> None:
-            self.status.setText(f"Could not connect: {exc}")
+            self.status.setText(t("Could not connect: {exc}", exc=exc))
 
         name = self.name.text().strip() or "Staff terminal"
         run_async(lambda: remote.pair(address, code, name), paired, failed)
@@ -290,8 +303,11 @@ class ConnectDialog(QDialog):
     def _compare(self, config: remote.TerminalConfig) -> bool:
         answer = QMessageBox.question(
             self,
-            "Is this the right Desk?",
-            f"Does {config.main_name or 'the main Desk'} show these pictures?\n\n"
-            f"{config.fingerprint}",
+            t("Is this the right Desk?"),
+            t(
+                "Does {value} show these pictures?\n\n{fingerprint}",
+                value=config.main_name or "the main Desk",
+                fingerprint=config.fingerprint,
+            ),
         )
         return answer == QMessageBox.StandardButton.Yes

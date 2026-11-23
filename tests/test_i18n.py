@@ -19,6 +19,7 @@ SCOPE = [
     SRC / "app.py",
     SRC / "core" / "games.py",
     SRC / "core" / "controller.py",
+    *sorted((SRC / "desk").glob("*.py")),
 ]
 
 
@@ -168,3 +169,60 @@ def test_the_picker_is_for_guests_and_not_an_admin_setting(qtbot, ktv) -> None:
     store.settings.desk_url = "http://desk"
     page.apply_role()
     assert not frame.isHidden()
+
+
+def test_the_desk_keeps_its_language_in_its_settings_or_on_a_terminal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ytktv.desk import language
+    from ytktv.desk.store import DeskStore
+
+    monkeypatch.setattr(i18n, "_system_names", lambda: ["en-US"])
+    store = DeskStore(tmp_path / "desk.sqlite3")
+    assert language.apply(store) == "en"
+    store.set_setting(language.SETTING, "zh_CN")
+    assert language.apply(store) == "zh_CN"
+    assert i18n.t("Settings") == "设置"
+    # A staff terminal's choice lives on its own computer, never in the main Desk's records.
+    mine = tmp_path / "desk-language.json"
+    language.save_local("zh_CN", mine)
+    assert language.load_local(mine) == "zh_CN"
+    assert language.apply(None, mine) == "zh_CN"
+    assert language.load_local(tmp_path / "missing.json") == ""
+    monkeypatch.setattr(i18n, "_system_names", lambda: ["zh-Hans"])
+    assert language.apply(None, tmp_path / "missing.json") == "zh_CN"  # first run: the system
+
+
+def test_the_desk_picker_saves_without_changing_this_run(qtbot, tmp_path: Path) -> None:
+    pytest.importorskip("PySide6")
+    from ytktv.desk import language
+    from ytktv.desk.store import DeskStore
+
+    store = DeskStore(tmp_path / "desk.sqlite3")
+    picker = language.LanguageSettings(store)
+    qtbot.addWidget(picker)
+    picker.choice.setCurrentIndex(1)
+    picker.choice.activated.emit(1)
+    assert store.setting(language.SETTING) == "zh_CN"
+    assert picker.note.text() == "新语言将在重启 YTKTV Desk 后生效。"
+    assert i18n.current() == "en"
+    mine = tmp_path / "terminal.json"
+    terminal = language.LanguageSettings(store, local=True, path=mine)
+    qtbot.addWidget(terminal)
+    terminal.choice.setCurrentIndex(0)
+    terminal.choice.activated.emit(0)
+    assert language.load_local(mine) == "en"
+    assert store.setting(language.SETTING) == "zh_CN"
+
+
+def test_phone_pages_learn_the_language_from_html_lang_only() -> None:
+    page = '<!doctype html>\n<html lang="en">\n<head></head>'
+    assert i18n.localize_page(page) == page
+    i18n.set_language("zh_CN")
+    assert 'lang="zh-CN"' in i18n.localize_page(page)
+    for name in ("index.html", "mic.html"):
+        text = (SRC / "server" / "static" / name).read_text(encoding="utf-8")
+        assert '<html lang="en">' in text
+        assert 'src="http' not in text
+    staff = (SRC / "desk" / "assets" / "staff.html").read_text(encoding="utf-8")
+    assert '<html lang="en">' in staff and "zh_CN" in staff

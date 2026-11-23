@@ -23,6 +23,7 @@ from ytktv.desk import store as desk_store
 from ytktv.desk.guard import PairingGuard
 from ytktv.desk.server import Hub, tell
 from ytktv.desk.store import DeskStore
+from ytktv.i18n import localize_page
 
 # Values that travel as {"__type__": name, "fields": {...}} and come back as the same class.
 TYPES: dict[str, type] = {
@@ -293,7 +294,7 @@ def add_staff_routes(
     @app.get("/staff", response_class=HTMLResponse)
     def phone_page() -> str:
         """The staff terminal for a phone: rooms, calls and orders, in the browser."""
-        return (ASSETS / "staff.html").read_text(encoding="utf-8")
+        return localize_page((ASSETS / "staff.html").read_text(encoding="utf-8"))
 
     @app.post("/api/staff/hello")
     def hello(body: HelloIn) -> dict[str, str]:

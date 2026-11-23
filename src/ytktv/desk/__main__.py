@@ -85,12 +85,14 @@ def main() -> int:
 
     app.setWindowIcon(QIcon(str(ICON)))
     app.setStyleSheet(theme.STYLESHEET)
-    from ytktv.desk import remote
+    from ytktv.desk import language, remote
 
     config = remote.load_config()
     if config is not None:
+        language.apply()  # a terminal keeps its own language, before any window
         return run_terminal(app, config)
     store = DeskStore(data_dir() / "desk.sqlite3")
+    language.apply(store)
     app.setStyleSheet(theme.apply(store.setting("theme", theme.DEFAULT_THEME)))
     hub = Hub()
     from ytktv.desk import staff

@@ -78,6 +78,53 @@
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
+const LANG = (document.documentElement.lang || "en").replace("-", "_");
+const ZH = {
+ "YTKTV Microphone": "YTKTV 麦克风",
+ "Use this phone as a microphone": "把这部手机当麦克风",
+ "Your voice is sent to the karaoke computer and mixed in like any other microphone.": "你的声音会发到卡拉 OK 电脑上，和其他麦克风一样混音。",
+ "Name shown on the mixer": "调音台上显示的名字",
+ "For example: Tony": "例如：小明",
+ "Start microphone": "开始使用麦克风",
+ "Stop microphone": "停止使用麦克风",
+ "Not started": "未开始",
+ "Press the button and allow the microphone.": "点按钮并允许使用麦克风。",
+ "On the computer, open <b>Mixer</b> and choose this phone on a channel.": "在电脑上打开<b>调音台</b>，在某个通道选择这部手机。",
+ "Keep the phone away from the speakers, or it will feed back.": "手机要远离音箱，否则会啸叫。",
+ "A phone on Wi-Fi is always a little behind a wired microphone.": "Wi-Fi 手机麦克风总会比有线麦克风慢一点。",
+ "Keep this page open and the screen on while you sing.": "唱歌时请保持本页面打开、屏幕常亮。",
+ "Connected": "已连接",
+ "Now choose this phone on a channel of the mixer.": "现在请在调音台的某个通道选择这部手机。",
+ "On mixer channel {n}": "调音台通道 {n}",
+ "Waiting: choose \"{name}\" on a channel of the mixer": "等待中：请在调音台某个通道选择“{name}”",
+ "  ·  network {ms} ms": "  ·  网络 {ms} 毫秒",
+ "Buffer {buffer} ms{network}  ·  {gaps} gaps": "缓冲 {buffer} 毫秒{network}  ·  {gaps} 次中断",
+ "Disconnected": "已断开",
+ "The connection to the computer was lost. Start again.": "与电脑的连接已断开，请重新开始。",
+ "Stopped": "已停止",
+ "Press the button to start again.": "点按钮重新开始。",
+ "Could not start the microphone": "无法启动麦克风",
+ "Allow the microphone for this page in the browser, then try again.": "请在浏览器中允许本页面使用麦克风，然后重试。",
+ "This browser does not allow the microphone on this page.": "此浏览器不允许本页面使用麦克风。"
+};
+const T = (s, v) => {
+  let r = (LANG === "zh_CN" && ZH[s]) || s;
+  if (v) for (const k in v) r = r.split("{" + k + "}").join(v[k]);
+  return r;
+};
+function localize() {  // the page's own words, in the app's language
+  if (LANG !== "zh_CN") return;
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const k = n.nodeValue.replace(/\s+/g, " ").trim();
+    if (k && ZH[k] && n.parentNode.nodeName !== "SCRIPT") n.nodeValue = ZH[k] + (/\s$/.test(n.nodeValue) ? " " : "");
+  }
+  for (const el of document.querySelectorAll("[placeholder],[title]")) {
+    for (const a of ["placeholder", "title"]) { const v = el.getAttribute(a); if (v && ZH[v]) el.setAttribute(a, ZH[v]); }
+  }
+  if (ZH[document.title]) document.title = ZH[document.title];
+}
+localize();
 const PACKET = 240;  // samples per packet: 5 ms at 48 kHz
 
 // Runs on the audio thread: collects the microphone into 16-bit packets.
@@ -108,8 +155,8 @@ function show(title, detail, error) {
   const box = $("status");
   box.className = "card" + (error ? " error" : "");
   box.replaceChildren();
-  const b = document.createElement("b"); b.textContent = title;
-  const s = document.createElement("span"); s.textContent = detail || "";
+  const b = document.createElement("b"); b.textContent = T(title);
+  const s = document.createElement("span"); s.textContent = T(detail || "");
   box.append(b, s);
 }
 
@@ -125,7 +172,7 @@ function send(buffer) {
 
 async function start() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    throw new Error("This browser does not allow the microphone on this page.");
+    throw new Error(T("This browser does not allow the microphone on this page."));
   }
   // Everything a phone does to "improve" calls is switched off: it costs time and
   // changes the voice.
@@ -179,10 +226,10 @@ async function start() {
     const message = JSON.parse(event.data);
     if ("pong" in message) { roundTrip = performance.now() - message.pong; return; }
     const where = message.channel
-      ? `On mixer channel ${message.channel}`
-      : `Waiting: choose "${message.name}" on a channel of the mixer`;
-    const network = roundTrip === null ? "" : `  ·  network ${Math.round(roundTrip / 2)} ms`;
-    show(where, `Buffer ${message.buffer_ms} ms${network}  ·  ${message.gaps} gaps`);
+      ? T("On mixer channel {n}", {n: message.channel})
+      : T('Waiting: choose "{name}" on a channel of the mixer', {name: message.name});
+    const network = roundTrip === null ? "" : T("  ·  network {ms} ms", {ms: Math.round(roundTrip / 2)});
+    show(where, T("Buffer {buffer} ms{network}  ·  {gaps} gaps", {buffer: message.buffer_ms, network, gaps: message.gaps}));
   };
   socket.onclose = () => { if (context) { stop(); show("Disconnected", "The connection to the computer was lost. Start again.", true); } };
 
@@ -199,7 +246,7 @@ function stop() {
   context = stream = socket = wakeLock = null;
   roundTrip = null;
   $("level").style.width = "0";
-  $("toggle").textContent = "Start microphone";
+  $("toggle").textContent = T("Start microphone");
   $("toggle").classList.remove("on");
   $("name").disabled = false;
 }
@@ -210,7 +257,7 @@ $("toggle").onclick = async () => {
   $("toggle").disabled = true;
   try {
     await start();
-    $("toggle").textContent = "Stop microphone";
+    $("toggle").textContent = T("Stop microphone");
     $("toggle").classList.add("on");
     $("name").disabled = true;
   } catch (error) {
