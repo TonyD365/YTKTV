@@ -29,7 +29,7 @@ contribution terms`.
 2. Repository webhook: `https://<ref>.supabase.co/functions/v1/pr-assistant`, content type
    JSON, the webhook secret, events: Pull requests, Pull request reviews, Issue comments,
    Workflow runs, Pushes.
-3. Run `cron.sql` in the SQL editor (replace `PROJECT_REF`) for the 10-minute sweep.
+3. Run `cron.sql` in the SQL editor for the 10-minute sweep (project `fqccljyubefeakscukpx`).
 4. Repository variable `SUPABASE_SWEEP_URL` (the `/sweep` URL) and secret
    `SUPABASE_SWEEP_SECRET` for `supabase-keepalive.yml`, which stops a free project pausing.
 
