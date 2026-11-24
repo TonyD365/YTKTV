@@ -1,0 +1,70 @@
+# Free Supabase projects pause after a week without activity. This calls the PR assistant's
+# signed sweep endpoint, which runs a database query and refreshes open pull requests.
+# Does nothing until the repository variable SUPABASE_SWEEP_URL is set.
+#
+# It wakes daily, but pings only when due: 2 to 5 days after the last successful ping. The gap
+# is derived from that run's id, so it stays the same on each daily check. A failed ping does
+# not count, so the next day tries again.
+name: Supabase keepalive
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  decide:
+    runs-on: ubuntu-slim
+    timeout-minutes: 3
+    permissions:
+      actions: read
+    outputs:
+      due: ${{ steps.check.outputs.due }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          due=true
+          if [ "$EVENT" != workflow_dispatch ]; then
+            runs=$(gh api "repos/$GH_REPO/actions/workflows/supabase-keepalive.yml/runs?status=success&per_page=30" \
+              --jq '.workflow_runs[] | "\(.id):\(.created_at | fromdateiso8601)"')
+            for row in $runs; do
+              id=${row%%:*}; at=${row#*:}
+              [ "$id" != "$RUN_ID" ] || continue
+              pinged=$(gh api "repos/$GH_REPO/actions/runs/$id/jobs" \
+                --jq '[.jobs[] | select(.name == "keepalive" and .conclusion == "success")] | length')
+              [ "$pinged" != 0 ] || continue
+              hash=$(printf '%s' "$id" | openssl dgst -sha256 -r | cut -c1-8)
+              gap=$((2 + 0x$hash % 4))
+              days=$(($(date -u +%s) / 86400 - at / 86400))
+              echo "last ping: run $id, $days day(s) ago; this gap: $gap day(s)"
+              [ "$days" -ge "$gap" ] || due=false
+              break
+            done
+          fi
+          echo "due=$due" >> "$GITHUB_OUTPUT"
+
+  keepalive:
+    needs: decide
+    if: needs.decide.outputs.due == 'true' && vars.SUPABASE_SWEEP_URL != ''
+    runs-on: ubuntu-slim
+    timeout-minutes: 3
+    steps:
+      - name: Call the sweep endpoint
+        env:
+          SWEEP_SECRET: ${{ secrets.SUPABASE_SWEEP_SECRET }}
+          URL: ${{ vars.SUPABASE_SWEEP_URL }}
+        run: |
+          set -euo pipefail
+          body="keepalive $(date -u +%FT%TZ)"
+          sig=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$SWEEP_SECRET" -r | cut -d' ' -f1)
+          curl -fsS --retry 3 --retry-all-errors --max-time 30 -X POST \
+            -H "x-sweep-signature: sha256=$sig" -d "$body" \
+            "$URL"

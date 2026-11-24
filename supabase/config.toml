@@ -1,0 +1,5 @@
+project_id = "ytktv-assistant"
+
+[functions.pr-assistant]
+# GitHub signs its webhooks instead of sending a Supabase JWT; index.ts verifies the signature.
+verify_jwt = false

@@ -58,6 +58,28 @@ jobs:
           dist/ytktv-installer-linux-x64 --help
           dist/ytktv-installer-linux-x64 --licenses | head -n 3
 
+  pr-assistant:
+    name: PR assistant function
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: supabase/functions/pr-assistant
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+      - name: Type-check, lint and test (no network to GitHub; an in-memory GitHub)
+        env:
+          LIVE_PRS: '*'
+        run: |
+          deno check --frozen index.ts
+          deno lint
+          deno test --frozen --allow-env
+
   test:
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
