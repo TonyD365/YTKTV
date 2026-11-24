@@ -1,5 +1,5 @@
 // GitHub webhook endpoint. Verifies the signature, answers at once, and works in the background.
-import postgres from "npm:postgres@3.4.5";
+import postgres from "postgres";
 import { answerTerms, openNumbers, refresh, sweep, thanks, welcome } from "./assistant.ts";
 import { BOT, REPO, termsReply } from "./logic.ts";
 

@@ -1,3 +1,4 @@
 {
+  "imports": { "postgres": "npm:postgres@3.4.5" },
   "lock": { "path": "./deno.lock", "frozen": false }
 }
