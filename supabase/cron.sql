@@ -1,5 +1,5 @@
 -- Schedules for the assistant: every 10 minutes it checks all open pull requests again, which
--- also picks up webhooks GitHub could not deliver. Run once in the SQL editor
+-- also picks up webhooks GitHub could not deliver. Run once in the SQL editor.
 -- The signing key stays in Supabase Vault as `sweep_secret` (the same value as the
 -- function's SWEEP_SECRET).
 create extension if not exists pg_cron;
