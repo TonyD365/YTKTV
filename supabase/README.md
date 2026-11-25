@@ -18,7 +18,7 @@ contribution terms`.
 
 | Name | What |
 |---|---|
-| `GITHUB_TOKEN` | TonyD365-Agent classic token, `public_repo` only, 90 days. When it expires the required check stops updating and nothing can merge: replace it beforehand. |
+| `GITHUB_TOKEN` | TonyD365-Agent classic token, `public_repo` only, 90 days (the current one expires around 2027-02-22). When it expires the required check stops updating and nothing can merge: replace it beforehand. |
 | `WEBHOOK_SECRET` | The repository webhook's secret. |
 | `SWEEP_SECRET` | Signs the scheduled sweep (also in Vault as `sweep_secret`, and in the Actions secret `SUPABASE_SWEEP_SECRET`). |
 | `LIVE_PRS` | See above. |
