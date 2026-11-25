@@ -71,13 +71,14 @@ failure usually means, and what happens next. Besides the tests on three systems
 the benchmarks:
 
 - **Security** audits the Python and npm dependencies and runs CodeQL on the changed code.
-- **Labels** are added from the files you change. Some start heavier tests for that part:
-  `installer` (real installs on macOS, Linux and Windows), `desk` (a live Desk and room),
-  `separation` (the real model) and `packaging` (the whole release build with the built apps'
-  self-tests). A maintainer can also add a label to run them.
+- **Labels** are added from the files you change. Changes to some parts also start heavier
+  tests for that part by themselves: the installers (real installs on macOS, Linux and
+  Windows), the Desk (a live Desk and room), vocal separation (the real model) and packaging
+  (the whole release build with the built apps' self-tests). A maintainer can run them on
+  purpose with `@TonyD365-Agent /run installer` (or `desk`, `separation`, `packaging`).
 - A pull request needs the maintainer's approval, and every check passing, before it is merged.
   The bot sums the checks up in one status, **YTKTV checks**; once the maintainer approves, it
-  turns on auto-merge, so the pull request merges by itself when that status is green.
+  merges the pull request by itself as soon as that status is green.
 - The bot also keeps **status labels** up to date: `Checks-Running`, `Checks-Passed`,
   `Checks-Failed`, `Internal-Error` (a check was cancelled or timed out, usually not the
   change's fault), `Merge-Conflict` (bring `main` into your branch, resolve, push; nothing is
