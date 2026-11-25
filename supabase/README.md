@@ -14,6 +14,10 @@ harmless. Every write goes through one switch:
 Every interaction starts with `@TonyD365-Agent`, e.g. `@TonyD365-Agent I agree to the YTKTV
 contribution terms`.
 
+After a merge the head branch is deleted (never a fork's, the default branch, or the base of
+another open pull request). `@TonyD365-Agent /keep-branch` keeps it (label `Keep-Branch`);
+`@TonyD365-Agent /delete-branch` undoes that. Only the author or a maintainer can use them.
+
 ## Secrets (Edge Functions → Secrets, set by the maintainer, never pasted in chat)
 
 | Name | What |

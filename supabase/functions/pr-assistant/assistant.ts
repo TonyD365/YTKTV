@@ -2,6 +2,10 @@
 // the state again from GitHub, so repeated or out-of-order webhooks are harmless.
 import {
   aggregate,
+  branchCommand,
+  DELETE_COMMAND,
+  KEEP_COMMAND,
+  KEEP_LABEL,
   BOT,
   type Check,
   COLOURS,
@@ -117,7 +121,7 @@ class Writer {
 }
 
 const PR_QUERY = `query($o:String!,$n:String!,$p:Int!){repository(owner:$o,name:$n){pullRequest(number:$p){
-  id state isDraft reviewDecision mergeable mergeStateStatus headRefOid
+  id state isDraft reviewDecision mergeable mergeStateStatus headRefOid headRefName isCrossRepository
   labels(first:50){nodes{name}} autoMergeRequest{enabledAt}}}}`;
 
 async function pullRequest(number: number) {
@@ -243,6 +247,8 @@ export async function refresh(number: number, doneSuite = 0, doneConclusion = ""
     busy: counts({ checks, busy: 0 } as unknown as State).running ? 0 : busy,
     waiting,
     terms,
+    branch: pr.isCrossRepository ? undefined : pr.headRefName,
+    keep: pr.labels.nodes.some((l: { name: string }) => l.name === KEEP_LABEL),
   };
   if (state.review === "CHANGES_REQUESTED") {
     const reviews = await getAll(`/repos/${REPO}/pulls/${number}/reviews`);
@@ -352,4 +358,43 @@ export async function sweep() {
       console.error(`sweep pr=${number}: ${e}`);
     }
   }
+}
+
+// "@TonyD365-Agent /keep-branch" or "/delete-branch", from the author or a maintainer.
+// The Keep-Branch label is the record, so it can also be set or removed by hand.
+export async function answerBranch(number: number, c: {
+  body: string;
+  author_association?: string;
+  user: { login: string };
+}, author: string) {
+  const what = branchCommand(c.body);
+  if (!what) return false;
+  const w = new Writer(number);
+  const allowed = c.user.login === author || ["OWNER", "MEMBER", "COLLABORATOR"].includes(c.author_association ?? "");
+  if (!allowed) {
+    await w.comment(`@${c.user.login} only the pull request's author or a maintainer can choose what happens to its branch.`);
+    return true;
+  }
+  if (what === "keep") {
+    await w.send("POST", `/repos/${REPO}/labels`, { name: KEEP_LABEL, color: "bfdadc" });
+    await w.send("POST", `/repos/${REPO}/issues/${number}/labels`, { labels: [KEEP_LABEL] });
+    await w.comment(`<!-- ytktv-branch -->\n👍 @${c.user.login}: the branch will be kept after merging. Comment \`${DELETE_COMMAND}\` to change that.`);
+  } else {
+    await w.send("DELETE", `/repos/${REPO}/issues/${number}/labels/${encodeURIComponent(KEEP_LABEL)}`);
+    await w.comment(`<!-- ytktv-branch -->\n👍 @${c.user.login}: the branch will be deleted after merging. Comment \`${KEEP_COMMAND}\` to keep it.`);
+  }
+  return true;
+}
+
+// After a merge: delete the head branch, unless it is a fork's, the default branch, marked
+// Keep-Branch, or the base of another open pull request.
+// deno-lint-ignore no-explicit-any
+export async function deleteBranch(pr: any) {
+  const ref: string = pr.head?.ref ?? "";
+  if (!ref || pr.head?.repo?.full_name !== REPO || ref === pr.base?.repo?.default_branch) return;
+  // deno-lint-ignore no-explicit-any
+  if ((pr.labels ?? []).some((l: any) => l.name === KEEP_LABEL)) return;
+  const based = await getAll(`/repos/${REPO}/pulls?state=open&base=${encodeURIComponent(ref)}`);
+  if (based.length) return;
+  await new Writer(pr.number).send("DELETE", `/repos/${REPO}/git/refs/heads/${encodeURIComponent(ref)}`);
 }

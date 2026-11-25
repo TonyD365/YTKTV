@@ -36,7 +36,7 @@ function world(over: Record<string, unknown> = {}) {
       if (body.query.includes("disablePullRequestAutoMerge")) { w.pr.auto = false; w.writes++; return json({ data: {} }); }
       return json({ data: { repository: { pullRequest: {
         id: w.pr.id, state: w.pr.state, isDraft: w.pr.draft, reviewDecision: w.pr.review,
-        mergeable: w.pr.mergeable, mergeStateStatus: w.pr.mergeState ?? "BLOCKED", headRefOid: w.pr.head,
+        mergeable: w.pr.mergeable, mergeStateStatus: w.pr.mergeState ?? "BLOCKED", headRefOid: w.pr.head, headRefName: "feature", isCrossRepository: !!w.pr.fork,
         labels: { nodes: w.pr.labels.map((name: string) => ({ name })) },
         autoMergeRequest: w.pr.auto ? { enabledAt: "x" } : null,
       } } } });
@@ -73,6 +73,7 @@ function world(over: Record<string, unknown> = {}) {
       w.ledger.push({ body: body.body, user: { login: BOT } });
       return json({}, 201);
     }
+    if (method === "DELETE" && p.startsWith("/git/refs/heads/")) { w.deleted = decodeURIComponent(p.slice(16)); return new Response(null, { status: 204 }); }
     if (method === "POST" && p.startsWith("/statuses/")) { w.statuses.push(body); return json({}, 201); }
     throw new Error(`unexpected ${method} ${p}`);
   }) as typeof fetch;
@@ -88,7 +89,7 @@ const pull = (w: Any, action: string, extra = {}) => ({
 });
 const say = (w: Any, text: string, user = { login: w.pr.author, id: w.pr.authorId }) => ({
   action: "created", repository,
-  issue: { number: 50, pull_request: {}, user: { id: w.pr.authorId } },
+  issue: { number: 50, pull_request: {}, user: { id: w.pr.authorId, login: w.pr.author } },
   comment: { body: text, html_url: "c", user },
 });
 function ok(cond: unknown, what: string) { if (!cond) throw new Error(what); }
@@ -278,4 +279,47 @@ Deno.test("approved while checks run: auto-merge only", async () => {
   await route("pull_request", pull(w, "edited"));
   eq(w.merged, undefined, "merged");
   eq(w.pr.auto, true, "auto");
+});
+
+const merged = (w: Any, extra = {}) => pull(w, "closed", {
+  merged: true, head: { ref: "feature", repo: { full_name: w.pr.fork ? "bob/YTKTV" : REPO } },
+  base: { repo: { default_branch: "main" } }, labels: w.pr.labels.map((name: string) => ({ name })), ...extra,
+});
+
+Deno.test("merged: the branch is deleted by default, and the status comment says so", async () => {
+  const w = world({ author: "TonyD365" });
+  await route("pull_request", pull(w, "edited"));
+  ok(assistantComments(w)[0].body.includes("`feature` is deleted automatically"), "hint");
+  ok(assistantComments(w)[0].body.includes("@TonyD365-Agent /keep-branch"), "command");
+  w.pr.state = "MERGED";
+  await route("pull_request", merged(w));
+  eq(w.deleted, "feature", "deleted");
+});
+
+Deno.test("/keep-branch keeps it; /delete-branch undoes that", async () => {
+  const w = world({ author: "TonyD365" });
+  await route("issue_comment", say(w, "@TonyD365-Agent /keep-branch"));
+  ok(w.pr.labels.includes("Keep-Branch"), "label");
+  ok(assistantComments(w).at(-1).body.includes("is kept after merging"), "status");
+  w.pr.state = "MERGED";
+  await route("pull_request", merged(w));
+  eq(w.deleted, undefined, "kept");
+  w.pr.state = "OPEN";
+  await route("issue_comment", say(w, "@TonyD365-Agent /delete-branch"));
+  ok(!w.pr.labels.includes("Keep-Branch"), "label removed");
+});
+
+Deno.test("only the author or a maintainer can keep the branch", async () => {
+  const w = world({ author: "TonyD365" });
+  await route("issue_comment", say(w, "@TonyD365-Agent /keep-branch", { login: "mallory", id: 99 } as Any));
+  ok(!w.pr.labels.includes("Keep-Branch"), "no label");
+});
+
+Deno.test("a fork's branch is never deleted", async () => {
+  const w = world({ author: "TonyD365", fork: true });
+  await route("pull_request", pull(w, "edited"));
+  ok(!assistantComments(w)[0].body.includes("deleted automatically"), "no hint");
+  w.pr.state = "MERGED";
+  await route("pull_request", merged(w));
+  eq(w.deleted, undefined, "fork");
 });

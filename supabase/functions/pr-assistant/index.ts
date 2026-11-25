@@ -1,6 +1,6 @@
 // GitHub webhook endpoint. Verifies the signature, answers at once, and works in the background.
 import postgres from "postgres";
-import { answerTerms, openNumbers, refresh, sweep, thanks, welcome } from "./assistant.ts";
+import { answerBranch, answerTerms, deleteBranch, openNumbers, refresh, sweep, thanks, welcome } from "./assistant.ts";
 import { BOT, REPO, termsReply } from "./logic.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
@@ -30,6 +30,7 @@ export async function route(event: string, p: any) {
     if (p.action === "closed") {
       if (pr.merged) {
         await thanks(pr.number, pr.user.login, pr.user.type);
+        await deleteBranch(pr);
       }
     } else if (PR_ACTIONS.includes(p.action)) {
       if (p.action === "opened" && FIRST_TIME.includes(pr.author_association)) {
@@ -43,6 +44,10 @@ export async function route(event: string, p: any) {
     if (!["created", "edited"].includes(p.action)) return;
     if ([BOT, "github-actions[bot]"].includes(p.comment.user.login)) return;
     if (!p.issue.pull_request) return;
+    if (p.action === "created" && await answerBranch(p.issue.number, p.comment, p.issue.user.login)) {
+      await refresh(p.issue.number);
+      return;
+    }
     if (termsReply(p.comment.body) === null) return; // not addressed to the bot: no API calls
     await answerTerms(p.issue.number, p.comment, p.issue.user.id);
     await refresh(p.issue.number);

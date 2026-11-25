@@ -16,6 +16,10 @@ const EXEMPT = new Set([
   "github-actions[bot]",
 ]);
 
+export const KEEP_LABEL = "Keep-Branch";
+export const KEEP_COMMAND = `@${BOT} /keep-branch`;
+export const DELETE_COMMAND = `@${BOT} /delete-branch`;
+
 export const COLOURS: Record<string, string> = {
   "Checks-Running": "c5def5",
   "Checks-Passed": "0e8a16",
@@ -53,6 +57,8 @@ export type State = {
   terms: Terms;
   askedBy?: string;
   askedUrl?: string;
+  branch?: string; // the head branch, when it is in this repository (not a fork)
+  keep?: boolean;
 };
 
 export function latestChecks(all: Check[], doneSuite = 0, doneConclusion = ""): Check[] {
@@ -194,6 +200,11 @@ export function renderStatus(s: State, labels: string[], now: Date): string {
   if (s.review === "APPROVED") out.push("- Approved by the maintainer: it merges by itself once every check passes (auto-merge is on).");
   else if (s.review === "CHANGES_REQUESTED") out.push("- The maintainer asked for changes: see the review.");
   else out.push("- It needs the maintainer's approval before it can be merged.");
+  if (s.branch && s.keep) {
+    out.push(`- The branch \`${s.branch}\` is kept after merging. To have it deleted then, comment \`${DELETE_COMMAND}\`.`);
+  } else if (s.branch) {
+    out.push(`- Once merged, the branch \`${s.branch}\` is deleted automatically. To keep it, comment \`${KEEP_COMMAND}\`.`);
+  }
   const when = now.toISOString().slice(0, 16).replace("T", " ");
   out.push("", `<sub>[How the checks work](${SERVER}/${REPO}/blob/main/CONTRIBUTING.md#before-you-open-a-pull-request) · updated ${when} UTC for ${s.head.slice(0, 7)}</sub>`);
   return out.join("\n") + "\n";
@@ -253,4 +264,13 @@ export function termsMarkdown(contributing: string): string {
     out.push(line.replace(/\]\(([A-Za-z_]+(\.md)?)\)/g, `](${SERVER}/${REPO}/blob/main/$1)`));
   }
   return out.join("\n").trim();
+}
+
+export function branchCommand(body: string): "keep" | "delete" | null {
+  const text = addressed(body);
+  if (text === null) return null;
+  const said = text.trim().toLowerCase();
+  if (said === "/keep-branch") return "keep";
+  if (said === "/delete-branch") return "delete";
+  return null;
 }
