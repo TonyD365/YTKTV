@@ -79,6 +79,7 @@ jobs:
           deno check --frozen index.ts
           deno lint
           deno test --frozen --allow-env
+          deno audit
 
   test:
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})

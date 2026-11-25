@@ -1,5 +1,6 @@
 -- Schedules for the assistant: every 10 minutes it checks all open pull requests again, which
--- also picks up webhooks GitHub could not deliver. Run once in the SQL editor.
+-- also picks up webhooks GitHub could not deliver; hourly it sends due reminders, and daily it
+-- marks and closes stale pull requests. Run once in the SQL editor.
 -- The signing key stays in Supabase Vault as `sweep_secret` (the same value as the
 -- function's SWEEP_SECRET).
 create extension if not exists pg_cron;
@@ -28,3 +29,5 @@ end $$;
 revoke all on function assistant.call(text) from public;
 
 select cron.schedule('assistant-sweep', '*/10 * * * *', $$select assistant.call('sweep')$$);
+select cron.schedule('assistant-hourly', '41 * * * *', $$select assistant.call('hourly')$$);
+select cron.schedule('assistant-daily', '23 8 * * *', $$select assistant.call('daily')$$);
