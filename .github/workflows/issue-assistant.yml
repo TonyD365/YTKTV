@@ -137,7 +137,7 @@ jobs:
   command:
     if: >-
       github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/') &&
+      (startsWith(github.event.comment.body, '@TonyD365-Agent /') || startsWith(github.event.comment.body, '@tonyd365-agent /')) &&
       github.event.comment.user.login != 'TonyD365-Agent'
     runs-on: ubuntu-slim
     permissions:
@@ -157,7 +157,7 @@ jobs:
           COMMENT_ID: ${{ github.event.comment.id }}
         run: |
           set -uo pipefail
-          line=$(printf '%s' "$BODY" | head -n 1 | tr -d '\r')
+          line=$(printf '%s' "$BODY" | head -n 1 | tr -d '\r' | sed -E 's/^[[:space:]]*@[Tt][Oo][Nn][Yy][Dd]365-[Aa][Gg][Ee][Nn][Tt][[:space:],:]+//')
           cmd=$(printf '%s' "$line" | awk '{print tolower($1)}')
           rest=$(printf '%s' "$line" | sed -E 's#^/[A-Za-z]+[[:space:]]*##')
           case "$ROLE" in OWNER|MEMBER|COLLABORATOR) maintainer=1 ;; *) maintainer="" ;; esac
@@ -167,7 +167,7 @@ jobs:
           case "$cmd" in
             /help)
               react eyes
-              reply "Commands for this issue (at the start of a comment):" "" \
+              reply "Commands for this issue (start the comment with \`@TonyD365-Agent\`, e.g. \`@TonyD365-Agent /help\`):" "" \
                 "- \`/close\`, \`/reopen\`: close or reopen it (whoever opened it, or a maintainer)." \
                 "- \`/label name ...\`, \`/unlabel name ...\`: add or remove labels (maintainers)." \
                 "- \`/help\`: this list."

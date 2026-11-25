@@ -1,4 +1,4 @@
-# Commands in pull request comments, and stale pull requests.
+# Commands in pull request comments (each comment starts with @TonyD365-Agent), and stale pull requests.
 #
 #   /help                      what the bot can do (anyone)
 #   /retest                    re-run the failed or cancelled checks (the PR's author or a maintainer)
@@ -35,7 +35,7 @@ jobs:
   command:
     if: >-
       github.event_name == 'issue_comment' && github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/') &&
+      (startsWith(github.event.comment.body, '@TonyD365-Agent /') || startsWith(github.event.comment.body, '@tonyd365-agent /')) &&
       github.event.comment.user.login != 'TonyD365-Agent'
     runs-on: ubuntu-slim
     permissions:
@@ -56,7 +56,7 @@ jobs:
           COMMENT_ID: ${{ github.event.comment.id }}
         run: |
           set -euo pipefail
-          line=$(printf '%s' "$BODY" | head -n 1 | tr -d '\r')
+          line=$(printf '%s' "$BODY" | head -n 1 | tr -d '\r' | sed -E 's/^[[:space:]]*@[Tt][Oo][Nn][Yy][Dd]365-[Aa][Gg][Ee][Nn][Tt][[:space:],:]+//')
           read -r cmd arg _ <<<"$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')" || true
           rest=$(printf '%s' "$line" | sed -E 's#^/[A-Za-z]+[[:space:]]*##')  # as typed, for labels
           case "$ROLE" in OWNER|MEMBER|COLLABORATOR) maintainer=1 ;; *) maintainer="" ;; esac
@@ -73,7 +73,7 @@ jobs:
           case "$cmd" in
             /help)
               react eyes
-              reply "Commands for this pull request (write them at the start of a comment):" "" \
+              reply "Commands for this pull request (start the comment with \`@TonyD365-Agent\`, e.g. \`@TonyD365-Agent /retest\`):" "" \
                 "- \`/retest\`: re-run the checks that failed or were cancelled (the author or a maintainer)." \
                 "- \`/benchmark\`: compare the speed with \`main\` again, e.g. after a slowdown that may be a busy runner (author or maintainer)." \
                 "- \`/ready\`: mark a draft as ready for review (author or maintainer)." \
@@ -83,11 +83,12 @@ jobs:
                 "- \`/run packaging\`, \`/run installer\`, \`/run desk\`, \`/run separation\`: run that part's heavier tests (maintainers)." \
                 "- \`/label name ...\`, \`/unlabel name ...\`: add or remove labels (maintainers)." \
                 "- \`/help\`: this list." "" \
-                "Other things the bot answers: \`I agree to the YTKTV contribution terms\` and \`I do not agree to the YTKTV contribution terms\`."
+                "- \`/keep-branch\`, \`/delete-branch\`: keep the branch after merging, or have it deleted again (the default; author or maintainer)." "" \
+                "Also: \`@TonyD365-Agent I agree to the YTKTV contribution terms\` and \`@TonyD365-Agent I do not agree to the YTKTV contribution terms\`."
               ;;
             /retest)
               if [ "$WHO_ID" != "$AUTHOR_ID" ] && [ -z "$maintainer" ]; then
-                react confused; reply "Sorry @$WHO, only the pull request's author or a maintainer can use \`/retest\`."; exit 0
+                react confused; reply "Sorry @$WHO, only the pull request's author or a maintainer can use \`@TonyD365-Agent /retest\`."; exit 0
               fi
               react eyes
               head=$(gh pr view "$NUMBER" --json headRefOid -q .headRefOid)
