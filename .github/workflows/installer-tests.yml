@@ -1,8 +1,8 @@
 # Installs YTKTV for real, through each way of installing it, when a pull request changes
 # the installers (the files the "installer" label is given for, in labeler.yml) or someone
-# adds the "installer" label by hand. The label from the labelling bot cannot start a
-# workflow itself (GitHub does not let one workflow's token start another), so this
-# looks at the same files.
+# adds the "installer" label (by hand, or with "@TonyD365-Agent /run installer"). The bot
+# does not add this label for files, since with its token that would start this a second
+# time, so this looks at the same files itself.
 #
 # Each system installs the latest release twice: YTKTV through the terminal installer
 # program built from this pull request (installer/), YTKTV Desk through the one-line
@@ -46,7 +46,7 @@ jobs:
           LABEL: ${{ github.event.label.name }}
           SENDER: ${{ github.event.sender.login }}
         run: |
-          # The bot adds an area's label for "/run <area>" (pr-commands.yml); otherwise its
+          # The bot adds an area's label for "@TonyD365-Agent /run <area>"; otherwise its
           # labels come from the files, which already start the tests.
           asked_to_run() {
             gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \

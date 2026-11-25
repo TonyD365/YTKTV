@@ -1,7 +1,7 @@
 # Heavier tests for one part of YTKTV, run when a pull request changes that part (the files
-# its label is given for, in labeler.yml) or someone adds the label by hand. The labelling
-# bot's label cannot start a workflow (GitHub does not let one workflow's token start
-# another), so this looks at the same files.
+# its label is given for, in labeler.yml) or someone adds the label (by hand, or with
+# "@TonyD365-Agent /run <area>"). The bot does not add these labels for files, since with its
+# token that would start this a second time, so this looks at the same files itself.
 #
 #   desk        a Desk and a room over a real network connection (tests/live)
 #   separation  the separation worker with the real model on a short song (tests/live)
@@ -48,14 +48,14 @@ jobs:
           SENDER: ${{ github.event.sender.login }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
-          # The bot adds an area's label for "/run <area>" (pr-commands.yml); otherwise its
+          # The bot adds an area's label for "@TonyD365-Agent /run <area>"; otherwise its
           # labels come from the files, which already start the tests.
           asked_to_run() {
             gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \
               -q "[.[] | select((.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\") and (.body | ascii_downcase | startswith(\"/run $1\"))) | .created_at] | max // empty" |
               { read -r at || exit 1; [ $(( $(date -u +%s) - $(date -u -d "$at" +%s) )) -lt 600 ]; }
           }
-          # area: the files that give its label (keep in step with labeler.yml)
+          # area: the files that give its label (keep in step with labeler.yml and fileLabels in supabase/functions/pr-assistant/bots_logic.ts)
           declare -A files=(
             [desk]='^(src/ytktv/desk/|src/ytktv/rooms/|packaging/desk\.spec$|tests/live/test_desk_live\.py$)'
             [separation]='^(src/ytktv/separation/|src/ytktv/ui/separation_setup\.py$|tests/live/test_separation_live\.py$)'

@@ -1,4 +1,6 @@
-# Area labels for pull requests, by the files they touch (see workflows/labeler.yml).
+# Area labels for pull requests, by the files they touch. The bot now applies these rules from
+# supabase/functions/pr-assistant/bots_logic.ts (fileLabels); the workflows/labeler.yml that read
+# this file is disabled, kept as the fallback. Change both together.
 # desk, separation, packaging and installer also start heavier tests for those files
 # (area-tests.yml, installer-tests.yml): keep their file lists in step.
 player:
