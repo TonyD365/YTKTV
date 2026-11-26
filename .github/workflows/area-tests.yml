@@ -52,7 +52,7 @@ jobs:
           # labels come from the files, which already start the tests.
           asked_to_run() {
             gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \
-              -q "[.[] | select((.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\") and (.body | ascii_downcase | startswith(\"/run $1\"))) | .created_at] | max // empty" |
+              -q "[.[] | select((.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\") and (.body | ascii_downcase | startswith(\"@tonyd365-agent /run $1\"))) | .created_at] | max // empty" |
               { read -r at || exit 1; [ $(( $(date -u +%s) - $(date -u -d "$at" +%s) )) -lt 600 ]; }
           }
           # area: the files that give its label (keep in step with labeler.yml and fileLabels in supabase/functions/pr-assistant/bots_logic.ts)
@@ -148,8 +148,12 @@ jobs:
     name: Packaging
     needs: decide
     if: needs.decide.outputs.packaging == 'true'
+    # Every permission a job of release.yml asks for must be granted here, or GitHub refuses
+    # to start this whole workflow (startup failure). Release-only steps, such as the
+    # release check that opens an issue, do not run here.
     permissions:
-      contents: write # asked for by the release's jobs; release-only steps do not run here
+      contents: write
+      issues: write
     uses: ./.github/workflows/release.yml # zizmor: ignore[self-repository]
     # No secrets: this builds a pull request's code, and the build needs none (unsigned
     # builds; publishing steps only run for a real release).
