@@ -3,6 +3,17 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.7.3
+
+### ✨ A new update window
+- When an update is ready, YTKTV and YTKTV Desk now show it in their own window: the app's icon, the new version, the download size and the release notes taken straight from the GitHub release. A security release is marked as one, and the window shows that the download was checked and its signature verified.
+- After updating, the first start shows a short note that the update went in and every new file was checked.
+
+### 🎨 Installers in YTKTV's look
+- The Windows setup has a new picture with the app's icon on its first and last pages, and the icon on the others.
+- The macOS installer shows the app's icon in the corner.
+- The terminal installer shows YTKTV in pink-to-cyan letters, with a download bar to match.
+
 ## 4.7.2
 
 ### 🔒 Security: signed updates
