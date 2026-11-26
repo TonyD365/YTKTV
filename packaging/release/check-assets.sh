@@ -5,7 +5,7 @@ set -euo pipefail
 
 version="${1#v}"
 have="$(gh release view "$1" --json assets --jq '.assets[] | select(.size > 0) | .name')"
-want=(SHA256SUMS ytktv-installer.sha256)
+want=(SHA256SUMS SHA256SUMS.sig ytktv-installer.sha256)
 for target in darwin-arm64 darwin-x64 linux-arm64 linux-x64 windows-x64.exe; do
   want+=("ytktv-installer-$target.gz")
 done

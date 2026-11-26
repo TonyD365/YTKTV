@@ -8,6 +8,7 @@ installed copy.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
@@ -33,6 +34,14 @@ log = logging.getLogger(__name__)
 
 CHECK_INTERVAL_SECONDS = 6 * 60 * 60
 CHECKSUM_ASSET = "SHA256SUMS"
+SIGNATURE_ASSET = "SHA256SUMS.sig"
+# Ed25519 public keys whose signature on SHA256SUMS makes a release trusted (base64, raw 32
+# bytes). The release workflow signs with the first (secret UPDATE_SIGNING_KEY); the second's
+# private key is kept offline by the maintainer, for when the first is lost or leaked.
+UPDATE_KEYS = (
+    "kI2UujGRZlf32S3GcLwXe7/N2DEjMuvpRZ8rcmwyxrw=",
+    "6kKFQPUmqNLUkcIt9QzSf4fMJvEpuyuBAfQJQyZPi04=",
+)
 _USER_AGENT = f"YTKTV/{__version__}"
 
 Fetch = Callable[[str], bytes]
@@ -137,7 +146,8 @@ def check_for_update(
     if asset is None:
         return None
     checksums = pick_asset(assets, [CHECKSUM_ASSET], None)
-    if checksums is None:
+    signed = pick_asset(assets, [SIGNATURE_ASSET], None)
+    if checksums is None or signed is None:
         # Installers are attached a while after the release is published; until the
         # checksums are there too, treat the release as not ready.
         return None
@@ -172,6 +182,26 @@ def expected_checksum(sums_text: str, asset_name: str) -> str | None:
         if len(parts) >= 2 and parts[-1].lstrip("*") == asset_name:
             return parts[0].lower()
     return None
+
+
+def signature_valid(
+    sums: bytes, signature_text: bytes, keys: tuple[str, ...] | None = None
+) -> bool:
+    """Whether *signature_text* (base64 Ed25519) signs *sums* with one of the update keys."""
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+    try:
+        signature = base64.b64decode(signature_text.strip(), validate=True)
+    except ValueError:
+        return False
+    for key in UPDATE_KEYS if keys is None else keys:
+        try:
+            Ed25519PublicKey.from_public_bytes(base64.b64decode(key)).verify(signature, sums)
+            return True
+        except (InvalidSignature, ValueError):
+            continue
+    return False
 
 
 def sha256_of(path: Path) -> str:
@@ -227,7 +257,12 @@ def download_update(
     """
     if info.checksum_url is None:
         raise RuntimeError("release has no SHA256SUMS; refusing to install it")
-    sums = fetch(info.checksum_url).decode("utf-8", "replace")
+    raw = fetch(info.checksum_url)
+    # The checksums are only as trustworthy as whoever can upload to the release, so they
+    # must carry the maintainer's signature too (made by the release workflow).
+    if not signature_valid(raw, fetch(info.checksum_url + ".sig")):
+        raise RuntimeError("SHA256SUMS is not signed with the YTKTV update key; refusing it")
+    sums = raw.decode("utf-8", "replace")
     if info.patch_name and (root is not None or patch_usable(info, dest_dir)):
         try:
             return _download_patch(info, dest_dir, sums, progress, root)

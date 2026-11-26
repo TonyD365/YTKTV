@@ -590,6 +590,27 @@ jobs:
           rm -f ./*-macos-arm64.pkg ./*-macos-x86_64.pkg
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: repo
+          sparse-checkout: src/ytktv
+          persist-credentials: false
+      # The app trusts SHA256SUMS only with this signature (updater.UPDATE_KEYS), so someone
+      # who can upload to the release still cannot get a changed installer or patch accepted.
+      - name: Sign the checksums
+        working-directory: installers
+        env:
+          KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "$KEY" ] || { echo "::error::UPDATE_SIGNING_KEY is not set: apps would refuse this release's updates"; exit 1; }
+          key=$(mktemp); trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$KEY" > "$key"
+          openssl pkeyutl -sign -rawin -inkey "$key" -in SHA256SUMS | base64 -w0 > SHA256SUMS.sig
+          # The key must be one the app trusts, or every update of this release would fail.
+          pub=$(openssl pkey -in "$key" -pubout -outform DER | tail -c 32 | base64 -w0)
+          grep -qF "\"$pub\"" ../repo/src/ytktv/updater.py || { echo "::error::the signing key is not in updater.UPDATE_KEYS"; exit 1; }
+          cat SHA256SUMS.sig
       - name: Upload to the release
         env:
           GH_TOKEN: ${{ github.token }}
