@@ -20,4 +20,4 @@ Already installed? YTKTV and YTKTV Desk update themselves (Settings → Updates)
 
 You don't need the other files: `*-patch-*.zip` are the small updates the apps download themselves, `*-files.zip` are used to make the next patches, and `ytktv-installer-*` is the program the one-line install runs. `SHA256SUMS` lists every file's checksum.
 
-The installers are not code-signed yet, so macOS and Windows may warn before the first start. Help: [README](https://github.com/TonyD365/YTKTV#install) · [Report a problem](https://github.com/TonyD365/YTKTV/issues)
+The installers are not signed by Apple or Microsoft, so macOS and Windows may warn before the first start (on macOS, the one-line install avoids that). Help: [README](https://github.com/TonyD365/YTKTV#install) · [Report a problem](https://github.com/TonyD365/YTKTV/issues)
