@@ -337,7 +337,7 @@ You can also download the installer yourself from the
 | Linux (x86-64) | `YTKTV-<version>-linux-x86_64.AppImage` | `YTKTV-Desk-<version>-linux-x86_64.AppImage` |
 | Linux ARM (64-bit) | `YTKTV-<version>-linux-aarch64.AppImage` | `YTKTV-Desk-<version>-linux-aarch64.AppImage` |
 
-The installers are not code-signed, so downloads from a browser need one extra step:
+The installers are not signed by Apple or Microsoft, so downloads from a browser need one extra step:
 
 - **macOS**: before opening the package, remove the download mark in Terminal:
 
@@ -564,9 +564,11 @@ install when nothing is playing. A release marked as a pre-release is not offere
 Run the workflow manually (*Actions → Release → Run workflow*) to test the builds without
 touching any release.
 
-The macOS package is signed and notarized when the Developer ID secrets listed at the top of
-the macOS build step in `.github/workflows/release.yml` are configured; otherwise it is ad-hoc
-signed.
+The macOS apps are signed with YTKTV's own certificate (secrets `MACOS_CERTIFICATE_P12`,
+`MACOS_CERTIFICATE_PASSWORD`, `MACOS_CODESIGN_IDENTITY`), so macOS keeps their permissions
+across updates; without them the build is ad-hoc signed. With an Apple Developer ID and the
+notarization secrets listed at the top of the macOS build step in
+`.github/workflows/release.yml`, the package would also be notarized.
 
 The pictures in the README and on the website come from `python scripts/readme_images.py`
 (add `--phone` for the phone page, which needs Google Chrome); nothing opens on screen.
