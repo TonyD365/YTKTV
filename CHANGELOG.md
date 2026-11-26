@@ -13,7 +13,7 @@ has the installers and the full notes.
 
 ### 🍎 macOS
 - YTKTV and YTKTV Desk are now signed with the same YTKTV certificate in every release, so macOS recognises later updates as the same app and keeps its permissions (microphone, local network). After updating to 4.7.2, macOS may ask for them **once more**; from then on, updates keep them. macOS still asks you to allow the app the first time you open it, as before.
-- Because almost every file is re-signed, the update to 4.7.2 downloads the full installer instead of a small patch.
+- Because almost every file is re-signed, the update to 4.7.2 will most likely download the full installer instead of a small patch.
 
 ## 4.7.1
 
