@@ -7,6 +7,7 @@ import urllib.error
 
 import pytest
 
+from tests.helpers import signed
 from ytktv import updater
 
 
@@ -16,6 +17,7 @@ def release(tag="v1.2.0", **extra):
         "YTKTV-1.2.0-windows-x64-setup.exe",
         "YTKTV-1.2.0-linux-x86_64.AppImage",
         "SHA256SUMS",
+        "SHA256SUMS.sig",
     ]
     data = {
         "tag_name": tag,
@@ -68,6 +70,8 @@ def test_macos_prefers_the_universal_package_and_falls_back():
                 "YTKTV-1.2.0-macos-arm64.pkg",
                 "YTKTV-1.2.0-macos-universal.pkg",
                 "SHA256SUMS",
+                "SHA256SUMS.sig",
+                "SHA256SUMS.sig",
             )
         ]
     )
@@ -147,14 +151,12 @@ def test_download_verifies_checksum(tmp_path, monkeypatch):
     monkeypatch.setattr(updater, "urlopen", lambda request, timeout=30: _Response(payload))
     info = _info()
 
-    path = updater.download_update(
-        info, tmp_path, fetch=lambda url: f"{digest}  {info.asset_name}\n".encode()
-    )
+    path = updater.download_update(info, tmp_path, fetch=signed(f"{digest}  {info.asset_name}\n"))
     assert path.read_bytes() == payload
 
     with pytest.raises(RuntimeError, match="checksum"):
         updater.download_update(
-            info, tmp_path / "bad", fetch=lambda url: f"{'0' * 64}  {info.asset_name}\n".encode()
+            info, tmp_path / "bad", fetch=signed(f"{'0' * 64}  {info.asset_name}\n")
         )
     assert list((tmp_path / "bad").iterdir()) == []  # the bad download is not left behind
 
@@ -163,7 +165,7 @@ def test_download_refuses_releases_without_checksums(tmp_path):
     with pytest.raises(RuntimeError, match="SHA256SUMS"):
         updater.download_update(_info(checksum_url=None), tmp_path)
     with pytest.raises(RuntimeError, match="no checksum"):
-        updater.download_update(_info(), tmp_path, fetch=lambda url: b"abc  something-else\n")
+        updater.download_update(_info(), tmp_path, fetch=signed(b"abc  something-else\n"))
 
 
 def test_old_update_downloads_are_deleted_but_a_waiting_one_is_kept(tmp_path):
@@ -189,3 +191,46 @@ def test_old_update_downloads_are_deleted_but_a_waiting_one_is_kept(tmp_path):
     assert updater.clean_old_downloads(tmp_path / "missing", "1.4.1") == 0
     assert updater.clean_old_downloads(tmp_path, "not a version") == 0
     assert len(list(tmp_path.iterdir())) == 3
+
+
+def test_unsigned_or_forged_checksums_are_refused(tmp_path, monkeypatch):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    payload = b"installer-bytes"
+    monkeypatch.setattr(updater, "urlopen", lambda request, timeout=30: _Response(payload))
+    info = _info()
+    sums = f"{hashlib.sha256(payload).hexdigest()}  {info.asset_name}\n"
+    with pytest.raises(RuntimeError, match="not signed"):
+        updater.download_update(info, tmp_path, fetch=signed(sums, Ed25519PrivateKey.generate()))
+    with pytest.raises(RuntimeError, match="not signed"):
+        good = signed(sums)
+        updater.download_update(
+            info,
+            tmp_path,
+            fetch=lambda url: good(url) if url.endswith(".sig") else b"x" + sums.encode(),
+        )
+    assert updater.download_update(info, tmp_path, fetch=signed(sums)).read_bytes() == payload
+
+
+def test_a_release_without_a_signature_is_not_offered_yet():
+    data = release()(None)
+    unsigned = json.loads(data)
+    unsigned["assets"] = [a for a in unsigned["assets"] if a["name"] != "SHA256SUMS.sig"]
+    assert (
+        updater.check_for_update(
+            "1.1.0", fetch=lambda url: json.dumps(unsigned).encode(), suffixes=["macos-arm64.pkg"]
+        )
+        is None
+    )
+    assert (
+        updater.check_for_update("1.1.0", fetch=release(), suffixes=["macos-arm64.pkg"]) is not None
+    )
+
+
+def test_the_shipped_update_keys_are_valid():
+    import base64
+
+    from ytktv import updater as fresh
+
+    keys = fresh.__dict__["UPDATE_KEYS"]
+    assert all(len(base64.b64decode(k)) == 32 for k in keys)

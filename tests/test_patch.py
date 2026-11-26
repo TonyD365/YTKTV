@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import signed
 from ytktv import patching, updater
 
 WINDOWS = sys.platform == "win32"
@@ -180,7 +181,7 @@ PATCH = "YTKTV-patch-4.0.1-4.0.2-windows-x64.zip"
 
 
 def test_an_update_within_the_major_version_offers_the_patch():
-    fetch = _release([INSTALLER, PATCH, "SHA256SUMS"])
+    fetch = _release([INSTALLER, PATCH, "SHA256SUMS", "SHA256SUMS.sig"])
     args = {"fetch": fetch, "suffixes": ["windows-x64-setup.exe"], "tag_for_patch": "windows-x64"}
     info = updater.check_for_update("4.0.1", **args)
     assert info is not None and info.patch_name == PATCH and info.asset_name == INSTALLER
@@ -193,7 +194,9 @@ def test_an_update_within_the_major_version_offers_the_patch():
 
 
 def test_a_new_major_version_is_always_the_installer():
-    fetch = _release([INSTALLER, "YTKTV-patch-3.9.0-4.0.2-windows-x64.zip", "SHA256SUMS"])
+    fetch = _release(
+        [INSTALLER, "YTKTV-patch-3.9.0-4.0.2-windows-x64.zip", "SHA256SUMS", "SHA256SUMS.sig"]
+    )
     info = updater.check_for_update(
         "3.9.0", fetch=fetch, suffixes=["windows-x64-setup.exe"], tag_for_patch="windows-x64"
     )
@@ -228,10 +231,10 @@ def test_download_uses_the_patch_and_falls_back_to_the_installer(tmp_path, monke
         notes="", page_url="", patch_name=PATCH, patch_url=f"https://dl.invalid/{PATCH}",
         current="4.0.1", app="Test",
     )  # fmt: skip
-    got = updater.download_update(info, tmp_path / "dl", fetch=lambda url: sums.encode(), root=old)
+    got = updater.download_update(info, tmp_path / "dl", fetch=signed(sums), root=old)
     assert got.is_dir() and got.name == "patch-4.0.2"
     (old / "lib/qt.dll").write_bytes(b"not the build the patch is for")
-    got = updater.download_update(info, tmp_path / "dl", fetch=lambda url: sums.encode(), root=old)
+    got = updater.download_update(info, tmp_path / "dl", fetch=signed(sums), root=old)
     assert got.name == INSTALLER
 
 

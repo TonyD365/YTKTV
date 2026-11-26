@@ -95,3 +95,32 @@ def room_handshake(ws, session):
     ws.send_text(session.hello())
     ws.send_text(session.auth())
     return session.open(ws.receive_bytes())
+
+
+# A key for signing SHA256SUMS in tests (conftest makes it the only trusted update key).
+def _test_update_key():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    return Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+
+
+def update_public_key() -> str:
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+
+    raw = (
+        _test_update_key()
+        .public_key()
+        .public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    )
+    return base64.b64encode(raw).decode()
+
+
+def signed(sums, key=None):
+    """A fetch for download_update: *sums* for SHA256SUMS, its signature for SHA256SUMS.sig."""
+    import base64
+
+    data = sums.encode() if isinstance(sums, str) else sums
+    signature = base64.b64encode((key or _test_update_key()).sign(data))
+    return lambda url: signature if url.endswith(".sig") else data
