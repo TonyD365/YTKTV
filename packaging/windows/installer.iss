@@ -33,6 +33,9 @@ UninstallDisplayIcon={app}\YTKTV.exe
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; Drawn by packaging/draw_installer_art.py (1x and 2x, for high-DPI screens).
+WizardImageFile=..\installer\art\ytktv-wizard.bmp,..\installer\art\ytktv-wizard@2x.bmp
+WizardSmallImageFile=..\installer\art\ytktv-wizard-small.bmp,..\installer\art\ytktv-wizard-small@2x.bmp
 LicenseFile=..\..\LICENSE
 InfoBeforeFile=..\installer\ytktv-welcome.txt
 InfoAfterFile=..\installer\ytktv-done.txt

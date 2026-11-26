@@ -32,6 +32,8 @@ mkdir -p "$WORK/resources"
 cp "$HERE/../installer/${PAGES}-welcome.txt" "$WORK/resources/welcome.txt"
 cp "$HERE/../installer/${PAGES}-done.txt" "$WORK/resources/conclusion.txt"
 cp "$HERE/../../LICENSE" "$WORK/resources/license.txt"
+case "$APP" in YTKTV) ART=ytktv ;; *) ART=desk ;; esac
+cp "$HERE/../installer/art/${ART}-pkg-background.png" "$WORK/resources/background.png"
 
 # Each choice is selected only on its own architecture. Installer itself runs
 # natively, so hw.optional.arm64 is reliable even for apps under Rosetta.
@@ -42,6 +44,9 @@ cat > "$WORK/distribution.xml" <<XML
     <welcome file="welcome.txt" mime-type="text/plain"/>
     <license file="license.txt" mime-type="text/plain"/>
     <conclusion file="conclusion.txt" mime-type="text/plain"/>
+    <!-- The app icon, faint, bottom left (packaging/draw_installer_art.py); the same in dark mode. -->
+    <background file="background.png" alignment="bottomleft" scaling="proportional"/>
+    <background-darkAqua file="background.png" alignment="bottomleft" scaling="proportional"/>
     <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
     <script>
     function isAppleSilicon() { return system.sysctl('hw.optional.arm64') == 1; }
