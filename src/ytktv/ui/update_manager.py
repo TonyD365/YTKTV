@@ -13,7 +13,9 @@ from ytktv.config import cache_dir
 from ytktv.core.controller import KTVController
 from ytktv.core.models import PlayStatus
 from ytktv.i18n import t
+from ytktv.ui.icon import ICON_FILE
 from ytktv.ui.support import run_async
+from ytktv.ui.update_dialog import UpdateDialog, remember_update, show_finished_update
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +42,13 @@ class UpdateManager(QObject):
         self._idle_timer.setInterval(15_000)
         self._idle_timer.timeout.connect(self._prompt_when_idle)
         QTimer.singleShot(8_000, self.check)
+        # The first start after an update says it went in.
+        QTimer.singleShot(
+            1500,
+            lambda: show_finished_update(
+                cache_dir(), "YTKTV", "YTKTV", ICON_FILE, __version__, self._parent
+            ),
+        )
         if updater.can_self_install():
             # Installers of versions already installed are just taking up space.
             run_async(
@@ -127,22 +136,27 @@ class UpdateManager(QObject):
         if self._installer is None or self._info is None:
             return
         self._idle_timer.stop()
-        box = QMessageBox(self._parent)
-        box.setWindowTitle(t("Update ready"))
-        box.setText(t("YTKTV {version} has been downloaded.", version=self._info.version))
-        detail = t("Install it now? YTKTV will close and reopen after the update.")
+        warnings = []
         if updater.password_needed(self._installer):
-            detail += "\n\n" + updater.PASSWORD_NOTE.format(app="YTKTV")
+            warnings.append(updater.PASSWORD_NOTE.format(app="YTKTV"))
         if interrupting:
-            detail += t("\n\nThe song that is playing will stop and the queue will be lost.")
-        box.setInformativeText(detail)
-        install = box.addButton(t("Install and Restart"), QMessageBox.ButtonRole.AcceptRole)
-        box.addButton(t("Later"), QMessageBox.ButtonRole.RejectRole)
-        box.exec()
-        if box.clickedButton() is not install:
+            warnings.append(t("The song that is playing will stop and the queue will be lost."))
+        dialog = UpdateDialog(
+            app="YTKTV",
+            icon=ICON_FILE,
+            version=self._info.version,
+            current=__version__,
+            notes=self._info.notes,
+            page_url=self._info.page_url,
+            size=updater.size_label(self._info, cache_dir() / "updates"),
+            warnings=warnings,
+            parent=self._parent,
+        )
+        if dialog.exec() != UpdateDialog.DialogCode.Accepted:
             # Do not ask again by ourselves this session; Settings still offers it.
             self._declined = True
             return
+        remember_update(cache_dir(), "YTKTV", __version__, self._info.version)
         try:
             updater.install_update(self._installer)
         except Exception as exc:

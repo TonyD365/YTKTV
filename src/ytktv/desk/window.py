@@ -28,7 +28,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ytktv import updater
+from ytktv import __version__, updater
+from ytktv.config import cache_dir
 from ytktv.desk import birthday, lock
 from ytktv.desk.admin_dialog import AdminSettingsDialog
 from ytktv.desk.billing import bill
@@ -62,6 +63,7 @@ from ytktv.desk.update import DeskUpdater
 from ytktv.i18n import N_, t
 from ytktv.rooms.state import format_left
 from ytktv.ui import backdrop, icons
+from ytktv.ui.update_dialog import UpdateDialog, remember_update, show_finished_update
 
 COLUMNS = 4
 ICON = Path(__file__).parent / "assets" / "icon.png"
@@ -449,20 +451,36 @@ class DeskWindow(QMainWindow):
             self.update_button.show()
 
         def install() -> None:
-            if updates.installer is not None and updater.password_needed(updates.installer):
-                note = updater.PASSWORD_NOTE.format(app="YTKTV Desk")
-                answer = QMessageBox.question(
-                    self,
-                    t("Install the update"),
-                    t("YTKTV Desk will close and reopen.\n\n{note}", note=note),
+            info = updates.info
+            if updates.installer is not None and info is not None:
+                warnings = []
+                if updater.password_needed(updates.installer):
+                    warnings.append(updater.PASSWORD_NOTE.format(app="YTKTV Desk"))
+                dialog = UpdateDialog(
+                    app="YTKTV Desk",
+                    icon=ICON,
+                    version=info.version,
+                    current=__version__,
+                    notes=info.notes,
+                    page_url=info.page_url,
+                    size=updater.size_label(info, cache_dir() / "desk-updates"),
+                    warnings=warnings,
+                    parent=self,
                 )
-                if answer != QMessageBox.StandardButton.Yes:
+                if dialog.exec() != UpdateDialog.DialogCode.Accepted:
                     return
+                remember_update(cache_dir(), "YTKTV-Desk", __version__, info.version)
             if updates.install():
                 QApplication.quit()
             else:
                 QDesktopServices.openUrl(QUrl(self.update_button.toolTip()))
 
+        QTimer.singleShot(
+            1500,
+            lambda: show_finished_update(
+                cache_dir(), "YTKTV-Desk", "YTKTV Desk", ICON, __version__, self
+            ),
+        )
         updates.ready.connect(ready)
         updates.available.connect(available)
         self.update_button.clicked.connect(install)

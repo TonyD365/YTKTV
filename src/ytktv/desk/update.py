@@ -32,6 +32,7 @@ class DeskUpdater(QObject):
     ) -> None:
         super().__init__(parent)
         self.installer: Path | None = None
+        self.info: updater.UpdateInfo | None = None
         self.automatic = automatic
         self._busy = False
         self._timer = QTimer(self)
@@ -66,17 +67,18 @@ class DeskUpdater(QObject):
             self.status.emit(f"Downloading version {info.version}{size}…")
             run_async(
                 lambda: updater.download_update(info, cache_dir() / "desk-updates"),
-                lambda path: self._downloaded(path, info.version),
+                lambda path: self._downloaded(path, info),
                 self._failed,
             )
 
         run_async(lambda: updater.check_for_update(app=APP), found, self._failed)
 
-    def _downloaded(self, path: Path, version: str) -> None:
+    def _downloaded(self, path: Path, info: updater.UpdateInfo) -> None:
         self._busy = False
         self.installer = path
-        self.status.emit(f"Version {version} is ready to install.")
-        self.ready.emit(version)
+        self.info = info
+        self.status.emit(f"Version {info.version} is ready to install.")
+        self.ready.emit(info.version)
 
     def _failed(self, exc: Exception) -> None:
         self._busy = False

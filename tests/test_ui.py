@@ -391,11 +391,13 @@ def test_mv_window_shows_lyrics_and_danmaku_and_console_controls_work(window, qt
 def test_settings_offers_install_now_when_an_update_is_downloaded(
     window, qtbot, tmp_path, monkeypatch
 ):
-    from PySide6.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QLabel
 
     from ytktv import updater
+    from ytktv.ui.update_dialog import UpdateDialog, finished_update
     from ytktv.ui.update_manager import UpdateManager
 
+    monkeypatch.setattr("ytktv.ui.update_manager.cache_dir", lambda: tmp_path)
     main, controller = window
     page = main.settings_page
     main.show_page("settings")
@@ -408,7 +410,8 @@ def test_settings_offers_install_now_when_an_update_is_downloaded(
     installer = tmp_path / "YTKTV-9.9.9-macos-universal.pkg"
     installer.write_bytes(b"pkg")
     manager._installer = installer
-    manager._info = updater.UpdateInfo("9.9.9", "v9.9.9", installer.name, "", "", "", "")
+    notes = "## What's new\n\n### 🔒 Security\n- Signed updates.\n\n## Install\n\nsteps"
+    manager._info = updater.UpdateInfo("9.9.9", "v9.9.9", installer.name, "", "", notes, "")
     manager.ready.emit(True)
     assert page.install_button.isVisible()
 
@@ -419,13 +422,15 @@ def test_settings_offers_install_now_when_an_update_is_downloaded(
     )
     shown = []
 
-    def fake_exec(box):
-        shown.append(box.informativeText())
+    def fake_exec(dialog):
+        shown.append(" ".join(label.text() for label in dialog.findChildren(QLabel)))
+        assert dialog.badge.isVisibleTo(dialog)  # a security release says so
+        assert "Signed updates" in dialog.notes.toPlainText()
+        assert "steps" not in dialog.notes.toPlainText()  # not the install instructions
         # Accept on the second showing only.
-        box.clickedButton = lambda: box.buttons()[0] if len(shown) > 1 else box.buttons()[1]
-        return 0
+        return UpdateDialog.DialogCode.Accepted if len(shown) > 1 else 0
 
-    monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+    monkeypatch.setattr(UpdateDialog, "exec", fake_exec)
 
     manager._declined = True  # "Later" was chosen earlier this session
     page.install_button.click()  # the button still works, and this time says Later again
@@ -437,6 +442,9 @@ def test_settings_offers_install_now_when_an_update_is_downloaded(
     page.install_button.click()
     assert "will stop" in shown[1]  # warns before interrupting a song
     assert installed == [installer, "quit"]
+    # The next start, now running 9.9.9, says once that the update went in.
+    assert finished_update(tmp_path, "YTKTV", "9.9.9") is not None
+    assert finished_update(tmp_path, "YTKTV", "9.9.9") is None
 
 
 def test_score_toggle_live_score_and_score_card(window, qtbot):
