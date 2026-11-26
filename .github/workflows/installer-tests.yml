@@ -50,7 +50,7 @@ jobs:
           # labels come from the files, which already start the tests.
           asked_to_run() {
             gh api "repos/$GH_REPO/issues/$NUMBER/comments?per_page=100" \
-              -q "[.[] | select((.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\") and (.body | ascii_downcase | startswith(\"/run $1\"))) | .created_at] | max // empty" |
+              -q "[.[] | select((.author_association == \"OWNER\" or .author_association == \"MEMBER\" or .author_association == \"COLLABORATOR\") and (.body | ascii_downcase | startswith(\"@tonyd365-agent /run $1\"))) | .created_at] | max // empty" |
               { read -r at || exit 1; [ $(( $(date -u +%s) - $(date -u -d "$at" +%s) )) -lt 600 ]; }
           }
           run=false
