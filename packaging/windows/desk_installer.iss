@@ -33,6 +33,9 @@ UninstallDisplayIcon={app}\YTKTV Desk.exe
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; Drawn by packaging/draw_installer_art.py (1x and 2x, for high-DPI screens).
+WizardImageFile=..\installer\art\desk-wizard.bmp,..\installer\art\desk-wizard@2x.bmp
+WizardSmallImageFile=..\installer\art\desk-wizard-small.bmp,..\installer\art\desk-wizard-small@2x.bmp
 LicenseFile=..\..\LICENSE
 InfoBeforeFile=..\installer\desk-welcome.txt
 InfoAfterFile=..\installer\desk-done.txt

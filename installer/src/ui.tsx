@@ -7,6 +7,41 @@ import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 
 export const PINK = "#ff3d9a";
 export const CYAN = "#2ee6ff";
+const PURPLE = "#8b5cff";
+
+/** The colour at *at* (0..1) along YTKTV's pink → purple → cyan. */
+export function neon(at: number): string {
+  const stops = [PINK, PURPLE, CYAN].map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)));
+  const x = Math.min(1, Math.max(0, at)) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(x));
+  const f = x - i;
+  const rgb = stops[i].map((c, k) => Math.round(c + (stops[i + 1][k] - c) * f));
+  return "#" + rgb.map((c) => c.toString(16).padStart(2, "0")).join("");
+}
+
+// "YTKTV" in block letters, coloured left to right.
+const LOGO = [
+  "█ █ ███ █ █ ███ █ █",
+  " █   █  ██   █  █ █",
+  " █   █  █ █  █   █ ",
+];
+
+function Logo() {
+  const width = LOGO[0].length;
+  return (
+    <Box flexDirection="column">
+      {LOGO.map((row, r) => (
+        <Text key={r}>
+          {[...row].map((ch, i) => (
+            <Text key={i} color={neon(i / (width - 1))} bold>
+              {ch}
+            </Text>
+          ))}
+        </Text>
+      ))}
+    </Box>
+  );
+}
 
 /** Renders *element*, which calls `done(value)` once; resolves with that value. */
 function ask<T>(element: (done: (value: T) => void) => ReactElement): Promise<T> {
@@ -56,11 +91,10 @@ function useCancel(onCancel: () => void) {
 export function Header({ version, system }: { version: string; system: string }) {
   return (
     <Box borderStyle="round" borderColor={PINK} paddingX={2} flexDirection="column" marginTop={1} alignSelf="flex-start">
+      <Logo />
       <Text>
-        <Text color={PINK} bold>
-          ♪ YTKTV
-        </Text>
-        <Text bold> Installer</Text>
+        <Text color={PINK}>♪ </Text>
+        <Text bold>Installer</Text>
       </Text>
       <Text dimColor>
         {version} · {system}
@@ -412,7 +446,11 @@ function Bar({ name, done, total, speed, attempt }: { name: string; done: number
       </Text>
       <Text>
         {"  "}
-        <Text color={PINK}>{"█".repeat(filled)}</Text>
+        {[...Array(filled).keys()].map((i) => (
+          <Text key={i} color={neon(i / (width - 1))}>
+            █
+          </Text>
+        ))}
         <Text dimColor>{"░".repeat(width - filled)}</Text> {String(Math.round(share * 100)).padStart(3)}%{"  "}
         <Text dimColor>
           {mb(done)} / {mb(total)} MB · {mb(speed)} MB/s · {eta} left
