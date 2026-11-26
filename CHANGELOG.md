@@ -3,6 +3,18 @@
 What changed in each release. The [releases page](https://github.com/TonyD365/YTKTV/releases)
 has the installers and the full notes.
 
+## 4.7.2
+
+### 🔒 Security: signed updates
+- Updates are now signed. Each release's list of checksums (`SHA256SUMS`) carries a digital signature made with a key that only YTKTV's release process holds, and YTKTV and YTKTV Desk check it against the key built into the app before installing anything, whether the full installer or a small patch.
+- Why: until now an update was checked only against a checksum list that sits next to it on the same release. Someone who managed to upload to a release (for example with a leaked token) could have replaced an installer and its checksum together. Now they would also need the signing key, which never leaves the release process; a backup key is kept offline.
+- Nothing is signed on your computer: it only checks. Small updates (patches) still contain files built and signed in the release process, and a patch that does not check out falls back to the full installer.
+- This protects updates *from* 4.7.2 on, so installing 4.7.2 is the step that turns it on.
+
+### 🍎 macOS
+- YTKTV and YTKTV Desk are now signed with the same YTKTV certificate in every release, so macOS recognises later updates as the same app and keeps its permissions (microphone, local network). After updating to 4.7.2, macOS may ask for them **once more**; from then on, updates keep them. macOS still asks you to allow the app the first time you open it, as before.
+- Because almost every file is re-signed, the update to 4.7.2 will most likely download the full installer instead of a small patch.
+
 ## 4.7.1
 
 ### 🛠 Fixes
