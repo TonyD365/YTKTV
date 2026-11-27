@@ -17,6 +17,7 @@ import {
   label,
   latestRelease,
   parseSums,
+  sumsSigned,
   repoText,
 } from "./release";
 import * as sys from "./system";
@@ -183,7 +184,17 @@ async function main(): Promise<void> {
 
   // Download, check and install each.
   const sumsAsset = release.assets.find((asset) => asset.name === "SHA256SUMS");
-  const sums = sumsAsset ? parseSums(await fetchText(sumsAsset.browser_download_url).catch(() => "")) : new Map();
+  const sigAsset = release.assets.find((asset) => asset.name === "SHA256SUMS.sig");
+  const sumsText = sumsAsset ? await fetchText(sumsAsset.browser_download_url).catch(() => "") : "";
+  const sigText = sigAsset ? await fetchText(sigAsset.browser_download_url).catch(() => "") : "";
+  // The checksums count only with YTKTV's release signature: whoever could change a file on the
+  // release could change SHA256SUMS too, but not sign it.
+  await task("Checking the release's signature…", async () => {
+    if (!sumsText || !sigText || !sumsSigned(sumsText, sigText)) {
+      throw new Error("This release's checksums are not signed by YTKTV, so nothing was installed. Please try again in a few minutes, or report it.");
+    }
+  }, () => "Signed by YTKTV");
+  const sums = parseSums(sumsText);
   const work = mkdtempSync(join(tmpdir(), "ytktv-install-"));
   try {
     for (const [i, app] of apps.entries()) {
