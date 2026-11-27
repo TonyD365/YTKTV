@@ -245,7 +245,7 @@
         <pre><code>winget install TonyD365.YTKTV</code></pre>
         <p data-i18n="inst.mac" data-html><b>macOS</b>: open <b>Terminal</b> (⌘ Space, type Terminal), paste, press Enter, then type your Mac's password:</p>
         <pre><code>curl -fsSL https://tonyd365.github.io/YTKTV/install.sh | bash</code></pre>
-        <p class="small" data-i18n="inst.trust" data-html><b>What this line does</b>, and nothing else: it downloads YTKTV from <a href="https://github.com/TonyD365/YTKTV/releases/latest">YTKTV's own GitHub releases</a>, checks every file against the release's checksums, and installs it with macOS's own Installer, which is what asks for your password. YTKTV is open source: <a href="https://github.com/TonyD365/YTKTV/blob/main/site/install.sh">read the script</a> before you run it if you like. Prefer not to use Terminal? Download the .pkg above instead.</p>
+        <p class="small" data-i18n="inst.trust" data-html><b>What this line does</b>, and nothing else: it downloads YTKTV from <a href="https://github.com/TonyD365/YTKTV/releases/latest">YTKTV's own GitHub releases</a>, checks every file against the release's checksums, which are signed by YTKTV, and installs it with macOS's own Installer, which is what asks for your password. YTKTV is open source: <a href="https://github.com/TonyD365/YTKTV/blob/main/site/install.sh">read the script</a> before you run it if you like. Prefer not to use Terminal? Download the .pkg above instead.</p>
         <p data-i18n="inst.linux" data-html><b>Linux</b> (also Raspberry Pi): the same line in a terminal; it puts the app in <code>~/Applications</code>.</p>
         <p class="small" data-i18n="inst.desk" data-html>YTKTV Desk: add <code>-s -- --desk</code> after <code>bash</code>; on Windows, run <code>irm https://tonyd365.github.io/YTKTV/install.ps1 | iex</code> in PowerShell and tick YTKTV Desk.</p>
         <p class="small" data-i18n="inst.deskwinget">Why not winget? YTKTV Desk was submitted to winget but has waited a long time without being accepted, so its winget package is withdrawn for now. YTKTV itself is in winget as usual.</p>
@@ -313,7 +313,7 @@ const ZH = {
   "s3.t": "扫码开唱", "s3.d": "用手机扫二维码，点歌，拿起麦克风。",
   "dl.title": "下载", "dl.sub": "免费，支持 macOS、Windows 和 Linux。",
   "dl.mac": "Apple 芯片和 Intel", "dl.win": "Windows 10 和 11，64 位", "dl.linux": "x86-64 AppImage", "dl.button": "下载", "dl.macinstall": "安装（推荐）", "dl.macpkg": "或者下载 .pkg 安装包",
-  "inst.title": "一行命令安装", "inst.why": "最快，而且不会弹安全警告；之后的更新由 YTKTV 自己完成。", "inst.trust": "<b>这行命令做什么</b>（除此之外什么都不做）：从 <a href='https://github.com/TonyD365/YTKTV/releases/latest'>YTKTV 自己的 GitHub Release</a> 下载 YTKTV，用 Release 里的校验值逐个核对文件，再用 macOS 自带的“安装器”安装，要你输入密码的就是它。YTKTV 是开源的，运行前可以先<a href='https://github.com/TonyD365/YTKTV/blob/main/site/install.sh'>看看这个脚本</a>。不想用终端的话，也可以下载上面的 .pkg 安装包。",
+  "inst.title": "一行命令安装", "inst.why": "最快，而且不会弹安全警告；之后的更新由 YTKTV 自己完成。", "inst.trust": "<b>这行命令做什么</b>（除此之外什么都不做）：从 <a href='https://github.com/TonyD365/YTKTV/releases/latest'>YTKTV 自己的 GitHub Release</a> 下载 YTKTV，用 Release 里带 YTKTV 签名的校验值逐个核对文件，再用 macOS 自带的“安装器”安装，要你输入密码的就是它。YTKTV 是开源的，运行前可以先<a href='https://github.com/TonyD365/YTKTV/blob/main/site/install.sh'>看看这个脚本</a>。不想用终端的话，也可以下载上面的 .pkg 安装包。",
   "inst.win": "<b>Windows 10 / 11</b>：右键点「开始」→ <b>终端</b>，粘贴后按回车：",
   "inst.mac": "<b>macOS</b>：打开<b>终端</b>（⌘ 空格，输入「终端」），粘贴后按回车，再输入开机密码：",
   "inst.linux": "<b>Linux</b>（包括树莓派）：在终端里粘贴同一行，程序会放到 <code>~/Applications</code>。",

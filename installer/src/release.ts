@@ -1,3 +1,4 @@
+import { createPublicKey, verify } from "node:crypto";
 // The latest GitHub release: which files are for this computer, their sizes and checksums.
 
 export const REPO = "TonyD365/YTKTV";
@@ -21,6 +22,31 @@ export function assetFor(release: Release, app: App, suffix: string): Asset | un
   const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const pattern = new RegExp(`^${escape(app)}-\\d[^/]*-${escape(suffix)}$`);
   return release.assets.find((asset) => pattern.test(asset.name));
+}
+
+// Ed25519 keys whose signature on SHA256SUMS (SHA256SUMS.sig) makes a release trusted: the same
+// two as the app's (src/ytktv/updater.py, UPDATE_KEYS), base64 of the raw 32 bytes.
+export const UPDATE_KEYS = [
+  "kI2UujGRZlf32S3GcLwXe7/N2DEjMuvpRZ8rcmwyxrw=",
+  "6kKFQPUmqNLUkcIt9QzSf4fMJvEpuyuBAfQJQyZPi04=",
+];
+// The DER prefix that turns a raw Ed25519 public key into SubjectPublicKeyInfo.
+const ED25519_SPKI = Buffer.from("302a300506032b6570032100", "hex");
+
+/** Whether *signature* (base64 text) signs *sums* with one of *keys*. */
+export function sumsSigned(sums: string | Uint8Array, signature: string, keys: string[] = UPDATE_KEYS): boolean {
+  const data = typeof sums === "string" ? Buffer.from(sums, "utf8") : Buffer.from(sums);
+  const sig = Buffer.from(signature.trim(), "base64");
+  if (sig.length !== 64) return false;
+  return keys.some((key) => {
+    try {
+      const raw = Buffer.from(key, "base64");
+      const publicKey = createPublicKey({ key: Buffer.concat([ED25519_SPKI, raw]), format: "der", type: "spki" });
+      return verify(null, data, publicKey, sig);
+    } catch {
+      return false;
+    }
+  });
 }
 
 /** "file name → sha256" from a SHA256SUMS file. */
